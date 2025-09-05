@@ -8,25 +8,33 @@ class Database {
     private $db;
     
     private function __construct() {
-        $db_file = __DIR__ . '/../data/cloudflare_dns.db';
+        // MySQL 数据库配置
+        $host = 'localhost';
+        $dbname = 'cloudflare_dns';
+        $username = 'root';
+        $password = '';
+        $charset = 'utf8mb4';
         
-        // 确保数据目录存在
-        $data_dir = dirname($db_file);
-        if (!is_dir($data_dir)) {
-            mkdir($data_dir, 0755, true);
+        // 创建MySQL数据库连接
+        try {
+            $dsn = "mysql:host=$host;dbname=$dbname;charset=$charset";
+            $options = [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_PERSISTENT => false
+            ];
+            
+            $this->db = new PDO($dsn, $username, $password, $options);
+            
+            // 设置MySQL连接参数
+            $this->db->exec("SET NAMES '$charset'");
+            $this->db->exec("SET time_zone = '+00:00'");
+            $this->db->exec("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'");
+            
+        } catch (PDOException $e) {
+            throw new Exception("数据库连接失败: " . $e->getMessage());
         }
-        
-        // 创建数据库连接并设置优化参数
-        $this->db = new SQLite3($db_file);
-        $this->db->enableExceptions(true);
-        
-        // 设置SQLite优化参数以减少锁定问题
-        $this->db->exec('PRAGMA journal_mode = WAL');
-        $this->db->exec('PRAGMA synchronous = NORMAL');
-        $this->db->exec('PRAGMA cache_size = 1000');
-        $this->db->exec('PRAGMA temp_store = MEMORY');
-        $this->db->exec('PRAGMA busy_timeout = 30000');
-        $this->db->exec('PRAGMA foreign_keys = ON');
         
         $this->initTables();
     }
@@ -42,222 +50,232 @@ class Database {
         return $this->db;
     }
     
+    public function getPDO() {
+        return $this->db;
+    }
+    
     private function initTables() {
         // 创建用户表
         $this->db->exec("CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            email TEXT,
-            points INTEGER DEFAULT 100,
-            status INTEGER DEFAULT 1,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(255) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            email VARCHAR(255),
+            points INT DEFAULT 100,
+            status TINYINT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建管理员表
         $this->db->exec("CREATE TABLE IF NOT EXISTS admins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            email TEXT,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(255) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            email VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建域名表
         $this->db->exec("CREATE TABLE IF NOT EXISTS domains (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            domain_name TEXT NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            domain_name VARCHAR(255) NOT NULL UNIQUE,
             api_key TEXT NOT NULL,
-            email TEXT NOT NULL,
-            zone_id TEXT NOT NULL,
-            proxied_default BOOLEAN DEFAULT 1,
-            status INTEGER DEFAULT 1,
+            email VARCHAR(255) NOT NULL,
+            zone_id VARCHAR(255) NOT NULL,
+            proxied_default TINYINT DEFAULT 1,
+            status TINYINT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建DNS记录表
         $this->db->exec("CREATE TABLE IF NOT EXISTS dns_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            domain_id INTEGER,
-            subdomain TEXT NOT NULL,
-            type TEXT NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            domain_id INT,
+            subdomain VARCHAR(255) NOT NULL,
+            type VARCHAR(10) NOT NULL,
             content TEXT NOT NULL,
-            proxied INTEGER DEFAULT 0,
-            cloudflare_id TEXT,
-            status INTEGER DEFAULT 1,
-            is_system INTEGER DEFAULT 0,
+            proxied TINYINT DEFAULT 0,
+            cloudflare_id VARCHAR(255),
+            status TINYINT DEFAULT 1,
+            is_system TINYINT DEFAULT 0,
             remark TEXT DEFAULT '',
-            ttl INTEGER DEFAULT 1,
-            priority INTEGER,
+            ttl INT DEFAULT 1,
+            priority INT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (domain_id) REFERENCES domains(id)
-        )");
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+            INDEX idx_user_id (user_id),
+            INDEX idx_domain_id (domain_id),
+            INDEX idx_subdomain (subdomain),
+            INDEX idx_type (type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
-        // 为现有表添加 is_system 字段（如果不存在）
+        // 检查并添加 is_system 字段（如果不存在）
         try {
-            $columns = $this->db->query("PRAGMA table_info(dns_records)");
-            if ($columns) {
-                $has_is_system = false;
-                while ($column = $columns->fetchArray(SQLITE3_ASSOC)) {
-                    if ($column['name'] === 'is_system') {
-                        $has_is_system = true;
-                        break;
-                    }
-                }
-                if (!$has_is_system) {
-                    $this->db->exec("ALTER TABLE dns_records ADD COLUMN is_system INTEGER DEFAULT 0");
-                }
+            $stmt = $this->db->query("SHOW COLUMNS FROM dns_records LIKE 'is_system'");
+            if ($stmt->rowCount() === 0) {
+                $this->db->exec("ALTER TABLE dns_records ADD COLUMN is_system TINYINT DEFAULT 0");
             }
         } catch (Exception $e) {
-            // 如果检查失败，尝试直接添加字段（可能已存在）
-            try {
-                $this->db->exec("ALTER TABLE dns_records ADD COLUMN is_system INTEGER DEFAULT 0");
-            } catch (Exception $e2) {
-                // 字段可能已存在，忽略错误
-            }
+            // 字段可能已存在，忽略错误
         }
         
         // 创建系统设置表
         $this->db->exec("CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            setting_key TEXT NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            setting_key VARCHAR(255) NOT NULL UNIQUE,
             setting_value TEXT,
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建卡密表
         $this->db->exec("CREATE TABLE IF NOT EXISTS card_keys (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            card_key TEXT NOT NULL UNIQUE,
-            points INTEGER NOT NULL,
-            max_uses INTEGER DEFAULT 1,
-            used_count INTEGER DEFAULT 0,
-            status INTEGER DEFAULT 1,
-            created_by INTEGER,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            card_key VARCHAR(255) NOT NULL UNIQUE,
+            points INT NOT NULL,
+            max_uses INT DEFAULT 1,
+            used_count INT DEFAULT 0,
+            status TINYINT DEFAULT 1,
+            created_by INT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (created_by) REFERENCES admins(id)
-        )");
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (created_by) REFERENCES admins(id) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建卡密使用记录表
         $this->db->exec("CREATE TABLE IF NOT EXISTS card_key_usage (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            card_key_id INTEGER,
-            user_id INTEGER,
-            points_added INTEGER,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            card_key_id INT,
+            user_id INT,
+            points_added INT,
             used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (card_key_id) REFERENCES card_keys(id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )");
+            FOREIGN KEY (card_key_id) REFERENCES card_keys(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_card_key_id (card_key_id),
+            INDEX idx_user_id (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建操作日志表
         $this->db->exec("CREATE TABLE IF NOT EXISTS action_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_type TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            action TEXT NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_type VARCHAR(50) NOT NULL,
+            user_id INT NOT NULL,
+            action VARCHAR(255) NOT NULL,
             details TEXT,
-            ip_address TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+            ip_address VARCHAR(45),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user_type (user_type),
+            INDEX idx_user_id (user_id),
+            INDEX idx_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建DNS记录类型表
         $this->db->exec("CREATE TABLE IF NOT EXISTS dns_record_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type_name TEXT NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            type_name VARCHAR(10) NOT NULL UNIQUE,
             description TEXT,
-            enabled INTEGER DEFAULT 1,
+            enabled TINYINT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建邀请记录表
         $this->db->exec("CREATE TABLE IF NOT EXISTS invitations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            inviter_id INTEGER NOT NULL,
-            invitation_code TEXT NOT NULL UNIQUE,
-            reward_points INTEGER DEFAULT 0,
-            use_count INTEGER DEFAULT 0,
-            total_rewards INTEGER DEFAULT 0,
-            is_active INTEGER DEFAULT 1,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            inviter_id INT NOT NULL,
+            invitation_code VARCHAR(255) NOT NULL UNIQUE,
+            reward_points INT DEFAULT 0,
+            use_count INT DEFAULT 0,
+            total_rewards INT DEFAULT 0,
+            is_active TINYINT DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_used_at TIMESTAMP DEFAULT NULL,
-            FOREIGN KEY (inviter_id) REFERENCES users(id)
-        )");
+            last_used_at TIMESTAMP NULL DEFAULT NULL,
+            FOREIGN KEY (inviter_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_inviter_id (inviter_id),
+            INDEX idx_invitation_code (invitation_code)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建邀请使用记录表
         $this->db->exec("CREATE TABLE IF NOT EXISTS invitation_uses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            invitation_id INTEGER NOT NULL,
-            invitee_id INTEGER NOT NULL,
-            reward_points INTEGER DEFAULT 0,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invitation_id INT NOT NULL,
+            invitee_id INT NOT NULL,
+            reward_points INT DEFAULT 0,
             used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (invitation_id) REFERENCES invitations(id),
-            FOREIGN KEY (invitee_id) REFERENCES users(id)
-        )");
+            FOREIGN KEY (invitation_id) REFERENCES invitations(id) ON DELETE CASCADE,
+            FOREIGN KEY (invitee_id) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_invitation_id (invitation_id),
+            INDEX idx_invitee_id (invitee_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建公告表
         $this->db->exec("CREATE TABLE IF NOT EXISTS announcements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
             content TEXT NOT NULL,
-            type TEXT DEFAULT 'info',
-            is_active INTEGER DEFAULT 1,
-            show_frequency TEXT DEFAULT 'once',
-            interval_hours INTEGER DEFAULT 24,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
+            type VARCHAR(20) DEFAULT 'info',
+            is_active TINYINT DEFAULT 1,
+            show_frequency VARCHAR(20) DEFAULT 'once',
+            interval_hours INT DEFAULT 24,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_is_active (is_active),
+            INDEX idx_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建用户公告查看记录表
         $this->db->exec("CREATE TABLE IF NOT EXISTS user_announcement_views (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            announcement_id INTEGER NOT NULL,
-            last_viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            view_count INTEGER DEFAULT 1,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (announcement_id) REFERENCES announcements(id),
-            UNIQUE(user_id, announcement_id)
-        )");
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            announcement_id INT NOT NULL,
+            last_viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            view_count INT DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_user_announcement (user_id, announcement_id),
+            INDEX idx_user_id (user_id),
+            INDEX idx_announcement_id (announcement_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建禁用前缀表
         $this->db->exec("CREATE TABLE IF NOT EXISTS blocked_prefixes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prefix TEXT NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            prefix VARCHAR(255) NOT NULL UNIQUE,
             description TEXT,
-            is_active INTEGER DEFAULT 1,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
+            is_active TINYINT DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_prefix (prefix),
+            INDEX idx_is_active (is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 创建登录尝试记录表
         $this->db->exec("CREATE TABLE IF NOT EXISTS login_attempts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ip_address TEXT NOT NULL,
-            username TEXT NOT NULL,
-            type TEXT NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ip_address VARCHAR(45) NOT NULL,
+            username VARCHAR(255) NOT NULL,
+            type VARCHAR(20) NOT NULL,
             attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            success INTEGER DEFAULT 0
-        )");
+            success TINYINT DEFAULT 0,
+            INDEX idx_ip_address (ip_address),
+            INDEX idx_username (username),
+            INDEX idx_attempt_time (attempt_time)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         
         // 插入默认管理员账户（仅在未安装时）
         if (!file_exists(__DIR__ . '/../data/install.lock')) {
-            $admin_exists = $this->db->querySingle("SELECT COUNT(*) FROM admins WHERE username = 'admin'");
+            $stmt = $this->db->query("SELECT COUNT(*) FROM admins WHERE username = 'admin'");
+            $admin_exists = $stmt->fetchColumn();
             if (!$admin_exists) {
                 $password = password_hash('admin123456', PASSWORD_DEFAULT);
                 $stmt = $this->db->prepare("INSERT INTO admins (username, password, email) VALUES (?, ?, ?)");
-                $stmt->bindValue(1, 'admin', SQLITE3_TEXT);
-                $stmt->bindValue(2, $password, SQLITE3_TEXT);
-                $stmt->bindValue(3, 'admin@example.com', SQLITE3_TEXT);
-                $stmt->execute();
+                $stmt->execute(['admin', $password, 'admin@example.com']);
             }
         }
         
@@ -281,13 +299,11 @@ class Database {
         ];
         
         foreach ($default_settings as $setting) {
-            $exists = $this->db->querySingle("SELECT COUNT(*) FROM settings WHERE setting_key = '{$setting[0]}'");
+            $stmt = $this->db->query("SELECT COUNT(*) FROM settings WHERE setting_key = '{$setting[0]}'");
+            $exists = $stmt->fetchColumn();
             if (!$exists) {
                 $stmt = $this->db->prepare("INSERT INTO settings (setting_key, setting_value, description) VALUES (?, ?, ?)");
-                $stmt->bindValue(1, $setting[0], SQLITE3_TEXT);
-                $stmt->bindValue(2, $setting[1], SQLITE3_TEXT);
-                $stmt->bindValue(3, $setting[2], SQLITE3_TEXT);
-                $stmt->execute();
+                $stmt->execute([$setting[0], $setting[1], $setting[2]]);
             }
         }
     }
@@ -306,13 +322,11 @@ class Database {
         ];
         
         foreach ($default_types as $type) {
-            $exists = $this->db->querySingle("SELECT COUNT(*) FROM dns_record_types WHERE type_name = '{$type[0]}'");
+            $stmt = $this->db->query("SELECT COUNT(*) FROM dns_record_types WHERE type_name = '{$type[0]}'");
+            $exists = $stmt->fetchColumn();
             if (!$exists) {
                 $stmt = $this->db->prepare("INSERT INTO dns_record_types (type_name, description, enabled) VALUES (?, ?, ?)");
-                $stmt->bindValue(1, $type[0], SQLITE3_TEXT);
-                $stmt->bindValue(2, $type[1], SQLITE3_TEXT);
-                $stmt->bindValue(3, $type[2], SQLITE3_INTEGER);
-                $stmt->execute();
+                $stmt->execute([$type[0], $type[1], $type[2]]);
             }
         }
     }

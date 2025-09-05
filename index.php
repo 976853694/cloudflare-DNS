@@ -33,24 +33,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_prefix'])) {
     if ($query_prefix) {
         // 检查前缀是否被禁用
         $stmt = $db->prepare("SELECT COUNT(*) FROM blocked_prefixes WHERE prefix = ? AND is_active = 1");
-        $stmt->bindValue(1, $query_prefix, SQLITE3_TEXT);
-        $result = $stmt->execute();
-        $blocked = $result->fetchArray(SQLITE3_NUM)[0];
+        $stmt->execute([$query_prefix]);
+        $blocked = $stmt->fetchColumn();
         
         if ($blocked) {
             $query_result = ['status' => 'blocked', 'message' => '该前缀已被管理员禁用'];
         } else {
             // 获取所有可用域名
-            $domains_stmt = $db->prepare("SELECT id, domain_name FROM domains WHERE status = 1 ORDER BY domain_name");
-            $domains_result = $domains_stmt->execute();
+            $domains_stmt = $db->query("SELECT id, domain_name FROM domains WHERE status = 1 ORDER BY domain_name");
             
-            while ($domain = $domains_result->fetchArray(SQLITE3_ASSOC)) {
+            while ($domain = $domains_stmt->fetch(PDO::FETCH_ASSOC)) {
                 // 检查该前缀在此域名下是否已被使用
                 $used_stmt = $db->prepare("SELECT COUNT(*) FROM dns_records WHERE subdomain = ? AND domain_id = ? AND status = 1");
-                $used_stmt->bindValue(1, $query_prefix, SQLITE3_TEXT);
-                $used_stmt->bindValue(2, $domain['id'], SQLITE3_INTEGER);
-                $used_result = $used_stmt->execute();
-                $is_used = $used_result->fetchArray(SQLITE3_NUM)[0] > 0;
+                $used_stmt->execute([$query_prefix, $domain['id']]);
+                $is_used = $used_stmt->fetchColumn() > 0;
                 
                 $domain_results[] = [
                     'domain' => $domain['domain_name'],
@@ -77,10 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_prefix'])) {
 
 // 获取统计信息
 $stats = [
-    'total_users' => $db->querySingle("SELECT COUNT(*) FROM users"),
-    'total_domains' => $db->querySingle("SELECT COUNT(*) FROM domains WHERE status = 1"),
-    'total_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records WHERE status = 1"),
-    'active_today' => $db->querySingle("SELECT COUNT(DISTINCT user_id) FROM dns_records WHERE DATE(created_at) = DATE('now')")
+    'total_users' => $db->query("SELECT COUNT(*) FROM users")->fetchColumn(),
+    'total_domains' => $db->query("SELECT COUNT(*) FROM domains WHERE status = 1")->fetchColumn(),
+    'total_records' => $db->query("SELECT COUNT(*) FROM dns_records WHERE status = 1")->fetchColumn(),
+    'active_today' => $db->query("SELECT COUNT(DISTINCT user_id) FROM dns_records WHERE DATE(created_at) = CURDATE()")->fetchColumn()
 ];
 ?>
 <!DOCTYPE html>
@@ -932,9 +928,8 @@ $stats = [
                                         <i class="fas fa-list"></i>
                                         <?php 
                                         $stmt = $db->prepare("SELECT COUNT(*) FROM dns_records WHERE user_id = ? AND status = 1");
-                                        $stmt->bindValue(1, $_SESSION['user_id'], SQLITE3_INTEGER);
-                                        $result = $stmt->execute();
-                                        $user_records = $result->fetchArray(SQLITE3_NUM)[0];
+                                        $stmt->execute([$_SESSION['user_id']]);
+                                        $user_records = $stmt->fetchColumn();
                                         echo $user_records; 
                                         ?> 记录
                                     </div>

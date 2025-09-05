@@ -114,7 +114,7 @@ function getEnabledDNSTypes() {
     $types = [];
     
     $result = $db->query("SELECT * FROM dns_record_types WHERE enabled = 1 ORDER BY type_name");
-    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+    while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
         $types[] = $row;
     }
     
@@ -126,7 +126,8 @@ function getEnabledDNSTypes() {
  */
 function isDNSTypeEnabled($type) {
     $db = Database::getInstance()->getConnection();
-    $enabled = $db->querySingle("SELECT enabled FROM dns_record_types WHERE type_name = '$type'");
+    $stmt = $db->query("SELECT enabled FROM dns_record_types WHERE type_name = '$type'");
+    $enabled = $stmt ? $stmt->fetchColumn() : false;
     return (bool)$enabled;
 }
 
@@ -153,7 +154,8 @@ function checkAdminLogin() {
  */
 function getSetting($key, $default = '') {
     $db = Database::getInstance()->getConnection();
-    $value = $db->querySingle("SELECT setting_value FROM settings WHERE setting_key = '$key'");
+    $stmt = $db->query("SELECT setting_value FROM settings WHERE setting_key = '$key'");
+    $value = $stmt ? $stmt->fetchColumn() : null;
     return $value !== null ? $value : $default;
 }
 
@@ -165,22 +167,17 @@ function updateSetting($key, $value) {
     
     // 检查设置是否存在
     $stmt = $db->prepare("SELECT COUNT(*) FROM settings WHERE setting_key = ?");
-    $stmt->bindValue(1, $key, SQLITE3_TEXT);
-    $result = $stmt->execute();
-    $exists = $result->fetchArray(SQLITE3_NUM)[0];
+    $stmt->execute([$key]);
+    $exists = $stmt->fetchColumn();
     
     if ($exists) {
         // 更新现有设置
         $stmt = $db->prepare("UPDATE settings SET setting_value = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?");
-        $stmt->bindValue(1, $value, SQLITE3_TEXT);
-        $stmt->bindValue(2, $key, SQLITE3_TEXT);
-        return $stmt->execute();
+        return $stmt->execute([$value, $key]);
     } else {
         // 插入新设置
         $stmt = $db->prepare("INSERT INTO settings (setting_key, setting_value, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
-        $stmt->bindValue(1, $key, SQLITE3_TEXT);
-        $stmt->bindValue(2, $value, SQLITE3_TEXT);
-        return $stmt->execute();
+        return $stmt->execute([$key, $value]);
     }
 }
 
@@ -202,12 +199,7 @@ function logAction($user_type, $user_id, $action, $details = '') {
     )");
     
     $stmt = $db->prepare("INSERT INTO action_logs (user_type, user_id, action, details, ip_address) VALUES (?, ?, ?, ?, ?)");
-    $stmt->bindValue(1, $user_type, SQLITE3_TEXT);
-    $stmt->bindValue(2, $user_id, SQLITE3_INTEGER);
-    $stmt->bindValue(3, $action, SQLITE3_TEXT);
-    $stmt->bindValue(4, $details, SQLITE3_TEXT);
-    $stmt->bindValue(5, $_SERVER['REMOTE_ADDR'] ?? '', SQLITE3_TEXT);
-    $stmt->execute();
+    $stmt->execute([$user_type, $user_id, $action, $details, $_SERVER['REMOTE_ADDR'] ?? '']);
 }
 
 /**
@@ -220,16 +212,17 @@ function getUserAnnouncements($user_id) {
     // 获取所有启用的公告
     $result = $db->query("SELECT * FROM announcements WHERE is_active = 1 ORDER BY created_at DESC");
     
-    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+    while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
         $announcement_id = $row['id'];
         $show_frequency = $row['show_frequency'];
         $interval_hours = $row['interval_hours'];
         
         // 检查用户是否已查看过此公告
-        $view_record = $db->querySingle("
+        $stmt = $db->query("
             SELECT * FROM user_announcement_views 
             WHERE user_id = $user_id AND announcement_id = $announcement_id
-        ", true);
+        ");
+        $view_record = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
         
         $should_show = false;
         
@@ -297,19 +290,14 @@ function markAnnouncementViewed($user_id, $announcement_id) {
             SET last_viewed_at = CURRENT_TIMESTAMP, view_count = ? 
             WHERE user_id = ? AND announcement_id = ?
         ");
-        $stmt->bindValue(1, $new_count, SQLITE3_INTEGER);
-        $stmt->bindValue(2, $user_id, SQLITE3_INTEGER);
-        $stmt->bindValue(3, $announcement_id, SQLITE3_INTEGER);
-        $stmt->execute();
+        $stmt->execute([$new_count, $user_id, $announcement_id]);
     } else {
         // 创建新记录
         $stmt = $db->prepare("
             INSERT INTO user_announcement_views (user_id, announcement_id, last_viewed_at, view_count) 
             VALUES (?, ?, CURRENT_TIMESTAMP, 1)
         ");
-        $stmt->bindValue(1, $user_id, SQLITE3_INTEGER);
-        $stmt->bindValue(2, $announcement_id, SQLITE3_INTEGER);
-        $stmt->execute();
+        $stmt->execute([$user_id, $announcement_id]);
     }
 }
 
@@ -323,10 +311,11 @@ function isSubdomainBlocked($subdomain) {
     $subdomain = strtolower(trim($subdomain));
     
     // 检查是否有启用的拦截前缀匹配
-    $result = $db->querySingle("
+    $stmt = $db->query("
         SELECT COUNT(*) FROM blocked_prefixes 
         WHERE is_active = 1 AND prefix = '$subdomain'
     ");
+    $result = $stmt ? $stmt->fetchColumn() : 0;
     
     return $result > 0;
 }
@@ -339,7 +328,7 @@ function getBlockedPrefixes() {
     $prefixes = [];
     
     $result = $db->query("SELECT prefix FROM blocked_prefixes WHERE is_active = 1 ORDER BY prefix ASC");
-    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+    while ($row = $result->fetch(PDO::FETCH_ASSOC)) {
         $prefixes[] = $row['prefix'];
     }
     

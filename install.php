@@ -95,30 +95,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
             
         case 2:
-            // 数据库配置
-            $db_path = 'data/cloudflare_dns.db';
-            $data_dir = dirname($db_path);
+            // MySQL数据库配置
+            $db_host = trim($_POST['db_host'] ?? 'localhost');
+            $db_name = trim($_POST['db_name'] ?? 'root');
+            $db_user = trim($_POST['db_user'] ?? 'root');
+            $db_pass = $_POST['db_pass'] ?? '';
             
-            if (!is_dir($data_dir)) {
-                if (!mkdir($data_dir, 0755, true)) {
-                    $error = '无法创建数据目录，请检查权限';
-                    break;
-                }
-            }
-            
-            if (!is_writable($data_dir)) {
-                $error = '数据目录不可写，请检查权限';
+            if (!$db_host || !$db_name || !$db_user) {
+                $error = '请填写完整的数据库配置信息';
                 break;
             }
             
             try {
-                // 创建数据库
-                $db = new SQLite3($db_path);
-                $db->close();
+                // 测试MySQL连接
+                $dsn = "mysql:host=$db_host;charset=utf8mb4";
+                $options = [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                ];
+                
+                $pdo = new PDO($dsn, $db_user, $db_pass, $options);
+                
+                // 创建数据库（如果不存在）
+                $pdo->exec("CREATE DATABASE IF NOT EXISTS `$db_name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                
+                // 保存数据库配置
+                $_SESSION['install_db'] = [
+                    'host' => $db_host,
+                    'name' => $db_name,
+                    'user' => $db_user,
+                    'pass' => $db_pass
+                ];
+                
                 header('Location: install.php?step=3');
                 exit;
-            } catch (Exception $e) {
-                $error = '数据库创建失败: ' . $e->getMessage();
+                
+            } catch (PDOException $e) {
+                $error = '数据库连接失败: ' . $e->getMessage();
             }
             break;
             
@@ -178,17 +192,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 5:
             // 执行安装
             try {
-                require_once 'config/database.php';
-                
                 // 获取配置
+                $db_config = $_SESSION['install_db'] ?? [];
                 $admin_config = $_SESSION['install_admin'] ?? [];
                 $system_config = $_SESSION['install_config'] ?? [];
                 
-                if (empty($admin_config) || empty($system_config)) {
+                if (empty($db_config) || empty($admin_config) || empty($system_config)) {
                     throw new Exception('安装配置丢失，请重新开始安装');
                 }
                 
+                // 生成MySQL数据库配置文件
+                $config_content = generateDatabaseConfig($db_config);
+                file_put_contents('config/database.php', $config_content);
+                
                 // 初始化数据库（这会创建所有表）
+                require_once 'config/database.php';
                 $db = Database::getInstance()->getConnection();
                 
                 // 删除默认管理员（如果存在）
@@ -197,10 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // 创建新管理员
                 $hashed_password = password_hash($admin_config['password'], PASSWORD_DEFAULT);
                 $stmt = $db->prepare("INSERT INTO admins (username, password, email) VALUES (?, ?, ?)");
-                $stmt->bindValue(1, $admin_config['username'], SQLITE3_TEXT);
-                $stmt->bindValue(2, $hashed_password, SQLITE3_TEXT);
-                $stmt->bindValue(3, $admin_config['email'], SQLITE3_TEXT);
-                $stmt->execute();
+                $stmt->execute([$admin_config['username'], $hashed_password, $admin_config['email']]);
                 
                 // 更新系统设置
                 $settings = [
@@ -212,15 +227,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 foreach ($settings as $key => $value) {
                     $stmt = $db->prepare("UPDATE settings SET setting_value = ? WHERE setting_key = ?");
-                    $stmt->bindValue(1, $value, SQLITE3_TEXT);
-                    $stmt->bindValue(2, $key, SQLITE3_TEXT);
-                    $stmt->execute();
+                    $stmt->execute([$value, $key]);
                 }
                 
                 // 创建安装锁定文件
                 file_put_contents('data/install.lock', date('Y-m-d H:i:s'));
                 
                 // 清除安装会话
+                unset($_SESSION['install_db']);
                 unset($_SESSION['install_admin']);
                 unset($_SESSION['install_config']);
                 
@@ -237,8 +251,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 环境检查
 function checkEnvironment() {
     $checks = [
-        'PHP版本 >= 7.0' => version_compare(PHP_VERSION, '7.0.0', '>='),
-        'SQLite3扩展' => extension_loaded('sqlite3'),
+        'PHP版本 >= 7.0' => version_compare(PHP_VERSION, '7.4.0', '>='),
+        'PDO MySQL扩展' => extension_loaded('pdo_mysql'),
         'cURL扩展' => extension_loaded('curl'),
         'OpenSSL扩展' => extension_loaded('openssl'),
         'data目录可写' => is_writable('.') || is_writable('data'),
@@ -412,20 +426,53 @@ $env_ok = !in_array(false, $env_checks);
                 <!-- 步骤2: 数据库配置 -->
                 <div class="text-center mb-4">
                     <h3><i class="fas fa-database me-2"></i>数据库配置</h3>
-                    <p class="text-muted">配置SQLite数据库</p>
+                    <p class="text-muted">配置MySQL数据库连接</p>
                 </div>
                 
                 <div class="row justify-content-center">
-                    <div class="col-md-6">
+                    <div class="col-md-8">
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
-                            系统将使用SQLite数据库，数据将存储在 <code>data/cloudflare_dns.db</code> 文件中
+                            请填写MySQL数据库连接信息。系统将自动创建数据库和表结构。
                         </div>
                         
                         <form method="POST">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="db_host" class="form-label">数据库主机</label>
+                                        <input type="text" class="form-control" id="db_host" name="db_host" 
+                                               value="<?php echo htmlspecialchars($_POST['db_host'] ?? 'localhost'); ?>" required>
+                                        <div class="form-text">通常为 localhost</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="db_name" class="form-label">数据库名</label>
+                                        <input type="text" class="form-control" id="db_name" name="db_name" 
+                                               value="<?php echo htmlspecialchars($_POST['db_name'] ?? 'cloudflare_dns'); ?>" required>
+                                        <div class="form-text">数据库将自动创建</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="db_user" class="form-label">数据库用户名</label>
+                                        <input type="text" class="form-control" id="db_user" name="db_user" 
+                                               value="<?php echo htmlspecialchars($_POST['db_user'] ?? 'root'); ?>" required>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="db_pass" class="form-label">数据库密码</label>
+                                        <input type="password" class="form-control" id="db_pass" name="db_pass" 
+                                               value="<?php echo htmlspecialchars($_POST['db_pass'] ?? ''); ?>">
+                                        <div class="form-text">如果数据库用户没有密码，请留空</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="text-center">
                                 <button type="submit" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-database me-2"></i>创建数据库
+                                    <i class="fas fa-database me-2"></i>测试连接并继续
                                 </button>
                             </div>
                         </form>
