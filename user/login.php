@@ -35,12 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
     $email_verify_code = getPost('email_verify_code');
     $captcha_code = getPost('captcha_code');
     $invitation_code = getPost('invitation_code');
-    $confirm_pwd = getPost("confirm_pwd");
 
     $captcha = new Captcha();
 
 
-    if (!$username || !$password || !$email || !$captcha_code || !$confirm_pwd) {
+    if (!$username || !$password || !$email || !$captcha_code) {
         $error = '请填写完整信息';
     } elseif (!$captcha->verify($captcha_code)) {
         $error = '验证码错误或已过期';
@@ -50,8 +49,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         $error = '两次输入的密码不一致';
     } elseif (!isValidEmail($email)) {
         $error = '请输入有效的邮箱地址';
-    } elseif ($confirm_pwd !== 'ILOVEYOUGUYS.5201314') {
-        $error = '注册密钥错误,请加q群422043698获取,免费的!!!!';
     } elseif ((getSetting('mail_verify_enabled', '0') == '1') && !$email_verify_code) {
         $error = '邮箱验证码错误';
     } else {
@@ -417,15 +414,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                                         <div class="mb-3">
                                             <label for="confirm_password" class="form-label">确认密码</label>
                                             <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="pwd" class="form-label">注册密钥</label>
-                                            <input type="text" class="form-control" id="confirm_pwd" name="confirm_pwd" required>
-                                            <div class="form-text">
-                                                <a href="https://qun.qq.com/universal-share/share?ac=1&authKey=94No12b0qvzTm8haWsJzjLGhdAsiBMRDZ1BrkSWKnWCNpypad4cM4kZEk1A0M8BO&busi_data=eyJncm91cENvZGUiOiI0MjIwNDM2OTgiLCJ0b2tlbiI6IkdCNUdOWTBYaDdGa214Zjd4NFhCQzUrcHRRc3hzR2kzT1NyTlYwMFpqT0NjQlpFR1pmL1dJQTJkaDVMb296NEgiLCJ1aW4iOiIxODM1MTE5OTUxIn0%3D&data=lKZmrBL7qrytfkCoTVEmuPjB83DbFAy80MpCSwJOQszxGaYyRt6rVoOlou5XFhjJwsIoJgW88tB5bIOI141eEw&svctype=4&tempid=h5_group_info">
-                                                    加入交流群获取(是因为有人一下注册好几个账号，我没招了)
-                                                </a>
-                                            </div>
                                         </div>
                                         <div class="mb-3">
                                             <label for="invitation_code" class="form-label">邀请码 <span class="text-muted">(可选)</span></label>
