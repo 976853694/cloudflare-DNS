@@ -319,7 +319,7 @@ class powerdns implements DnsInterface
     }
 
     //获取域名信息
-    public function getDomainInfo()
+    public function getDomainInfo($domain = null)
     {
         return false;
     }

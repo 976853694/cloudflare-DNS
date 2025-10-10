@@ -874,7 +874,7 @@ $stats = [
                         </li>
                         <?php if ($allow_registration): ?>
                         <li class="nav-item">
-                            <a class="nav-link" href="user/login.php">
+                            <a class="nav-link" href="user/register_verify.php">
                                 <i class="fas fa-user-plus me-1"></i>注册
                             </a>
                         </li>
@@ -1056,7 +1056,7 @@ $stats = [
                                     <i class="fas fa-sign-in-alt me-1"></i>立即登录
                                 </a>
                                 <?php if ($allow_registration): ?>
-                                <a href="user/login.php" class="btn btn-success">
+                                <a href="user/register_verify.php" class="btn btn-success">
                                     <i class="fas fa-user-plus me-1"></i>免费注册
                                 </a>
                                 <?php endif; ?>

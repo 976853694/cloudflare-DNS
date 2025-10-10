@@ -2,6 +2,7 @@
 
 namespace app\lib\dns;
 
+require_once __DIR__ . '/DNS/DnsInterface.php';
 use app\lib\DnsInterface;
 use app\lib\client\TencentCloud;
 use Exception;
@@ -44,6 +45,13 @@ class dnspod implements DnsInterface
         return false;
     }
 
+    public function setDomain($domain)
+    {
+        $this->domain = $domain;
+        $this->domainid = null; // Reset domain ID when domain changes
+        $this->domainInfo = null; // Reset domain info when domain changes
+    }
+
     //获取域名列表
     public function getDomainList($KeyWord = null, $PageNumber = 1, $PageSize = 20)
     {
@@ -58,15 +66,37 @@ class dnspod implements DnsInterface
         
         $data = $this->send_request($action, $param);
         if ($data) {
-            $list = [];
-            foreach ($data['DomainList'] as $row) {
-                $list[] = [
-                    'DomainId' => $row['DomainId'],
-                    'Domain' => $row['Name'],
-                    'RecordCount' => $row['RecordCount'],
-                ];
+            // 检查响应结构
+            if (isset($data['Response'])) {
+                $response = $data['Response'];
+                
+                // 检查是否有错误
+                if (isset($response['Error'])) {
+                    $this->setError($response['Error']['Message'] ?? '未知错误');
+                    return false;
+                }
+                
+                // 检查域名列表
+                if (!isset($response['DomainList']) || !is_array($response['DomainList'])) {
+                    $this->setError('域名列表数据格式错误');
+                    return false;
+                }
+                
+                $list = [];
+                foreach ($response['DomainList'] as $row) {
+                    $list[] = [
+                        'DomainId' => $row['DomainId'] ?? '',
+                        'Domain' => $row['Name'] ?? '',
+                        'RecordCount' => $row['RecordCount'] ?? 0,
+                    ];
+                }
+                
+                $total = $response['DomainCountInfo']['DomainTotal'] ?? count($list);
+                return ['total' => $total, 'list' => $list];
+            } else {
+                $this->setError('API响应格式错误');
+                return false;
             }
-            return ['total' => $data['DomainCountInfo']['DomainTotal'], 'list' => $list];
         }
         return false;
     }
@@ -75,26 +105,42 @@ class dnspod implements DnsInterface
     public function getDomainRecords($PageNumber = 1, $PageSize = 20, $KeyWord = null, $SubDomain = null, $Value = null, $Type = null, $Line = null, $Status = null)
     {
         $offset = ($PageNumber - 1) * $PageSize;
-        if (!isNullOrEmpty($Status) || !isNullOrEmpty($Value)) {
+        if (!\isNullOrEmpty($Status) || !\isNullOrEmpty($Value)) {
             $action = 'DescribeRecordFilterList';
             $param = ['Domain' => $this->domain, 'Offset' => $offset, 'Limit' => $PageSize, 'RecordValue' => $Value];
-            if (!isNullOrEmpty($SubDomain)) $param['SubDomain'] = $SubDomain;
-            if (!isNullOrEmpty($KeyWord)) $param['Keyword'] = $KeyWord;
-            if (!isNullOrEmpty($Value)) $param['RecordValue'] = $Value;
-            if (!isNullOrEmpty($Status)) {
+            if (!\isNullOrEmpty($SubDomain)) $param['SubDomain'] = $SubDomain;
+            if (!\isNullOrEmpty($KeyWord)) $param['Keyword'] = $KeyWord;
+            if (!\isNullOrEmpty($Value)) $param['RecordValue'] = $Value;
+            if (!\isNullOrEmpty($Status)) {
                 $Status = $Status == '1' ? 'ENABLE' : 'DISABLE';
                 $param['RecordStatus'] = [$Status];
             }
-            if (!isNullOrEmpty($Type)) $param['RecordType'] = [$this->convertType($Type)];
-            if (!isNullOrEmpty($Line)) $param['RecordLine'] = [$Line];
+            if (!\isNullOrEmpty($Type)) $param['RecordType'] = [$this->convertType($Type)];
+            if (!\isNullOrEmpty($Line)) $param['RecordLine'] = [$Line];
         } else {
             $action = 'DescribeRecordList';
             $param = ['Domain' => $this->domain, 'Subdomain' => $SubDomain, 'RecordType' => $this->convertType($Type), 'RecordLineId' => $Line, 'Keyword' => $KeyWord, 'Offset' => $offset, 'Limit' => $PageSize];
         }
         $data = $this->send_request($action, $param);
         if ($data) {
-            $list = [];
-            foreach ($data['RecordList'] as $row) {
+            // 检查响应结构
+            if (isset($data['Response'])) {
+                $response = $data['Response'];
+                
+                // 检查是否有错误
+                if (isset($response['Error'])) {
+                    $this->setError($response['Error']['Message'] ?? '未知错误');
+                    return false;
+                }
+                
+                // 检查记录列表
+                if (!isset($response['RecordList']) || !is_array($response['RecordList'])) {
+                    // 如果没有记录，返回空列表
+                    return ['total' => 0, 'list' => []];
+                }
+                
+                $list = [];
+                foreach ($response['RecordList'] as $row) {
                 //if($row['Name'] == '@' && $row['Type'] == 'NS') continue;
                 $list[] = [
                     'RecordId' => $row['RecordId'],
@@ -111,7 +157,12 @@ class dnspod implements DnsInterface
                     'UpdateTime' => $row['UpdatedOn'],
                 ];
             }
-            return ['total' => $data['RecordCountInfo']['TotalCount'], 'list' => $list];
+                $total = $response['RecordCountInfo']['TotalCount'] ?? count($list);
+                return ['total' => $total, 'list' => $list];
+            } else {
+                $this->setError('API响应格式错误');
+                return false;
+            }
         } elseif ($this->error == '记录列表为空。' || $this->error == 'No records on the list.') {
             return ['total' => 0, 'list' => []];
         }
@@ -154,20 +205,51 @@ class dnspod implements DnsInterface
     public function addDomainRecord($Name, $Type, $Value, $Line = '0', $TTL = 600, $MX = 1, $Weight = null, $Remark = null)
     {
         $action = 'CreateRecord';
-        $param = ['Domain' => $this->domain, 'SubDomain' => $Name, 'RecordType' => $this->convertType($Type), 'Value' => $Value, 'RecordLine' => $Line, 'RecordLineId' => $this->convertLineCode($Line), 'TTL' => intval($TTL), 'Weight' => $Weight];
+        $param = ['Domain' => $this->domain, 'SubDomain' => $Name, 'RecordType' => $this->convertType($Type), 'Value' => $Value, 'RecordLine' => $Line, 'RecordLineId' => $this->convertLineCode($Line), 'TTL' => intval($TTL)];
+        
+        // 只有在需要时才添加Weight参数
+        if ($Weight !== null) {
+            $param['Weight'] = intval($Weight);
+        }
+        
         if ($Type == 'MX') $param['MX'] = intval($MX);
         $data = $this->send_request($action, $param);
-        return is_array($data) ? $data['RecordId'] : false;
+        
+        if ($data && isset($data['Response'])) {
+            // 检查是否有错误
+            if (isset($data['Response']['Error'])) {
+                $this->setError($data['Response']['Error']['Message'] ?? '添加记录失败');
+                return false;
+            }
+            // 返回记录ID
+            return $data['Response']['RecordId'] ?? false;
+        }
+        return false;
     }
 
     //修改解析记录
     public function updateDomainRecord($RecordId, $Name, $Type, $Value, $Line = '0', $TTL = 600, $MX = 1, $Weight = null, $Remark = null)
     {
         $action = 'ModifyRecord';
-        $param = ['Domain' => $this->domain, 'RecordId' => intval($RecordId), 'SubDomain' => $Name, 'RecordType' => $this->convertType($Type), 'Value' => $Value, 'RecordLine' => $Line, 'RecordLineId' => $this->convertLineCode($Line), 'TTL' => intval($TTL), 'Weight' => $Weight];
+        $param = ['Domain' => $this->domain, 'RecordId' => intval($RecordId), 'SubDomain' => $Name, 'RecordType' => $this->convertType($Type), 'Value' => $Value, 'RecordLine' => $Line, 'RecordLineId' => $this->convertLineCode($Line), 'TTL' => intval($TTL)];
+        
+        // 只有在需要时才添加Weight参数
+        if ($Weight !== null) {
+            $param['Weight'] = intval($Weight);
+        }
+        
         if ($Type == 'MX') $param['MX'] = intval($MX);
         $data = $this->send_request($action, $param);
-        return is_array($data);
+        
+        if ($data && isset($data['Response'])) {
+            // 检查是否有错误
+            if (isset($data['Response']['Error'])) {
+                $this->setError($data['Response']['Error']['Message'] ?? '修改记录失败');
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     //修改解析记录备注
@@ -176,7 +258,16 @@ class dnspod implements DnsInterface
         $action = 'ModifyRecordRemark';
         $param = ['Domain' => $this->domain, 'RecordId' => intval($RecordId), 'Remark' => $Remark];
         $data = $this->send_request($action, $param);
-        return is_array($data);
+        
+        if ($data && isset($data['Response'])) {
+            // 检查是否有错误
+            if (isset($data['Response']['Error'])) {
+                $this->setError($data['Response']['Error']['Message'] ?? '修改备注失败');
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     //删除解析记录
@@ -185,7 +276,16 @@ class dnspod implements DnsInterface
         $action = 'DeleteRecord';
         $param = ['Domain' => $this->domain, 'RecordId' => intval($RecordId)];
         $data = $this->send_request($action, $param);
-        return is_array($data);
+        
+        if ($data && isset($data['Response'])) {
+            // 检查是否有错误
+            if (isset($data['Response']['Error'])) {
+                $this->setError($data['Response']['Error']['Message'] ?? '删除记录失败');
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     //设置解析记录状态
@@ -195,7 +295,16 @@ class dnspod implements DnsInterface
         $action = 'ModifyRecordStatus';
         $param = ['Domain' => $this->domain, 'RecordId' => intval($RecordId), 'Status' => $Status];
         $data = $this->send_request($action, $param);
-        return is_array($data);
+        
+        if ($data && isset($data['Response'])) {
+            // 检查是否有错误
+            if (isset($data['Response']['Error'])) {
+                $this->setError($data['Response']['Error']['Message'] ?? '修改状态失败');
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     //获取解析记录操作日志
@@ -252,10 +361,11 @@ class dnspod implements DnsInterface
     }
 
     //获取域名概览信息
-    public function getDomainInfo()
+    public function getDomainInfo($domain = null)
     {
+        $domain = $domain ?: $this->domain;
         $action = 'DescribeDomain';
-        $param = ['Domain' => $this->domain];
+        $param = ['Domain' => $domain];
         $data = $this->send_request($action, $param);
         if ($data) {
             $this->domainInfo = $data['DomainInfo'];

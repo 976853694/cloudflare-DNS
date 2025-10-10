@@ -67,9 +67,9 @@ class DNSProviderFactory {
         switch ($type) {
             case 'dnspod':
                 return [
-                    'ak' => $systemConfig['secret_id'],
-                    'sk' => $systemConfig['secret_key'], 
-                    'domain' => $systemConfig['domain'],
+                    'ak' => $systemConfig['api_key'],      // secret_id存储在api_key字段
+                    'sk' => $systemConfig['provider_uid'], // secret_key存储在provider_uid字段
+                    'domain' => $systemConfig['domain_name'] ?? $systemConfig['domain'],
                     'proxy' => isset($systemConfig['proxy']) ? $systemConfig['proxy'] : false
                 ];
             case 'powerdns':

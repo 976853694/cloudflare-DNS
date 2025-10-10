@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/cloudflare.php';
 require_once __DIR__ . '/rainbow_dns.php';
+require_once __DIR__ . '/dns_providers.php';
 
 /**
  * 统一DNS API管理器
@@ -13,6 +14,8 @@ class DNSManager {
     
     const PROVIDER_CLOUDFLARE = 'cloudflare';
     const PROVIDER_RAINBOW = 'rainbow';
+    const PROVIDER_DNSPOD = 'dnspod';
+    const PROVIDER_POWERDNS = 'powerdns';
     
     public function __construct($domain_config) {
         $this->provider_type = $domain_config['provider_type'] ?? self::PROVIDER_CLOUDFLARE;
@@ -31,6 +34,13 @@ class DNSManager {
                     $domain_config['api_key'],
                     $domain_config['api_base_url']
                 );
+                break;
+                
+            case self::PROVIDER_DNSPOD:
+            case self::PROVIDER_POWERDNS:
+                // 使用新的DNS Provider系统
+                $config = DNSProviderFactory::convertConfig($this->provider_type, $domain_config);
+                $this->api_instance = DNSProviderFactory::create($this->provider_type, $config);
                 break;
                 
             default:
@@ -56,6 +66,12 @@ class DNSManager {
                     }
                 }
                 return $records;
+                
+            case self::PROVIDER_DNSPOD:
+            case self::PROVIDER_POWERDNS:
+                // 使用新的DNS Provider系统
+                // 对于DNSPod，zone_id实际上是域名名称，不是数字ID
+                return $this->api_instance->getDomainRecords();
                 
             default:
                 throw new Exception('不支持的DNS提供商');
@@ -106,6 +122,41 @@ class DNSManager {
                     'proxied' => false
                 ];
                 
+            case self::PROVIDER_DNSPOD:
+            case self::PROVIDER_POWERDNS:
+                // 使用新的DNS Provider系统
+                // 对于DNSPod，不需要setDomain，域名在构造函数中已设置
+                
+                $line = $options['line'] ?? 'default';
+                $ttl = $options['ttl'] ?? 600;
+                $mx = $options['mx'] ?? 1;
+                $weight = $options['weight'] ?? null;
+                $remark = $options['remark'] ?? null;
+                
+                $result = $this->api_instance->addDomainRecord($name, $type, $content, $line, $ttl, $mx, $weight, $remark);
+                
+                // 处理不同的返回格式
+                if (is_numeric($result)) {
+                    // 直接返回RecordId（整数）
+                    $record_id = $result;
+                } elseif (is_array($result)) {
+                    // 返回数组格式
+                    $record_id = $result['RecordId'] ?? $result['id'] ?? null;
+                } else {
+                    $record_id = null;
+                }
+                
+                // 返回统一格式
+                return [
+                    'id' => $record_id,
+                    'RecordId' => $record_id,
+                    'name' => $name,
+                    'type' => $type,
+                    'content' => $content,
+                    'ttl' => $ttl,
+                    'proxied' => false
+                ];
+                
             default:
                 throw new Exception('不支持的DNS提供商');
         }
@@ -137,6 +188,19 @@ class DNSManager {
                 
                 return $this->api_instance->updateDNSRecord($zone_id, $record_id, $name, $type, $content, $line, $ttl, $rainbow_options);
                 
+            case self::PROVIDER_DNSPOD:
+            case self::PROVIDER_POWERDNS:
+                // 使用新的DNS Provider系统
+                // 对于DNSPod，不需要setDomain，域名在构造函数中已设置
+                
+                $line = $options['line'] ?? 'default';
+                $ttl = $options['ttl'] ?? 600;
+                $mx = $options['mx'] ?? 1;
+                $weight = $options['weight'] ?? null;
+                $remark = $options['remark'] ?? null;
+                
+                return $this->api_instance->updateDomainRecord($record_id, $name, $type, $content, $line, $ttl, $mx, $weight, $remark);
+                
             default:
                 throw new Exception('不支持的DNS提供商');
         }
@@ -153,6 +217,12 @@ class DNSManager {
             case self::PROVIDER_RAINBOW:
                 return $this->api_instance->deleteDNSRecord($zone_id, $record_id);
                 
+            case self::PROVIDER_DNSPOD:
+            case self::PROVIDER_POWERDNS:
+                // 使用新的DNS Provider系统
+                // 对于DNSPod，不需要setDomain，域名在构造函数中已设置
+                return $this->api_instance->deleteDomainRecord($record_id);
+                
             default:
                 throw new Exception('不支持的DNS提供商');
         }
@@ -162,7 +232,13 @@ class DNSManager {
      * 验证API凭据
      */
     public function verifyCredentials() {
-        return $this->api_instance->verifyCredentials();
+        switch ($this->provider_type) {
+            case self::PROVIDER_DNSPOD:
+            case self::PROVIDER_POWERDNS:
+                return $this->api_instance->check();
+            default:
+                return $this->api_instance->verifyCredentials();
+        }
     }
     
     /**
@@ -201,7 +277,10 @@ class DNSManager {
      * 检查是否支持线路功能
      */
     public function supportsLine() {
-        return $this->provider_type === self::PROVIDER_RAINBOW;
+        return in_array($this->provider_type, [
+            self::PROVIDER_RAINBOW,
+            self::PROVIDER_DNSPOD
+        ]);
     }
     
     /**
@@ -214,6 +293,12 @@ class DNSManager {
                 
             case self::PROVIDER_RAINBOW:
                 return ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV'];
+                
+            case self::PROVIDER_DNSPOD:
+                return ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV', 'CAA'];
+                
+            case self::PROVIDER_POWERDNS:
+                return ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'PTR', 'SRV'];
                 
             default:
                 return ['A', 'AAAA', 'CNAME', 'MX', 'TXT'];
@@ -231,6 +316,12 @@ class DNSManager {
             case self::PROVIDER_RAINBOW:
                 return '彩虹聚合DNS';
                 
+            case self::PROVIDER_DNSPOD:
+                return 'DNSPod';
+                
+            case self::PROVIDER_POWERDNS:
+                return 'PowerDNS';
+                
             default:
                 return '未知提供商';
         }
@@ -242,7 +333,9 @@ class DNSManager {
     public static function getSupportedProviders() {
         return [
             self::PROVIDER_CLOUDFLARE => 'Cloudflare',
-            self::PROVIDER_RAINBOW => '彩虹聚合DNS'
+            self::PROVIDER_RAINBOW => '彩虹聚合DNS',
+            self::PROVIDER_DNSPOD => 'DNSPod',
+            self::PROVIDER_POWERDNS => 'PowerDNS'
         ];
     }
 }

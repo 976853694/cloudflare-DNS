@@ -49,10 +49,10 @@
         <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
             <span>帮助信息</span>
         </h6>
-        <ul class=\"nav flex-column mb-2\">
-            <li class=\"nav-item\">
-                <a class=\"nav-link\" href=\"#\" data-bs-toggle=\"modal\" data-bs-target=\"#helpModal\">
-                    <i class=\"fas fa-question-circle me-2\"></i>使用帮助
+        <ul class="nav flex-column mb-2">
+            <li class="nav-item">
+                <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#helpModal">
+                    <i class="fas fa-question-circle me-2"></i>使用帮助
                 </a>
             </li>
         </ul>

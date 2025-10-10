@@ -26,7 +26,7 @@
     <style>
         /* 全局背景设置 */
         body {
-            background-image: url('https://img.6qu.cc/file/img/1757093288720_%E3%80%90%E5%93%B2%E9%A3%8E%E5%A3%81%E7%BA%B8%E3%80%91%E4%BC%A0%E7%BB%9F%E5%BB%BA%E7%AD%91-%E5%92%96%E5%95%A1%E5%B0%8F%E5%BA%97__1_.png?from=admin');
+            background-image: url('<?php echo getSetting('background_image_url', 'https://img.6qu.cc/file/img/1757093288720_%E3%80%90%E5%93%B2%E9%A3%8E%E5%A3%81%E7%BA%B8%E3%80%91%E4%BC%A0%E7%BB%9F%E5%BB%BA%E7%AD%91-%E5%92%96%E5%95%A1%E5%B0%8F%E5%BA%97__1_.png?from=admin'); ?>');
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
