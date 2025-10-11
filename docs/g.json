@@ -1,0 +1,12 @@
+{
+  "version": "1.7",
+  "announcements": [
+    {
+      "id": 1,
+      "title": "这个是公告测试",
+      "content": "简单测试",
+      "date": "2025-10-11",
+      "priority": "high"
+    }
+  ]
+}

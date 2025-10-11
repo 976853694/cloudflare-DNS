@@ -78,6 +78,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'version_updates.php' ? 'active' : ''; ?>" href="version_updates.php">
+                    <i class="fas fa-code-branch me-2"></i>版本更新
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'blocked_prefixes.php' ? 'active' : ''; ?>" href="blocked_prefixes.php">
                     <i class="fas fa-shield-alt me-2"></i>前缀拦截
                 </a>

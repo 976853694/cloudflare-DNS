@@ -9,12 +9,9 @@ if (!class_exists('Database')) {
     require_once __DIR__ . '/../config/database.php';
 }
 
-if (!function_exists('ensureDatabaseIntegrity')) {
+if (!function_exists('getSetting')) {
     require_once __DIR__ . '/functions.php';
 }
-
-// 确保数据库结构完整
-ensureDatabaseIntegrity();
 
 // 设置错误报告（生产环境中应该关闭）
 if (!defined('PRODUCTION')) {
