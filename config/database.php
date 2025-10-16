@@ -21,11 +21,14 @@ class Database {
         $this->db->enableExceptions(true);
         
         // 设置SQLite优化参数以减少锁定问题
+        // 使用较短的超时时间，防止卡死
+        $this->db->busyTimeout(10000); // 10秒超时
         $this->db->exec('PRAGMA journal_mode = WAL');
         $this->db->exec('PRAGMA synchronous = NORMAL');
-        $this->db->exec('PRAGMA cache_size = 1000');
+        $this->db->exec('PRAGMA cache_size = -4000'); // 4MB cache
         $this->db->exec('PRAGMA temp_store = MEMORY');
-        $this->db->exec('PRAGMA busy_timeout = 30000');
+        $this->db->exec('PRAGMA locking_mode = NORMAL'); // 避免独占锁
+        $this->db->exec('PRAGMA page_size = 4096');
         $this->db->exec('PRAGMA foreign_keys = ON');
         
         $this->initTables();
@@ -46,8 +49,12 @@ class Database {
     }
     
     private function initTables() {
-        // 创建用户表
-        $this->db->exec("CREATE TABLE IF NOT EXISTS users (
+        // 使用事务批量创建表，提高性能
+        $this->db->exec('BEGIN TRANSACTION');
+        
+        try {
+            // 创建用户表
+            $this->db->exec("CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL,
@@ -79,6 +86,7 @@ class Database {
             provider_type TEXT DEFAULT 'cloudflare',
             provider_uid TEXT DEFAULT '',
             api_base_url TEXT DEFAULT '',
+            expiration_time TEXT DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )");
@@ -278,6 +286,14 @@ class Database {
         
         // 初始化用户组表（如果不存在则创建）
         $this->initUserGroupTables();
+        
+            // 提交事务
+            $this->db->exec('COMMIT');
+        } catch (Exception $e) {
+            // 回滚事务
+            $this->db->exec('ROLLBACK');
+            throw $e;
+        }
     }
     
     
@@ -356,6 +372,11 @@ class Database {
             // 添加api_base_url字段
             if (!in_array('api_base_url', $existing_columns)) {
                 $this->db->exec("ALTER TABLE domains ADD COLUMN api_base_url TEXT DEFAULT ''");
+            }
+            
+            // 添加expiration_time字段
+            if (!in_array('expiration_time', $existing_columns)) {
+                $this->db->exec("ALTER TABLE domains ADD COLUMN expiration_time TEXT DEFAULT NULL");
             }
             
         } catch (Exception $e) {

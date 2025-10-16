@@ -82,6 +82,13 @@ $stats = [
     'total_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records WHERE status = 1"),
     'active_today' => $db->querySingle("SELECT COUNT(DISTINCT user_id) FROM dns_records WHERE DATE(created_at) = DATE('now')")
 ];
+
+// 获取所有域名及到期时间
+$domains_with_expiration = [];
+$domains_query = $db->query("SELECT domain_name, expiration_time FROM domains WHERE status = 1 ORDER BY expiration_time ASC, domain_name ASC");
+while ($domain = $domains_query->fetchArray(SQLITE3_ASSOC)) {
+    $domains_with_expiration[] = $domain;
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -97,15 +104,69 @@ $stats = [
     
     <style>
         :root {
-            --primary-color: #00d4ff;
-            --secondary-color: #0099cc;
-            --accent-color: #ff6b6b;
-            --dark-bg: #0a0e27;
-            --darker-bg: #050816;
-            --card-bg: rgba(255, 255, 255, 0.05);
+            /* 赛博朋克二次元配色方案 */
+            --neon-cyan: #00f5ff;
+            --neon-pink: #ff006e;
+            --neon-purple: #bf00ff;
+            --neon-blue: #0080ff;
+            --neon-green: #00ff88;
+            --neon-yellow: #ffd700;
+            --cyber-dark: #0a0e27;
+            --cyber-darker: #050814;
+            --cyber-card: rgba(15, 25, 50, 0.75);
+            
+            /* 主要配色 */
+            --primary-color: #00f5ff;
+            --secondary-color: #bf00ff;
+            --accent-color: #ff006e;
+            --success-color: #00ff88;
+            --warning-color: #ffaa00;
+            --danger-color: #ff0055;
+            
+            /* 文字颜色 */
             --text-primary: #ffffff;
-            --text-secondary: #b8c5d6;
-            --glow-color: rgba(0, 212, 255, 0.3);
+            --text-secondary: #b4c4ff;
+            --text-muted: #8896b3;
+            --text-glow: #00f5ff;
+            --text-white: #ffffff;
+            
+            /* 毛玻璃背景色 */
+            --bg-primary: #0a0e27;
+            --bg-glass: rgba(10, 14, 39, 0.65);
+            --bg-glass-light: rgba(15, 25, 50, 0.55);
+            --bg-glass-dark: rgba(5, 8, 20, 0.85);
+            --bg-card: rgba(15, 25, 50, 0.75);
+            
+            /* 发光阴影效果 - 多层次 */
+            --shadow-neon-cyan: 0 0 20px rgba(0, 245, 255, 0.5), 0 0 40px rgba(0, 245, 255, 0.3), 0 0 60px rgba(0, 245, 255, 0.1);
+            --shadow-neon-pink: 0 0 20px rgba(255, 0, 110, 0.5), 0 0 40px rgba(255, 0, 110, 0.3), 0 0 60px rgba(255, 0, 110, 0.1);
+            --shadow-neon-purple: 0 0 20px rgba(191, 0, 255, 0.5), 0 0 40px rgba(191, 0, 255, 0.3), 0 0 60px rgba(191, 0, 255, 0.1);
+            --shadow-cyber: 0 8px 32px rgba(0, 245, 255, 0.2), 0 4px 16px rgba(191, 0, 255, 0.15);
+            --shadow-cyber-hover: 0 12px 48px rgba(0, 245, 255, 0.3), 0 6px 24px rgba(191, 0, 255, 0.25);
+            --shadow-deep: 0 20px 60px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 245, 255, 0.2);
+            
+            /* 渐变效果 */
+            --gradient-cyber: linear-gradient(135deg, #00f5ff 0%, #bf00ff 50%, #ff006e 100%);
+            --gradient-neon: linear-gradient(90deg, #00f5ff, #bf00ff, #ff006e);
+            --gradient-matrix: linear-gradient(180deg, rgba(0, 255, 136, 0.1) 0%, transparent 100%);
+            --gradient-kawaii: linear-gradient(135deg, #ff006e 0%, #bf00ff 50%, #00f5ff 100%);
+            --gradient-magical: linear-gradient(135deg, #ffd700 0%, #ff006e 50%, #bf00ff 100%);
+            --gradient-sky: linear-gradient(135deg, #00f5ff 0%, #0080ff 100%);
+            --gradient-sunset: linear-gradient(135deg, #ff006e 0%, #ffaa00 100%);
+            
+            /* 可爱风格阴影 */
+            --shadow-kawaii: 0 8px 32px rgba(255, 105, 180, 0.3), 0 4px 16px rgba(221, 160, 221, 0.2);
+            --shadow-dreamy: 0 12px 48px rgba(255, 182, 193, 0.4), 0 6px 24px rgba(221, 160, 221, 0.3);
+            --shadow-magic: 0 16px 64px rgba(255, 215, 0, 0.3), 0 8px 32px rgba(255, 105, 180, 0.25);
+            --shadow-cute: 0 4px 16px rgba(255, 182, 193, 0.3);
+            
+            /* 可爱配色 */
+            --sakura-pink: #ffb7c5;
+            --lavender: #e6e6fa;
+            --mint: #98fb98;
+            --peach: #ffd1dc;
+            --sky-blue: #87ceeb;
+            --darker-bg: #1a1a2e;
         }
         
         * {
@@ -115,13 +176,46 @@ $stats = [
         }
         
         body {
-            font-family: 'Inter', 'Segoe UI', sans-serif;
-            background: var(--dark-bg);
+            font-family: 'Orbitron', 'Rajdhani', 'Share Tech Mono', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
             color: var(--text-primary);
             overflow-x: hidden;
+            min-height: 100vh;
+            position: relative;
         }
         
-        /* 动态背景 */
+        /* 赛博网格背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    rgba(0, 245, 255, 0.05) 0px,
+                    transparent 1px,
+                    transparent 40px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(191, 0, 255, 0.05) 0px,
+                    transparent 1px,
+                    transparent 40px
+                );
+            z-index: -2;
+            pointer-events: none;
+            animation: grid-move 30s linear infinite;
+        }
+        
+        @keyframes grid-move {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(40px, 40px); }
+        }
+        
+        /* 科技感动态背景 - 多层次光效 */
         .bg-animation {
             position: fixed;
             top: 0;
@@ -129,9 +223,25 @@ $stats = [
             width: 100%;
             height: 100%;
             z-index: -1;
-            background: linear-gradient(45deg, var(--dark-bg), var(--darker-bg));
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0, 245, 255, 0.2) 0%, transparent 40%),
+                radial-gradient(circle at 80% 70%, rgba(191, 0, 255, 0.2) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(255, 0, 110, 0.15) 0%, transparent 50%);
+            animation: pulse-bg 8s ease-in-out infinite;
         }
         
+        @keyframes pulse-bg {
+            0%, 100% { 
+                opacity: 0.6; 
+                filter: blur(60px);
+            }
+            50% { 
+                opacity: 0.9; 
+                filter: blur(80px);
+            }
+        }
+        
+        /* 添加科技粒子效果层 */
         .bg-animation::before {
             content: '';
             position: absolute;
@@ -140,10 +250,48 @@ $stats = [
             width: 100%;
             height: 100%;
             background-image: 
-                radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(0, 153, 204, 0.05) 0%, transparent 50%);
-            animation: float 20s ease-in-out infinite;
+                radial-gradient(circle at 10% 20%, rgba(0, 245, 255, 0.1) 1px, transparent 1px),
+                radial-gradient(circle at 90% 80%, rgba(255, 0, 110, 0.1) 1px, transparent 1px),
+                radial-gradient(circle at 50% 50%, rgba(191, 0, 255, 0.1) 1px, transparent 1px);
+            background-size: 300px 300px, 250px 250px, 400px 400px;
+            animation: particle-float 20s linear infinite;
+        }
+        
+        @keyframes particle-float {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(100px, -100px); }
+        }
+        
+        /* 添加扫描线效果 */
+        .bg-animation::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(0, 245, 255, 0.8) 50%, 
+                transparent 100%);
+            box-shadow: 0 0 20px rgba(0, 245, 255, 0.5);
+            animation: scan-line 4s linear infinite;
+        }
+        
+        @keyframes scan-line {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(100vh); }
+        }
+        
+        @keyframes sparkle {
+            0% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+            100% { transform: translateY(0) rotate(360deg); }
+        }
+        
+        @keyframes kawaii-float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-10px) scale(1.02); }
         }
         
         @keyframes float {
@@ -151,47 +299,151 @@ $stats = [
             50% { transform: translateY(-20px) rotate(180deg); }
         }
         
-        /* 导航栏 */
+        /* 赛博朋克导航栏 - 加强毛玻璃效果 */
         .navbar {
-            background: rgba(10, 14, 39, 0.9) !important;
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+            background: var(--bg-glass) !important;
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border-bottom: 1px solid rgba(0, 245, 255, 0.3);
             padding: 1rem 0;
+            box-shadow: var(--shadow-cyber), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            border-radius: 0;
+        }
+        
+        .navbar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, 
+                rgba(0, 245, 255, 0.05) 0%, 
+                rgba(191, 0, 255, 0.03) 50%, 
+                rgba(255, 0, 110, 0.05) 100%);
+            z-index: -1;
+        }
+        
+        .navbar::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--gradient-neon);
+            animation: neon-flow 3s linear infinite;
+            box-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+        }
+        
+        @keyframes neon-flow {
+            0% { transform: translateX(-100%); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateX(100%); opacity: 0; }
         }
         
         .navbar-brand {
-            font-weight: 700;
-            font-size: 1.5rem;
-            color: var(--primary-color) !important;
-            text-shadow: 0 0 10px var(--glow-color);
+            font-weight: 900;
+            font-size: 1.8rem;
+            background: var(--gradient-cyber);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 20px rgba(0, 245, 255, 0.5);
+            position: relative;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .navbar-brand::before {
+            content: '◢';
+            position: absolute;
+            left: -1.5rem;
+            color: var(--primary-color);
+            animation: glitch-1 2s infinite;
+        }
+        
+        .navbar-brand::after {
+            content: '◣';
+            position: absolute;
+            right: -1.5rem;
+            color: var(--accent-color);
+            animation: glitch-2 2s infinite;
+        }
+        
+        @keyframes glitch-1 {
+            0%, 100% { opacity: 1; transform: translateX(0); }
+            25% { opacity: 0.5; transform: translateX(-5px); }
+            75% { opacity: 0.8; transform: translateX(3px); }
+        }
+        
+        @keyframes glitch-2 {
+            0%, 100% { opacity: 1; transform: translateX(0); }
+            30% { opacity: 0.7; transform: translateX(5px); }
+            70% { opacity: 0.9; transform: translateX(-3px); }
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); }
+            50% { opacity: 0.5; transform: translateY(-50%) scale(1.2); }
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
         }
         
         .navbar-nav .nav-link {
             color: var(--text-secondary) !important;
-            font-weight: 500;
+            font-weight: 700;
             margin: 0 0.5rem;
             transition: all 0.3s ease;
             position: relative;
+            padding: 0.5rem 1.2rem !important;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9rem;
+        }
+        
+        .navbar-nav .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0;
+            height: 100%;
+            background: var(--gradient-cyber);
+            transition: width 0.3s ease;
+            z-index: -1;
+            border-radius: 5px;
         }
         
         .navbar-nav .nav-link:hover {
-            color: var(--primary-color) !important;
-            text-shadow: 0 0 5px var(--glow-color);
+            color: var(--text-primary) !important;
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-neon-cyan);
+            transform: translateY(-2px);
+        }
+        
+        .navbar-nav .nav-link:hover::before {
+            width: 100%;
         }
         
         .navbar-nav .nav-link::after {
-            content: '';
+            content: '▸';
             position: absolute;
-            bottom: -5px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: var(--primary-color);
-            transition: width 0.3s ease;
+            right: 0.5rem;
+            opacity: 0;
+            transition: all 0.3s ease;
+            color: var(--primary-color);
         }
         
         .navbar-nav .nav-link:hover::after {
-            width: 100%;
+            opacity: 1;
+            right: 0.3rem;
         }
         
         /* 英雄区域 */
@@ -210,13 +462,34 @@ $stats = [
         
         .hero-title {
             font-size: clamp(2.5rem, 5vw, 4rem);
-            font-weight: 800;
+            font-weight: 900;
             margin-bottom: 1.5rem;
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            background: var(--gradient-magical);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             line-height: 1.2;
+            text-shadow: 3px 3px 6px rgba(255, 105, 180, 0.3);
+            position: relative;
+            animation: rainbow-text 3s ease-in-out infinite;
+        }
+        
+        .hero-title::before {
+            content: '🌸';
+            position: absolute;
+            left: -3rem;
+            top: 0;
+            font-size: 2rem;
+            animation: petal-fall 4s ease-in-out infinite;
+        }
+        
+        .hero-title::after {
+            content: '✨';
+            position: absolute;
+            right: -3rem;
+            top: 0;
+            font-size: 2rem;
+            animation: sparkle-dance 3s ease-in-out infinite;
         }
         
         .hero-subtitle {
@@ -224,46 +497,123 @@ $stats = [
             color: var(--text-secondary);
             margin-bottom: 2rem;
             line-height: 1.6;
+            position: relative;
         }
         
-        /* 卡片通用样式 */
+        .hero-subtitle::before {
+            content: '💖 ';
+            color: var(--primary-color);
+        }
+        
+        .hero-subtitle::after {
+            content: ' 💖';
+            color: var(--accent-color);
+        }
+        
+        /* 赛博毛玻璃卡片 - 多层次深度 */
         .card-modern {
-            background: var(--card-bg);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(0, 212, 255, 0.15);
-            border-radius: 24px;
-            padding: 2rem;
+            background: var(--bg-glass-light);
+            backdrop-filter: blur(30px) saturate(150%);
+            -webkit-backdrop-filter: blur(30px) saturate(150%);
+            border: 1px solid rgba(0, 245, 255, 0.2);
+            border-radius: 20px;
+            padding: 2.5rem;
             box-shadow: 
-                0 8px 32px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                var(--shadow-deep),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            transform-style: preserve-3d;
         }
         
+        /* 卡片内部发光边框 */
         .card-modern::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+            bottom: 0;
+            border-radius: 20px;
+            padding: 1px;
+            background: linear-gradient(135deg, 
+                rgba(0, 245, 255, 0.5) 0%,
+                rgba(191, 0, 255, 0.3) 50%,
+                rgba(255, 0, 110, 0.5) 100%);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
         }
         
+        /* 卡片背景纹理 */
+        .card-modern::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 245, 255, 0.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.3;
+            animation: texture-move 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        @keyframes texture-move {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            100% { transform: translate(50px, 50px) rotate(360deg); }
+        }
+        
+        @keyframes rainbow-text {
+            0%, 100% { filter: hue-rotate(0deg); }
+            50% { filter: hue-rotate(90deg); }
+        }
+        
+        @keyframes petal-fall {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(10px) rotate(180deg); }
+        }
+        
+        @keyframes sparkle-dance {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.2) rotate(360deg); }
+        }
+        
+        /* 卡片悬停效果 - 3D提升 */
         .card-modern:hover {
-            transform: translateY(-8px);
+            transform: translateY(-15px) translateZ(30px) scale(1.02);
             box-shadow: 
-                0 20px 60px rgba(0, 0, 0, 0.4),
-                0 0 40px rgba(0, 212, 255, 0.1),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            border-color: rgba(0, 212, 255, 0.4);
+                var(--shadow-cyber-hover),
+                0 30px 80px rgba(0, 0, 0, 0.6),
+                inset 0 2px 0 rgba(255, 255, 255, 0.2);
+            border-color: rgba(0, 245, 255, 0.5);
         }
         
         .card-modern:hover::before {
             opacity: 1;
+        }
+        
+        .card-modern:hover::after {
+            opacity: 0.5;
+            animation-duration: 10s;
+        }
+        
+        /* 卡片内容层叠 */
+        .card-modern > * {
+            position: relative;
+            z-index: 1;
+        }
+        
+        @keyframes heart-beat {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
         }
         
         /* 查询卡片 */
@@ -277,87 +627,151 @@ $stats = [
             align-items: end;
         }
         
+        /* 赛博毛玻璃输入框 */
         .form-control {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(0, 212, 255, 0.3);
-            border-radius: 10px;
+            background: rgba(15, 25, 50, 0.5);
+            border: 1px solid rgba(0, 245, 255, 0.3);
+            border-radius: 15px;
             color: var(--text-primary);
-            padding: 0.75rem 1rem;
+            padding: 1rem 1.5rem;
             font-size: 1.1rem;
-            transition: all 0.3s ease;
+            font-weight: 500;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
+            position: relative;
+            box-shadow: 
+                inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                0 4px 16px rgba(0, 0, 0, 0.2);
         }
         
         .form-control:focus {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(15, 25, 50, 0.7);
             border-color: var(--primary-color);
-            box-shadow: 0 0 20px var(--glow-color);
+            box-shadow: 
+                var(--shadow-neon-cyan),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                0 0 0 3px rgba(0, 245, 255, 0.1);
             color: var(--text-primary);
+            outline: none;
+            transform: translateY(-2px);
         }
         
         .form-control::placeholder {
-            color: var(--text-secondary);
+            color: var(--text-muted);
+            font-style: italic;
         }
         
-        /* 按钮样式 */
+        /* 可爱按钮样式 */
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: var(--gradient-kawaii);
             border: none;
-            border-radius: 10px;
-            padding: 0.75rem 2rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            border-radius: 25px;
+            padding: 1rem 2.5rem;
+            font-weight: 700;
+            color: var(--text-white);
+            font-size: 1.1rem;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.4);
+            box-shadow: var(--shadow-cute);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .btn-primary::before {
-            content: '';
+            content: '✨';
             position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-            transition: left 0.5s ease;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            transition: all 0.3s ease;
         }
         
-        .btn-primary:hover::before {
-            left: 100%;
+        .btn-primary::after {
+            content: '🌟';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: var(--shadow-magic);
+            color: var(--text-white);
+            animation: button-glow 0.5s ease-in-out;
+        }
+        
+        .btn-primary:hover::before,
+        .btn-primary:hover::after {
+            opacity: 1;
         }
         
         .btn-success {
-            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            background: var(--gradient-sky);
             border: none;
-            border-radius: 10px;
-            padding: 0.75rem 2rem;
-            font-weight: 600;
-            color: var(--dark-bg);
+            border-radius: 25px;
+            padding: 1rem 2rem;
+            font-weight: 700;
+            color: var(--text-white);
+            box-shadow: var(--shadow-cute);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .btn-success::before {
+            content: '🌱';
+            margin-right: 0.5rem;
+        }
+        
+        .btn-success:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-magic);
+            color: var(--text-white);
         }
         
         .btn-danger {
-            background: linear-gradient(135deg, var(--accent-color), #ff4757);
+            background: var(--gradient-sunset);
             border: none;
-            border-radius: 10px;
-            padding: 0.75rem 2rem;
-            font-weight: 600;
+            border-radius: 25px;
+            padding: 1rem 2rem;
+            font-weight: 700;
+            color: var(--text-white);
+            box-shadow: var(--shadow-cute);
+            transition: all 0.3s ease;
+            position: relative;
         }
         
-        /* 结果显示 */
+        .btn-danger::before {
+            content: '⚠️';
+            margin-right: 0.5rem;
+        }
+        
+        .btn-danger:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-magic);
+            color: var(--text-white);
+        }
+        
+        @keyframes button-glow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+        }
+        
+        /* 可爱结果显示 */
         .result-card {
             margin-top: 1.5rem;
-            padding: 1.5rem;
-            border-radius: 16px;
-            border-left: 4px solid;
-            animation: slideInUp 0.5s ease;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            padding: 2rem;
+            border-radius: 25px;
+            border: 3px solid;
+            animation: slideInUp 0.5s ease, result-shimmer 2s ease-in-out infinite;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            box-shadow: var(--shadow-kawaii);
             position: relative;
             overflow: hidden;
         }
@@ -370,36 +784,70 @@ $stats = [
             right: 0;
             bottom: 0;
             background: inherit;
-            opacity: 0.8;
+            opacity: 0.95;
             z-index: -1;
         }
         
         .result-available {
-            background: rgba(0, 255, 136, 0.15);
-            border-left-color: #00ff88;
-            color: #00ff88;
-            border: 1px solid rgba(0, 255, 136, 0.3);
+            background: rgba(152, 251, 152, 0.2);
+            border-color: var(--success-color);
+            color: var(--text-primary);
+        }
+        
+        .result-available::after {
+            content: '✅ 可用哦~ ';
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.2rem;
+            animation: bounce 1s ease-in-out infinite;
         }
         
         .result-used {
-            background: rgba(255, 193, 7, 0.15);
-            border-left-color: #ffc107;
-            color: #ffc107;
-            border: 1px solid rgba(255, 193, 7, 0.3);
+            background: rgba(255, 165, 0, 0.2);
+            border-color: var(--warning-color);
+            color: var(--text-primary);
+        }
+        
+        .result-used::after {
+            content: '⚠️ 已被使用 ';
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.2rem;
         }
         
         .result-blocked {
-            background: rgba(255, 107, 107, 0.15);
-            border-left-color: var(--accent-color);
-            color: var(--accent-color);
-            border: 1px solid rgba(255, 107, 107, 0.3);
+            background: rgba(255, 20, 147, 0.2);
+            border-color: var(--danger-color);
+            color: var(--text-primary);
+        }
+        
+        .result-blocked::after {
+            content: '❌ 被阻止了 ';
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.2rem;
         }
         
         .result-partial {
-            background: rgba(255, 193, 7, 0.15);
-            border-left-color: #ffc107;
-            color: #ffc107;
-            border: 1px solid rgba(255, 193, 7, 0.3);
+            background: rgba(255, 182, 193, 0.2);
+            border-color: var(--primary-color);
+            color: var(--text-primary);
+        }
+        
+        .result-partial::after {
+            content: '💫 部分可用 ';
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.2rem;
+        }
+        
+        @keyframes result-shimmer {
+            0%, 100% { box-shadow: var(--shadow-kawaii); }
+            50% { box-shadow: var(--shadow-magic); }
         }
         
         /* 域名列表样式 */
@@ -413,27 +861,47 @@ $stats = [
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.75rem 1rem;
-            margin-bottom: 0.5rem;
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
+            padding: 1rem 1.5rem;
+            margin-bottom: 0.8rem;
+            border-radius: 20px;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
             transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--sakura-pink);
+            background: rgba(255, 255, 255, 0.8);
+            position: relative;
+        }
+        
+        .domain-item::before {
+            content: '🌸';
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+            opacity: 0;
+            transition: all 0.3s ease;
         }
         
         .domain-item.available {
-            background: rgba(0, 255, 136, 0.1);
-            border-color: rgba(0, 255, 136, 0.3);
+            background: rgba(152, 251, 152, 0.3);
+            border-color: var(--success-color);
         }
         
         .domain-item.used {
-            background: rgba(255, 107, 107, 0.1);
-            border-color: rgba(255, 107, 107, 0.3);
+            background: rgba(255, 182, 193, 0.3);
+            border-color: var(--danger-color);
         }
         
         .domain-item:hover {
-            transform: translateX(5px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transform: translateX(10px) scale(1.02);
+            box-shadow: var(--shadow-kawaii);
+            background: rgba(255, 255, 255, 0.95);
+        }
+        
+        .domain-item:hover::before {
+            opacity: 1;
+            left: -10px;
         }
         
         .domain-name {
@@ -451,51 +919,73 @@ $stats = [
         }
         
         .domain-status.available {
-            color: #00ff88;
+            color: var(--success-color);
+            font-weight: 700;
+            text-shadow: 1px 1px 2px rgba(50, 205, 50, 0.3);
+        }
+        
+        .domain-status.available::before {
+            content: '💚 ';
         }
         
         .domain-status.used {
-            color: var(--accent-color);
+            color: var(--danger-color);
+            font-weight: 700;
+            text-shadow: 1px 1px 2px rgba(255, 20, 147, 0.3);
+        }
+        
+        .domain-status.used::before {
+            content: '💔 ';
         }
         
         .domain-actions {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.8rem;
         }
         
         .btn-mini {
-            padding: 0.4rem 0.8rem;
-            font-size: 0.8rem;
-            border-radius: 8px;
+            padding: 0.6rem 1.2rem;
+            font-size: 0.9rem;
+            border-radius: 20px;
             border: none;
-            font-weight: 600;
+            font-weight: 700;
             text-decoration: none;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 0.3rem;
+            gap: 0.5rem;
+            box-shadow: var(--shadow-cute);
+            position: relative;
         }
         
         .btn-mini.btn-add {
-            background: linear-gradient(135deg, #00ff88, #00cc6a);
-            color: var(--dark-bg);
+            background: var(--gradient-sky);
+            color: var(--text-white);
+        }
+        
+        .btn-mini.btn-add::before {
+            content: '➕';
         }
         
         .btn-mini.btn-add:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.4);
-            color: var(--dark-bg);
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: var(--shadow-magic);
+            color: var(--text-white);
         }
         
         .btn-mini.btn-login {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
+            background: var(--gradient-kawaii);
+            color: var(--text-white);
+        }
+        
+        .btn-mini.btn-login::before {
+            content: '🔑';
         }
         
         .btn-mini.btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
-            color: white;
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: var(--shadow-magic);
+            color: var(--text-white);
         }
         
         @keyframes slideInUp {
@@ -542,37 +1032,67 @@ $stats = [
         }
         
         .stat-icon {
-            font-size: 3rem;
-            color: var(--primary-color);
+            font-size: 4rem;
+            background: var(--gradient-kawaii);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 1rem;
-            text-shadow: 0 0 20px var(--glow-color);
+            animation: icon-bounce 2s ease-in-out infinite;
+            filter: drop-shadow(2px 2px 4px rgba(255, 105, 180, 0.3));
         }
         
         .stat-number {
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: var(--text-primary);
+            font-size: 3rem;
+            font-weight: 900;
+            background: var(--gradient-magical);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
             margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         .stat-label {
             color: var(--text-secondary);
-            font-weight: 500;
+            font-weight: 600;
+            font-size: 1.1rem;
         }
         
-        /* 用户状态卡片 */
+        @keyframes icon-bounce {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-5px) scale(1.1); }
+        }
+        
+        /* 可爱用户状态卡片 */
         .user-status {
             margin-bottom: 2rem;
-            padding: 2rem;
-            border-radius: 24px;
+            padding: 2.5rem;
+            border-radius: 30px;
             background: linear-gradient(135deg, 
-                rgba(0, 212, 255, 0.15) 0%, 
-                rgba(255, 107, 107, 0.08) 100%);
-            border: 1px solid rgba(0, 212, 255, 0.3);
+                rgba(255, 182, 193, 0.3) 0%, 
+                rgba(221, 160, 221, 0.2) 50%,
+                rgba(173, 216, 230, 0.3) 100%);
+            border: 3px solid var(--primary-color);
             backdrop-filter: blur(20px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: var(--shadow-dreamy);
             position: relative;
             overflow: hidden;
+        }
+        
+        .user-status::before {
+            content: '🌈✨💖';
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.5rem;
+            animation: float-emojis 3s ease-in-out infinite;
+        }
+        
+        @keyframes float-emojis {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(10deg); }
         }
         
         .user-status::before {
@@ -592,66 +1112,89 @@ $stats = [
         }
         
         .user-avatar {
-            width: 70px;
-            height: 70px;
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            background: var(--gradient-kawaii);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: white;
-            margin-right: 1.5rem;
-            box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--text-white);
+            margin-right: 2rem;
+            box-shadow: var(--shadow-kawaii);
             position: relative;
+            animation: avatar-glow 3s ease-in-out infinite;
         }
         
         .user-avatar::after {
-            content: '';
+            content: '✨';
             position: absolute;
-            inset: -3px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-            z-index: -1;
-            opacity: 0.3;
+            top: -5px;
+            right: -5px;
+            font-size: 1.2rem;
+            animation: twinkle 2s ease-in-out infinite;
         }
         
         .user-details h5 {
             color: var(--text-primary);
-            font-weight: 600;
+            font-weight: 700;
             margin-bottom: 0.5rem;
-            font-size: 1.25rem;
+            font-size: 1.4rem;
+        }
+        
+        .user-details h5::before {
+            content: '👋 ';
         }
         
         .user-meta {
             display: flex;
-            gap: 1rem;
+            gap: 1.5rem;
             align-items: center;
             margin-bottom: 1.5rem;
         }
         
         .points-badge {
-            background: linear-gradient(135deg, #00ff88, #00cc6a);
-            color: var(--dark-bg);
-            padding: 0.6rem 1.2rem;
-            border-radius: 25px;
-            font-weight: 700;
-            font-size: 0.95rem;
-            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+            background: var(--gradient-sky);
+            color: var(--text-white);
+            padding: 0.8rem 1.5rem;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 1rem;
+            box-shadow: var(--shadow-cute);
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
+            animation: badge-pulse 2s ease-in-out infinite;
+        }
+        
+        .points-badge::before {
+            content: '💰';
         }
         
         .status-badge {
-            background: rgba(0, 212, 255, 0.2);
+            background: rgba(255, 182, 193, 0.3);
             color: var(--primary-color);
-            padding: 0.4rem 0.8rem;
-            border-radius: 15px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            border: 1px solid rgba(0, 212, 255, 0.3);
+            padding: 0.6rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: 2px solid var(--primary-color);
+        }
+        
+        .status-badge::before {
+            content: '🎯 ';
+        }
+        
+        @keyframes avatar-glow {
+            0%, 100% { box-shadow: var(--shadow-kawaii); }
+            50% { box-shadow: var(--shadow-magic); }
+        }
+        
+        @keyframes badge-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
         
         .user-actions {
@@ -662,24 +1205,47 @@ $stats = [
         }
         
         .btn-dashboard {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background: var(--gradient-magical);
             border: none;
-            border-radius: 12px;
-            padding: 0.8rem 1.5rem;
-            font-weight: 600;
-            color: white;
+            border-radius: 30px;
+            padding: 1rem 2rem;
+            font-weight: 800;
+            color: var(--text-white);
             text-decoration: none;
             transition: all 0.3s ease;
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.3);
+            gap: 0.8rem;
+            box-shadow: var(--shadow-kawaii);
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-dashboard::before {
+            content: '🚀';
+            font-size: 1.2rem;
+        }
+        
+        .btn-dashboard::after {
+            content: '✨';
+            position: absolute;
+            right: 10px;
+            animation: sparkle-dance 2s ease-in-out infinite;
         }
         
         .btn-dashboard:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.4);
-            color: white;
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: var(--shadow-dreamy);
+            color: var(--text-white);
+            animation: rainbow-glow 1s ease-in-out;
+        }
+        
+        @keyframes rainbow-glow {
+            0%, 100% { filter: hue-rotate(0deg) brightness(1); }
+            50% { filter: hue-rotate(180deg) brightness(1.2); }
         }
         
         .quick-stats {
@@ -817,6 +1383,57 @@ $stats = [
             .domain-list {
                 max-height: 250px;
             }
+        }
+        
+        /* 域名到期时间表格样式 - 强制覆盖Bootstrap默认样式 */
+        .domains-expiration-section .table,
+        .domains-expiration-section .table-responsive,
+        .domains-expiration-section .table > :not(caption) > * > * {
+            background-color: transparent !important;
+            background: transparent !important;
+            color: var(--text-primary) !important;
+        }
+        
+        .domains-expiration-section .table thead {
+            backdrop-filter: blur(15px) saturate(150%);
+            -webkit-backdrop-filter: blur(15px) saturate(150%);
+            background-color: transparent !important;
+        }
+        
+        .domains-expiration-section .table tbody {
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+        
+        .domains-expiration-section .table tbody tr {
+            cursor: pointer;
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
+            background-color: rgba(15, 25, 50, 0.4) !important;
+        }
+        
+        .domains-expiration-section .table tbody tr:hover {
+            background: rgba(0, 245, 255, 0.15) !important;
+            background-color: rgba(0, 245, 255, 0.15) !important;
+            box-shadow: inset 0 0 20px rgba(0, 245, 255, 0.2);
+            transform: translateX(5px);
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+        }
+        
+        .domains-expiration-section .table td,
+        .domains-expiration-section .table th {
+            border-color: rgba(0, 245, 255, 0.1) !important;
+            background-color: transparent !important;
+        }
+        
+        /* 移除Bootstrap表格的条纹和悬停默认样式 */
+        .domains-expiration-section .table-striped > tbody > tr:nth-of-type(odd) > * {
+            background-color: transparent !important;
+        }
+        
+        .domains-expiration-section .table-hover > tbody > tr:hover > * {
+            background-color: transparent !important;
         }
         
         /* 滚动条样式 */
@@ -1112,6 +1729,111 @@ $stats = [
             </div>
         </div>
     </section>
+    
+    <!-- 域名到期时间表格 -->
+    <?php if (!empty($domains_with_expiration)): ?>
+    <section class="domains-expiration-section" style="padding: 4rem 0; background: rgba(255, 255, 255, 0.02);">
+        <div class="container">
+            <div class="text-center mb-4">
+                <h2 class="section-title" style="font-size: 2.5rem; font-weight: 900; background: var(--gradient-kawaii); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem;">
+                    <i class="fas fa-calendar-alt me-2"></i>域名到期时间
+                </h2>
+                <p class="text-secondary">系统域名到期时间一览</p>
+            </div>
+            
+            <div class="card-modern">
+                <div class="table-responsive" style="background: transparent;">
+                    <table class="table table-hover align-middle" style="margin-bottom: 0; background: transparent; color: var(--text-primary);">
+                        <thead style="background: linear-gradient(135deg, rgba(255, 182, 193, 0.15) 0%, rgba(221, 160, 221, 0.15) 100%); border-bottom: 2px solid var(--primary-color); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);">
+                            <tr>
+                                <th style="padding: 1rem; font-weight: 700; color: var(--text-primary); border-color: rgba(0, 245, 255, 0.1);">
+                                    <i class="fas fa-globe me-2"></i>域名
+                                </th>
+                                <th style="padding: 1rem; font-weight: 700; color: var(--text-primary); border-color: rgba(0, 245, 255, 0.1);">
+                                    <i class="fas fa-clock me-2"></i>到期时间
+                                </th>
+                                <th style="padding: 1rem; font-weight: 700; color: var(--text-primary); border-color: rgba(0, 245, 255, 0.1);">
+                                    <i class="fas fa-info-circle me-2"></i>状态
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody style="background: transparent;">
+                            <?php foreach ($domains_with_expiration as $domain): ?>
+                            <tr style="transition: all 0.3s ease; border-bottom: 1px solid rgba(0, 245, 255, 0.1); background: rgba(15, 25, 50, 0.4); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+                                <td style="padding: 1rem; border-color: rgba(0, 245, 255, 0.1);">
+                                    <span style="font-weight: 600; color: var(--text-primary); font-size: 1.05rem;">
+                                        <?php echo htmlspecialchars($domain['domain_name']); ?>
+                                    </span>
+                                </td>
+                                <td style="padding: 1rem; border-color: rgba(0, 245, 255, 0.1);">
+                                    <?php if (!empty($domain['expiration_time'])): ?>
+                                        <?php
+                                        $expiration_date = strtotime($domain['expiration_time']);
+                                        $now = time();
+                                        $days_until_expiration = floor(($expiration_date - $now) / 86400);
+                                        ?>
+                                        <span style="color: var(--text-secondary); font-size: 0.95rem;">
+                                            <i class="far fa-calendar me-1"></i>
+                                            <?php echo date('Y-m-d H:i', $expiration_date); ?>
+                                        </span>
+                                        <?php if ($days_until_expiration > 0): ?>
+                                        <small style="display: block; color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.25rem;">
+                                            (还有 <?php echo $days_until_expiration; ?> 天)
+                                        </small>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span style="color: var(--accent-color); font-weight: 600;">
+                                            <i class="fas fa-infinity me-1"></i>永久
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="padding: 1rem; border-color: rgba(0, 245, 255, 0.1);">
+                                    <?php if (empty($domain['expiration_time'])): ?>
+                                        <span class="badge badge-permanent" style="background: var(--gradient-magical); color: var(--text-white); padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 700; box-shadow: var(--shadow-cute);">
+                                            <i class="fas fa-star me-1"></i>永久域名
+                                        </span>
+                                    <?php else: ?>
+                                        <?php
+                                        $expiration_date = strtotime($domain['expiration_time']);
+                                        $now = time();
+                                        $days_until_expiration = floor(($expiration_date - $now) / 86400);
+                                        
+                                        if ($days_until_expiration < 0) {
+                                            $badge_class = 'danger';
+                                            $icon = 'fa-times-circle';
+                                            $text = '已过期';
+                                            $bg_style = 'background: var(--gradient-sunset); box-shadow: 0 4px 16px rgba(255, 0, 85, 0.4);';
+                                        } elseif ($days_until_expiration <= 30) {
+                                            $badge_class = 'warning';
+                                            $icon = 'fa-exclamation-triangle';
+                                            $text = '即将到期';
+                                            $bg_style = 'background: linear-gradient(135deg, var(--warning-color), #ff9800); box-shadow: 0 4px 16px rgba(255, 170, 0, 0.4);';
+                                        } elseif ($days_until_expiration <= 90) {
+                                            $badge_class = 'info';
+                                            $icon = 'fa-info-circle';
+                                            $text = '注意续费';
+                                            $bg_style = 'background: var(--gradient-sky); box-shadow: 0 4px 16px rgba(0, 245, 255, 0.3);';
+                                        } else {
+                                            $badge_class = 'success';
+                                            $icon = 'fa-check-circle';
+                                            $text = '正常';
+                                            $bg_style = 'background: linear-gradient(135deg, var(--success-color), #00cc70); box-shadow: 0 4px 16px rgba(0, 255, 136, 0.3);';
+                                        }
+                                        ?>
+                                        <span class="badge badge-<?php echo $badge_class; ?>" style="<?php echo $bg_style; ?> color: var(--text-white); padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 700;">
+                                            <i class="fas <?php echo $icon; ?> me-1"></i><?php echo $text; ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
     
     <script src="assets/js/bootstrap.bundle.min.js"></script>
     <script>

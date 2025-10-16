@@ -412,3 +412,53 @@ function getUserCurrentRecordCount($user_id) {
     $manager = new UserGroupManager();
     return $manager->getCurrentRecordCount($user_id);
 }
+
+/**
+ * 获取域名whois信息
+ * @param string $domain 域名
+ * @return array|null 返回whois信息，失败返回null
+ */
+function getDomainWhoisInfo($domain) {
+    try {
+        $api_url = "https://api.whoiscx.com/whois/?domain=" . urlencode($domain);
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $api_url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($http_code == 200 && $response) {
+            $data = json_decode($response, true);
+            if (isset($data['status']) && $data['status'] == 1 && isset($data['data']['info'])) {
+                return $data['data']['info'];
+            }
+        }
+        
+        return null;
+    } catch (Exception $e) {
+        error_log("获取域名whois信息失败: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * 获取域名到期时间
+ * @param string $domain 域名
+ * @return string|null 返回到期时间，如果是永久域名或获取失败返回null
+ */
+function getDomainExpirationTime($domain) {
+    $whois_info = getDomainWhoisInfo($domain);
+    
+    if ($whois_info && isset($whois_info['expiration_time']) && !empty($whois_info['expiration_time'])) {
+        return $whois_info['expiration_time'];
+    }
+    
+    // 如果没有expiration_time参数，说明是永久域名或无法获取
+    return null;
+}

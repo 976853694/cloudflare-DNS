@@ -99,7 +99,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_rainbow_domain'])
             // 验证彩虹DNS API
             $rainbow_api = new RainbowDNSAPI($provider_uid, $api_key, $api_base_url);
             if ($rainbow_api->verifyCredentials()) {
-                $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                // 获取域名到期时间
+                $expiration_time = getDomainExpirationTime($domain_name);
+                
+                $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url, expiration_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->bindValue(1, $domain_name, SQLITE3_TEXT);
                 $stmt->bindValue(2, $api_key, SQLITE3_TEXT);
                 $stmt->bindValue(3, '', SQLITE3_TEXT); // 彩虹DNS不需要email
@@ -108,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_rainbow_domain'])
                 $stmt->bindValue(6, 'rainbow', SQLITE3_TEXT);
                 $stmt->bindValue(7, $provider_uid, SQLITE3_TEXT);
                 $stmt->bindValue(8, $api_base_url, SQLITE3_TEXT);
+                $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                 
                 if ($stmt->execute()) {
                     logAction('admin', $_SESSION['admin_id'], 'add_rainbow_domain', "添加彩虹DNS域名: $domain_name");
@@ -275,7 +279,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_rainbow_
                 // 检查域名是否已存在
                 $exists = $db->querySingle("SELECT COUNT(*) FROM domains WHERE domain_name = '{$domain_info['name']}'");
                 if (!$exists) {
-                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    // 获取域名到期时间
+                    $expiration_time = getDomainExpirationTime($domain_info['name']);
+                    
+                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url, expiration_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
                     $stmt->bindValue(1, $domain_info['name'], SQLITE3_TEXT);
                     $stmt->bindValue(2, $config['api_key'], SQLITE3_TEXT);
                     $stmt->bindValue(3, '', SQLITE3_TEXT);
@@ -284,6 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_rainbow_
                     $stmt->bindValue(6, 'rainbow', SQLITE3_TEXT);
                     $stmt->bindValue(7, $config['provider_uid'], SQLITE3_TEXT);
                     $stmt->bindValue(8, $config['api_base_url'], SQLITE3_TEXT);
+                    $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
                         $added_count++;
@@ -331,7 +339,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_dnspod_d
                 // 检查域名是否已存在
                 $exists = $db->querySingle("SELECT COUNT(*) FROM domains WHERE domain_name = '{$domain_info['Domain']}'");
                 if (!$exists) {
-                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    // 获取域名到期时间
+                    $expiration_time = getDomainExpirationTime($domain_info['Domain']);
+                    
+                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url, expiration_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
                     $stmt->bindValue(1, $domain_info['Domain'], SQLITE3_TEXT);
                     $stmt->bindValue(2, $config['secret_id'], SQLITE3_TEXT);
                     $stmt->bindValue(3, '', SQLITE3_TEXT); // DNSPod不需要email
@@ -340,6 +351,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_dnspod_d
                     $stmt->bindValue(6, 'dnspod', SQLITE3_TEXT);
                     $stmt->bindValue(7, $config['secret_key'], SQLITE3_TEXT);
                     $stmt->bindValue(8, '', SQLITE3_TEXT); // DNSPod不需要api_base_url
+                    $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
                         $added_count++;
@@ -387,7 +399,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_powerdns
                 // 检查域名是否已存在
                 $exists = $db->querySingle("SELECT COUNT(*) FROM domains WHERE domain_name = '{$domain_info['Domain']}'");
                 if (!$exists) {
-                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    // 获取域名到期时间
+                    $expiration_time = getDomainExpirationTime($domain_info['Domain']);
+                    
+                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, provider_type, provider_uid, api_base_url, expiration_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
                     $stmt->bindValue(1, $domain_info['Domain'], SQLITE3_TEXT);
                     $stmt->bindValue(2, $config['api_key'], SQLITE3_TEXT);
                     $stmt->bindValue(3, '', SQLITE3_TEXT); // PowerDNS不需要email
@@ -396,6 +411,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_powerdns
                     $stmt->bindValue(6, 'powerdns', SQLITE3_TEXT);
                     $stmt->bindValue(7, $config['server_id'], SQLITE3_TEXT);
                     $stmt->bindValue(8, $config['api_url'], SQLITE3_TEXT);
+                    $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
                         $added_count++;
@@ -431,12 +447,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_domain'])) {
         // 获取账户信息
         $account = $db->querySingle("SELECT * FROM cloudflare_accounts WHERE id = $account_id", true);
         if ($account) {
-            $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default) VALUES (?, ?, ?, ?, ?)");
+            // 获取域名到期时间
+            $expiration_time = getDomainExpirationTime($domain_name);
+            
+            $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, expiration_time) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->bindValue(1, $domain_name, SQLITE3_TEXT);
             $stmt->bindValue(2, $account['api_key'], SQLITE3_TEXT);
             $stmt->bindValue(3, $account['email'], SQLITE3_TEXT);
             $stmt->bindValue(4, $zone_id, SQLITE3_TEXT);
             $stmt->bindValue(5, $proxied_default, SQLITE3_INTEGER);
+            $stmt->bindValue(6, $expiration_time, SQLITE3_TEXT);
             
             if ($stmt->execute()) {
                 logAction('admin', $_SESSION['admin_id'], 'add_domain', "添加域名: $domain_name");
@@ -505,12 +525,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_domains'
                 // 检查域名是否已存在
                 $exists = $db->querySingle("SELECT COUNT(*) FROM domains WHERE domain_name = '{$zone_info['name']}'");
                 if (!$exists) {
-                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default) VALUES (?, ?, ?, ?, ?)");
+                    // 获取域名到期时间
+                    $expiration_time = getDomainExpirationTime($zone_info['name']);
+                    
+                    $stmt = $db->prepare("INSERT INTO domains (domain_name, api_key, email, zone_id, proxied_default, expiration_time) VALUES (?, ?, ?, ?, ?, ?)");
                     $stmt->bindValue(1, $zone_info['name'], SQLITE3_TEXT);
                     $stmt->bindValue(2, $account['api_key'], SQLITE3_TEXT);
                     $stmt->bindValue(3, $account['email'], SQLITE3_TEXT);
                     $stmt->bindValue(4, $zone_info['id'], SQLITE3_TEXT);
                     $stmt->bindValue(5, $proxied_default, SQLITE3_INTEGER);
+                    $stmt->bindValue(6, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
                         $added_count++;

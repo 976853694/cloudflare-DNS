@@ -1,11 +1,10 @@
 {
-  "version": "1.7",
-  "version": "2",
+  "version": "1.8",
   "announcements": [
     {
       "id": 1,
-      "title": "这个是公告测试",
-      "content": "简单测试",
+      "title": "1.8更新",
+      "content": "添加域名获取到期期限",
       "date": "2025-10-11",
       "priority": "high"
     }

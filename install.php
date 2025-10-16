@@ -112,9 +112,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             try {
-                // 创建数据库
+                // 创建数据库并设置优化参数，防止卡死
                 $db = new SQLite3($db_path);
+                $db->enableExceptions(true);
+                
+                // 设置较短的超时时间和优化参数
+                $db->busyTimeout(5000); // 5秒超时
+                $db->exec('PRAGMA journal_mode = WAL');
+                $db->exec('PRAGMA synchronous = NORMAL');
+                $db->exec('PRAGMA cache_size = -2000'); // 2MB cache
+                $db->exec('PRAGMA temp_store = MEMORY');
+                $db->exec('PRAGMA locking_mode = NORMAL');
+                
+                // 测试写入
+                $db->exec("CREATE TABLE IF NOT EXISTS install_test (id INTEGER PRIMARY KEY)");
+                $db->exec("DROP TABLE IF EXISTS install_test");
+                
                 $db->close();
+                
+                // 确保文件权限正确
+                chmod($db_path, 0666);
+                if (file_exists($db_path . '-wal')) {
+                    chmod($db_path . '-wal', 0666);
+                }
+                if (file_exists($db_path . '-shm')) {
+                    chmod($db_path . '-shm', 0666);
+                }
+                
                 header('Location: install.php?step=3');
                 exit;
             } catch (Exception $e) {
@@ -178,6 +202,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 5:
             // 执行安装
             try {
+                // 设置较长的执行时间限制
+                set_time_limit(300); // 5分钟
+                
                 require_once 'config/database.php';
                 
                 // 获取配置
@@ -189,7 +216,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 // 初始化数据库（这会创建所有表）
-                $db = Database::getInstance()->getConnection();
+                // 使用try-catch包装，避免初始化时卡死
+                $max_retries = 3;
+                $retry_count = 0;
+                $db = null;
+                
+                while ($retry_count < $max_retries && $db === null) {
+                    try {
+                        $db = Database::getInstance()->getConnection();
+                        break;
+                    } catch (Exception $e) {
+                        $retry_count++;
+                        if ($retry_count >= $max_retries) {
+                            throw new Exception('数据库初始化失败: ' . $e->getMessage() . '。请检查data目录权限或尝试手动删除cloudflare_dns.db及其相关文件(-wal, -shm)后重新安装');
+                        }
+                        // 等待一下再重试
+                        sleep(1);
+                        
+                        // 尝试清理可能的锁文件
+                        $db_path = __DIR__ . '/data/cloudflare_dns.db';
+                        if (file_exists($db_path . '-shm')) {
+                            @unlink($db_path . '-shm');
+                        }
+                    }
+                }
                 
                 // 删除默认管理员（如果存在）
                 $db->exec("DELETE FROM admins WHERE username = 'admin'");
@@ -236,12 +286,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // 环境检查
 function checkEnvironment() {
+    // 检查data目录权限
+    $data_writable = false;
+    if (!is_dir('data')) {
+        $data_writable = @mkdir('data', 0755, true);
+    } else {
+        $data_writable = is_writable('data');
+    }
+    
+    // 检查磁盘空间（至少需要10MB）
+    $disk_space_ok = false;
+    if (function_exists('disk_free_space')) {
+        $free_space = @disk_free_space('.');
+        $disk_space_ok = ($free_space === false || $free_space > 10 * 1024 * 1024);
+    } else {
+        $disk_space_ok = true; // 无法检测时假设足够
+    }
+    
     $checks = [
         'PHP版本 >= 7.0' => version_compare(PHP_VERSION, '7.0.0', '>='),
         'SQLite3扩展' => extension_loaded('sqlite3'),
         'cURL扩展' => extension_loaded('curl'),
         'OpenSSL扩展' => extension_loaded('openssl'),
-        'data目录可写' => is_writable('.') || is_writable('data'),
+        'data目录可写' => $data_writable,
+        '磁盘空间充足 (>10MB)' => $disk_space_ok,
     ];
     return $checks;
 }
@@ -395,14 +463,22 @@ $env_ok = !in_array(false, $env_checks);
                                     <i class="fas fa-arrow-right me-2"></i>下一步
                                 </button>
                             </form>
+                            <div class="mt-3">
+                                <a href="install_diagnostic.php" class="btn btn-outline-info" target="_blank">
+                                    <i class="fas fa-stethoscope me-2"></i>运行诊断工具
+                                </a>
+                            </div>
                             <?php else: ?>
                             <div class="alert alert-warning">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
                                 请解决上述环境问题后刷新页面继续安装
                             </div>
-                            <button type="button" class="btn btn-secondary" onclick="location.reload()">
+                            <button type="button" class="btn btn-secondary me-2" onclick="location.reload()">
                                 <i class="fas fa-redo me-2"></i>重新检查
                             </button>
+                            <a href="install_diagnostic.php" class="btn btn-info" target="_blank">
+                                <i class="fas fa-stethoscope me-2"></i>诊断工具
+                            </a>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -543,13 +619,40 @@ $env_ok = !in_array(false, $env_checks);
                             系统正在初始化数据库并配置相关设置，请不要关闭浏览器。
                         </div>
                         
-                        <form method="POST">
+                        <!-- 安装进度提示 -->
+                        <div id="installProgress" style="display:none;">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-spinner fa-spin me-2"></i>正在安装...</h6>
+                                    <div class="progress mt-3">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                             role="progressbar" style="width: 100%"></div>
+                                    </div>
+                                    <p class="mt-3 mb-0 text-muted small">
+                                        <i class="fas fa-clock me-1"></i>此过程可能需要30秒到2分钟，请耐心等待...
+                                    </p>
+                                    <p class="mt-2 mb-0 text-muted small">
+                                        <strong>提示：</strong>如果超过2分钟仍未完成，可能是服务器性能问题或权限问题。
+                                        请检查data目录是否可写，或联系服务器管理员。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <form method="POST" id="installForm">
                             <div class="text-center">
-                                <button type="submit" class="btn btn-success btn-lg">
+                                <button type="submit" class="btn btn-success btn-lg" id="installBtn">
                                     <i class="fas fa-play me-2"></i>开始安装
                                 </button>
                             </div>
                         </form>
+                        
+                        <script>
+                            document.getElementById('installForm').addEventListener('submit', function() {
+                                document.getElementById('installBtn').disabled = true;
+                                document.getElementById('installProgress').style.display = 'block';
+                            });
+                        </script>
                     </div>
                 </div>
                 
