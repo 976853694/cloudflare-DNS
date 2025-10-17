@@ -77,17 +77,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_code'])) {
                 // 创建用户账户
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 
-                $stmt = $db->prepare("INSERT INTO users (username, email, password, credits, created_at) VALUES (?, ?, ?, 100, datetime('now'))");
+                // 获取系统设置的默认积分
+                $default_points = (int)getSetting('default_user_points', 100);
+                
+                $stmt = $db->prepare("INSERT INTO users (username, email, password, points, created_at) VALUES (?, ?, ?, ?, datetime('now'))");
                 $stmt->bindValue(1, $_SESSION['registration_username'], SQLITE3_TEXT);
                 $stmt->bindValue(2, $_SESSION['registration_email'], SQLITE3_TEXT);
                 $stmt->bindValue(3, $hashed_password, SQLITE3_TEXT);
+                $stmt->bindValue(4, $default_points, SQLITE3_INTEGER);
                 
                 if ($stmt->execute()) {
                 // 清除会话数据
                 unset($_SESSION['registration_email']);
                 unset($_SESSION['registration_username']);
                 
-                    $messages['success'] = '注册成功！您已获得100积分，请登录您的账户';
+                    $messages['success'] = '注册成功！您已获得' . $default_points . '积分，请登录您的账户';
                     $step = 'success';
                 } else {
                     $messages['error'] = '注册失败，请重试';
@@ -447,7 +451,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_code'])) {
                                 <h4 class="text-success mb-3">注册成功！</h4>
                                 <p class="text-muted mb-4">
                                     恭喜您成功注册 <?php echo getSetting('site_name', 'DNS管理系统'); ?>！<br>
-                                    您已获得 <strong class="text-success">100积分</strong> 的新用户奖励。
+                                    您已获得 <strong class="text-success"><?php echo getSetting('default_user_points', 100); ?>积分</strong> 的新用户奖励。
                                 </p>
                                 <div class="d-grid">
                                     <a href="login.php" class="btn btn-primary btn-lg">

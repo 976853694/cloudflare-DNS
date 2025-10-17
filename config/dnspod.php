@@ -21,7 +21,7 @@ class dnspod implements DnsInterface
     private $domain;
     private $domainid;
     private $domainInfo;
-    private TencentCloud $client;
+    private $client;
 
     public function __construct($config)
     {
