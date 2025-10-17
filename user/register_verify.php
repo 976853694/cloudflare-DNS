@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_code'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>用户注册验证 - 六趣DNS</title>
+    <title>用户注册 - <?php echo getSetting('site_name', 'DNS管理系统'); ?></title>
     <link href="../assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="../assets/css/fontawesome.min.css" rel="stylesheet">
     <style>
@@ -113,168 +113,354 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_code'])) {
             min-height: 100vh;
             display: flex;
             align-items: center;
+            padding: 20px 0;
         }
         .register-card {
             background: white;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             overflow: hidden;
+            max-width: 550px;
+            margin: 0 auto;
+        }
+        .register-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        .register-header h3 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
         }
         .step-indicator {
-            background: #f8f9fa;
-            padding: 20px;
-            border-bottom: 1px solid #dee2e6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1.5rem;
+            border-bottom: 3px solid rgba(255, 255, 255, 0.2);
+        }
+        .step-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
         }
         .step {
-            display: inline-block;
-            width: 30px;
-            height: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+        .step-circle {
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
-            background: #dee2e6;
-            color: #6c757d;
-            text-align: center;
-            line-height: 30px;
-            margin: 0 10px;
-        }
-        .step.active {
-            background: #667eea;
+            background: rgba(255, 255, 255, 0.3);
             color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.2rem;
+            transition: all 0.3s;
+            border: 3px solid transparent;
         }
-        .step.completed {
+        .step.active .step-circle {
+            background: white;
+            color: #667eea;
+            border-color: white;
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4);
+            transform: scale(1.1);
+        }
+        .step.completed .step-circle {
             background: #28a745;
+            border-color: #28a745;
+        }
+        .step-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            font-weight: 500;
+        }
+        .step.active .step-label {
             color: white;
+            font-weight: 600;
+        }
+        .step-line {
+            position: absolute;
+            top: 22px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            z-index: 1;
+        }
+        .step-line.line-1 {
+            left: calc(33.33% + 22px);
+            width: calc(33.33% - 44px);
+        }
+        .step-line.line-2 {
+            left: calc(66.66% + 22px);
+            width: calc(33.33% - 44px);
+        }
+        .step-line.completed {
+            background: #28a745;
+        }
+        .register-body {
+            padding: 2.5rem 2rem;
+        }
+        .form-control {
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            transition: all 0.3s;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #63408b 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-success {
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+        .btn-link {
+            color: #667eea;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        .btn-link:hover {
+            color: #5568d3;
+            text-decoration: underline;
+        }
+        .alert {
+            border-radius: 8px;
+            border: none;
+        }
+        .success-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            animation: successPulse 1.5s ease-in-out infinite;
+        }
+        .success-icon i {
+            font-size: 3rem;
+            color: white;
+        }
+        @keyframes successPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(40, 167, 69, 0); }
+        }
+        @media (max-width: 576px) {
+            .register-body {
+                padding: 1.5rem 1rem;
+            }
+            .register-header {
+                padding: 1.5rem 1rem;
+            }
+            .step-indicator {
+                padding: 1rem;
+            }
+            .step-circle {
+                width: 35px;
+                height: 35px;
+                font-size: 1rem;
+            }
+            .step-label {
+                font-size: 0.7rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-md-6">
+            <div class="col-md-8 col-lg-7">
                 <div class="register-card">
                     <!-- 步骤指示器 -->
-                    <div class="step-indicator text-center">
-                        <span class="step <?php echo ($step === 'email') ? 'active' : (in_array($step, ['verify', 'success']) ? 'completed' : ''); ?>">1</span>
-                        <span class="step <?php echo ($step === 'verify') ? 'active' : ($step === 'success' ? 'completed' : ''); ?>">2</span>
-                        <span class="step <?php echo ($step === 'success') ? 'active' : ''; ?>">3</span>
-                        <div class="mt-2">
-                            <small class="text-muted">
-                                <?php if ($step === 'email'): ?>
-                                    输入邮箱 → 验证邮箱 → 完成注册
-                                <?php elseif ($step === 'verify'): ?>
-                                    输入邮箱 → <strong>验证邮箱</strong> → 完成注册
-                                <?php else: ?>
-                                    输入邮箱 → 验证邮箱 → <strong>完成注册</strong>
-                                <?php endif; ?>
-                            </small>
+                    <div class="step-indicator">
+                        <div class="step-container">
+                            <div class="step <?php echo ($step === 'email') ? 'active' : (in_array($step, ['verify', 'success']) ? 'completed' : ''); ?>" style="width: 33.33%;">
+                                <div class="step-circle">
+                                    <?php if (in_array($step, ['verify', 'success'])): ?>
+                                        <i class="fas fa-check"></i>
+                                    <?php else: ?>
+                                        1
+                                    <?php endif; ?>
+                                </div>
+                                <div class="step-label">填写信息</div>
+                            </div>
+                            
+                            <div class="step <?php echo ($step === 'verify') ? 'active' : ($step === 'success' ? 'completed' : ''); ?>" style="width: 33.33%;">
+                                <div class="step-circle">
+                                    <?php if ($step === 'success'): ?>
+                                        <i class="fas fa-check"></i>
+                                    <?php else: ?>
+                                        2
+                                    <?php endif; ?>
+                                </div>
+                                <div class="step-label">验证邮箱</div>
+                            </div>
+                            
+                            <div class="step <?php echo ($step === 'success') ? 'active' : ''; ?>" style="width: 33.33%;">
+                                <div class="step-circle">3</div>
+                                <div class="step-label">完成注册</div>
+                            </div>
+                            
+                            <div class="step-line line-1 <?php echo in_array($step, ['verify', 'success']) ? 'completed' : ''; ?>"></div>
+                            <div class="step-line line-2 <?php echo $step === 'success' ? 'completed' : ''; ?>"></div>
                         </div>
                     </div>
                     
-                    <!-- 消息提示 -->
-                    <?php if (!empty($messages)): ?>
-                        <?php foreach ($messages as $type => $message): ?>
-                            <div class="alert alert-<?php echo $type; ?> alert-dismissible fade show m-3" role="alert">
-                                <?php echo htmlspecialchars($message); ?>
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                    
-                    <div class="p-4">
+                    <div class="register-body">
+                        <!-- 消息提示 -->
+                        <?php if (!empty($messages)): ?>
+                            <?php foreach ($messages as $type => $message): ?>
+                                <div class="alert alert-<?php echo $type; ?> alert-dismissible fade show" role="alert">
+                                    <i class="fas fa-<?php echo $type === 'error' ? 'exclamation-circle' : 'check-circle'; ?> me-2"></i>
+                                    <?php echo htmlspecialchars($message); ?>
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        
                         <?php if ($step === 'email'): ?>
                             <!-- 步骤1: 输入邮箱 -->
-                            <h4 class="text-center mb-4">
-                                <i class="fas fa-user-plus text-primary me-2"></i>
-                                用户注册
-                            </h4>
+                            <div class="text-center mb-4">
+                                <h4 class="text-primary mb-2">
+                                    <i class="fas fa-user-plus me-2"></i>创建新账户
+                                </h4>
+                                <p class="text-muted">请填写您的注册信息</p>
+                            </div>
                             
                             <form method="POST">
                                 <div class="mb-3">
-                                    <label for="username" class="form-label">用户名</label>
+                                    <label for="username" class="form-label">
+                                        <i class="fas fa-user me-1"></i>用户名
+                                    </label>
                                     <input type="text" class="form-control" id="username" name="username" 
                                            value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>" 
-                                           required>
+                                           placeholder="请输入用户名" required autofocus>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="email" class="form-label">邮箱地址</label>
+                                    <label for="email" class="form-label">
+                                        <i class="fas fa-envelope me-1"></i>邮箱地址
+                                    </label>
                                     <input type="email" class="form-control" id="email" name="email" 
                                            value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" 
-                                           required>
-                                    <div class="form-text">我们将向此邮箱发送验证码</div>
+                                           placeholder="请输入邮箱地址" required>
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle me-1"></i>我们将向此邮箱发送验证码
+                                    </div>
                                 </div>
                                 
-                                <button type="submit" name="send_code" class="btn btn-primary w-100">
-                                    <i class="fas fa-paper-plane me-2"></i>
-                                    发送验证码
-                                </button>
+                                <div class="d-grid mt-4">
+                                    <button type="submit" name="send_code" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-paper-plane me-2"></i>发送验证码
+                                    </button>
+                                </div>
                             </form>
                             
                         <?php elseif ($step === 'verify'): ?>
                             <!-- 步骤2: 验证邮箱 -->
-                            <h4 class="text-center mb-4">
-                                <i class="fas fa-envelope-open text-primary me-2"></i>
-                                验证邮箱
-                            </h4>
+                            <div class="text-center mb-4">
+                                <h4 class="text-primary mb-2">
+                                    <i class="fas fa-envelope-open-text me-2"></i>验证邮箱
+                                </h4>
+                                <p class="text-muted">请查收验证码并设置密码</p>
+                            </div>
                             
-                            <div class="alert alert-info">
+                            <div class="alert alert-info mb-4">
                                 <i class="fas fa-info-circle me-2"></i>
                                 验证码已发送到: <strong><?php echo htmlspecialchars($_SESSION['registration_email']); ?></strong>
                             </div>
                             
                             <form method="POST">
                                 <div class="mb-3">
-                                    <label for="code" class="form-label">验证码</label>
+                                    <label for="code" class="form-label">
+                                        <i class="fas fa-key me-1"></i>验证码
+                                    </label>
                                     <input type="text" class="form-control" id="code" name="code" 
-                                           placeholder="请输入6位验证码" maxlength="6" required>
+                                           placeholder="请输入6位验证码" maxlength="6" required autofocus>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="password" class="form-label">设置密码</label>
+                                    <label for="password" class="form-label">
+                                        <i class="fas fa-lock me-1"></i>设置密码
+                                    </label>
                                     <input type="password" class="form-control" id="password" name="password" 
                                            placeholder="至少6位字符" required>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="confirm_password" class="form-label">确认密码</label>
+                                    <label for="confirm_password" class="form-label">
+                                        <i class="fas fa-lock me-1"></i>确认密码
+                                    </label>
                                     <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
                                            placeholder="再次输入密码" required>
                                 </div>
                                 
-                                <button type="submit" name="verify_code" class="btn btn-success w-100">
-                                    <i class="fas fa-check me-2"></i>
-                                    完成注册
-                                </button>
+                                <div class="d-grid mt-4">
+                                    <button type="submit" name="verify_code" class="btn btn-success btn-lg">
+                                        <i class="fas fa-check me-2"></i>完成注册
+                                    </button>
+                                </div>
                             </form>
                             
                             <div class="text-center mt-3">
                                 <a href="?step=email" class="btn btn-link">
-                                    <i class="fas fa-arrow-left me-1"></i>
-                                    重新发送验证码
+                                    <i class="fas fa-arrow-left me-1"></i>重新发送验证码
                                 </a>
                             </div>
                             
                         <?php else: ?>
                             <!-- 步骤3: 注册成功 -->
                             <div class="text-center">
-                                <div class="mb-4">
-                                    <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                                <div class="success-icon">
+                                    <i class="fas fa-check"></i>
                                 </div>
                                 <h4 class="text-success mb-3">注册成功！</h4>
                                 <p class="text-muted mb-4">
-                                    恭喜您成功注册六趣DNS！<br>
-                                    您已获得 <strong>100积分</strong> 的新用户奖励。
+                                    恭喜您成功注册 <?php echo getSetting('site_name', 'DNS管理系统'); ?>！<br>
+                                    您已获得 <strong class="text-success">100积分</strong> 的新用户奖励。
                                 </p>
-                                <a href="login.php" class="btn btn-primary">
-                                    <i class="fas fa-sign-in-alt me-2"></i>
-                                    立即登录
-                                </a>
+                                <div class="d-grid">
+                                    <a href="login.php" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-sign-in-alt me-2"></i>立即登录
+                                    </a>
+                                </div>
                             </div>
                         <?php endif; ?>
                         
-                        <div class="text-center mt-4">
-                            <p class="text-muted">
-                                已有账户？ <a href="login.php" class="text-decoration-none">立即登录</a>
-                            </p>
+                        <div class="text-center mt-4 pt-3 border-top">
+                            <small class="text-muted">
+                                已有账户？ <a href="login.php" class="text-decoration-none fw-bold">立即登录</a>
+                            </small>
                         </div>
                     </div>
                 </div>

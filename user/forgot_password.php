@@ -92,131 +92,265 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>找回密码 - 六趣DNS</title>
+    <title>找回密码 - <?php echo getSetting('site_name', 'DNS管理系统'); ?></title>
     <link href="../assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="../assets/css/fontawesome.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
+            padding: 20px 0;
         }
         .reset-card {
             background: white;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             overflow: hidden;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .reset-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        .reset-header h3 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .reset-body {
+            padding: 2.5rem 2rem;
+        }
+        .form-control {
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            transition: all 0.3s;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #63408b 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-success {
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+        .btn-link {
+            color: #667eea;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        .btn-link:hover {
+            color: #5568d3;
+            text-decoration: underline;
+        }
+        .alert {
+            border-radius: 8px;
+            border: none;
+        }
+        .icon-container {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+        }
+        .icon-container i {
+            font-size: 3rem;
+            color: white;
+        }
+        .success-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            animation: successPulse 1.5s ease-in-out infinite;
+        }
+        .success-icon i {
+            font-size: 3rem;
+            color: white;
+        }
+        @keyframes successPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(40, 167, 69, 0); }
+        }
+        @media (max-width: 576px) {
+            .reset-body {
+                padding: 1.5rem 1rem;
+            }
+            .reset-header {
+                padding: 1.5rem 1rem;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-md-5">
+            <div class="col-md-7 col-lg-6">
                 <div class="reset-card">
-                    <!-- 消息提示 -->
-                    <?php if (!empty($messages)): ?>
-                        <?php foreach ($messages as $type => $message): ?>
-                            <div class="alert alert-<?php echo $type; ?> alert-dismissible fade show m-3" role="alert">
-                                <?php echo htmlspecialchars($message); ?>
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        <?php endforeach; ?>
+                    <?php if ($step !== 'success'): ?>
+                    <div class="reset-header">
+                        <h3 class="mb-0"><?php echo getSetting('site_name', 'DNS管理系统'); ?></h3>
+                        <p class="mb-0 mt-2">密码找回服务</p>
+                    </div>
                     <?php endif; ?>
                     
-                    <div class="p-4">
+                    <div class="reset-body">
+                        <!-- 消息提示 -->
+                        <?php if (!empty($messages)): ?>
+                            <?php foreach ($messages as $type => $message): ?>
+                                <div class="alert alert-<?php echo $type; ?> alert-dismissible fade show" role="alert">
+                                    <i class="fas fa-<?php echo $type === 'error' ? 'exclamation-circle' : 'check-circle'; ?> me-2"></i>
+                                    <?php echo htmlspecialchars($message); ?>
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        
                         <?php if ($step === 'email'): ?>
                             <!-- 步骤1: 输入邮箱 -->
-                            <h4 class="text-center mb-4">
-                                <i class="fas fa-key text-danger me-2"></i>
-                                找回密码
-                            </h4>
-                            
-                            <p class="text-muted text-center mb-4">
-                                请输入您注册时使用的邮箱地址，我们将发送密码重置邮件给您。
-                            </p>
+                            <div class="text-center mb-4">
+                                <div class="icon-container">
+                                    <i class="fas fa-key"></i>
+                                </div>
+                                <h4 class="text-primary mb-2">找回密码</h4>
+                                <p class="text-muted">请输入您注册时使用的邮箱地址</p>
+                            </div>
                             
                             <form method="POST">
                                 <div class="mb-3">
-                                    <label for="email" class="form-label">邮箱地址</label>
+                                    <label for="email" class="form-label">
+                                        <i class="fas fa-envelope me-1"></i>邮箱地址
+                                    </label>
                                     <input type="email" class="form-control" id="email" name="email" 
                                            value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" 
-                                           placeholder="your@email.com" required>
+                                           placeholder="your@email.com" required autofocus>
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle me-1"></i>我们将向此邮箱发送验证码
+                                    </div>
                                 </div>
                                 
-                                <button type="submit" name="send_reset" class="btn btn-danger w-100">
-                                    <i class="fas fa-paper-plane me-2"></i>
-                                    发送重置邮件
-                                </button>
+                                <div class="d-grid mt-4">
+                                    <button type="submit" name="send_reset" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-paper-plane me-2"></i>发送验证码
+                                    </button>
+                                </div>
                             </form>
                             
                         <?php elseif ($step === 'verify'): ?>
                             <!-- 步骤2: 验证并重置密码 -->
-                            <h4 class="text-center mb-4">
-                                <i class="fas fa-shield-alt text-danger me-2"></i>
-                                重置密码
-                            </h4>
+                            <div class="text-center mb-4">
+                                <div class="icon-container">
+                                    <i class="fas fa-shield-alt"></i>
+                                </div>
+                                <h4 class="text-primary mb-2">重置密码</h4>
+                                <p class="text-muted">请输入验证码并设置新密码</p>
+                            </div>
                             
-                            <div class="alert alert-info">
+                            <div class="alert alert-info mb-4">
                                 <i class="fas fa-info-circle me-2"></i>
-                                重置邮件已发送到: <strong><?php echo htmlspecialchars($_SESSION['reset_email']); ?></strong>
+                                验证码已发送到: <strong><?php echo htmlspecialchars($_SESSION['reset_email']); ?></strong>
                             </div>
                             
                             <form method="POST">
                                 <div class="mb-3">
-                                    <label for="code" class="form-label">验证码</label>
+                                    <label for="code" class="form-label">
+                                        <i class="fas fa-key me-1"></i>验证码
+                                    </label>
                                     <input type="text" class="form-control" id="code" name="code" 
-                                           placeholder="请输入6位验证码" maxlength="6" required>
+                                           placeholder="请输入6位验证码" maxlength="6" required autofocus>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="password" class="form-label">新密码</label>
+                                    <label for="password" class="form-label">
+                                        <i class="fas fa-lock me-1"></i>新密码
+                                    </label>
                                     <input type="password" class="form-control" id="password" name="password" 
                                            placeholder="至少6位字符" required>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label for="confirm_password" class="form-label">确认新密码</label>
+                                    <label for="confirm_password" class="form-label">
+                                        <i class="fas fa-lock me-1"></i>确认新密码
+                                    </label>
                                     <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
                                            placeholder="再次输入新密码" required>
                                 </div>
                                 
-                                <button type="submit" name="reset_password" class="btn btn-success w-100">
-                                    <i class="fas fa-check me-2"></i>
-                                    重置密码
-                                </button>
+                                <div class="d-grid mt-4">
+                                    <button type="submit" name="reset_password" class="btn btn-success btn-lg">
+                                        <i class="fas fa-check me-2"></i>重置密码
+                                    </button>
+                                </div>
                             </form>
                             
                             <div class="text-center mt-3">
                                 <a href="?step=email" class="btn btn-link">
-                                    <i class="fas fa-arrow-left me-1"></i>
-                                    重新发送邮件
+                                    <i class="fas fa-arrow-left me-1"></i>重新发送验证码
                                 </a>
                             </div>
                             
                         <?php else: ?>
                             <!-- 步骤3: 重置成功 -->
                             <div class="text-center">
-                                <div class="mb-4">
-                                    <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+                                <div class="success-icon">
+                                    <i class="fas fa-check"></i>
                                 </div>
                                 <h4 class="text-success mb-3">密码重置成功！</h4>
                                 <p class="text-muted mb-4">
-                                    您的密码已成功重置，请使用新密码登录您的账户。
+                                    您的密码已成功重置<br>
+                                    请使用新密码登录您的账户
                                 </p>
-                                <a href="login.php" class="btn btn-primary">
-                                    <i class="fas fa-sign-in-alt me-2"></i>
-                                    立即登录
-                                </a>
+                                <div class="d-grid">
+                                    <a href="login.php" class="btn btn-primary btn-lg">
+                                        <i class="fas fa-sign-in-alt me-2"></i>立即登录
+                                    </a>
+                                </div>
                             </div>
                         <?php endif; ?>
                         
-                        <div class="text-center mt-4">
-                            <p class="text-muted">
-                                记起密码了？ <a href="login.php" class="text-decoration-none">立即登录</a> |
-                                <a href="register_verify.php" class="text-decoration-none">注册账户</a>
-                            </p>
+                        <div class="text-center mt-4 pt-3 border-top">
+                            <small class="text-muted">
+                                <?php if ($step !== 'success'): ?>
+                                记起密码了？ <a href="login.php" class="text-decoration-none fw-bold">立即登录</a>
+                                <?php if ($step === 'email'): ?>
+                                 | <a href="register_verify.php" class="text-decoration-none fw-bold">注册账户</a>
+                                <?php endif; ?>
+                                <?php endif; ?>
+                            </small>
                         </div>
                     </div>
                 </div>

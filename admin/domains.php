@@ -571,6 +571,38 @@ if ($action === 'get_dns_count' && getGet('domain_id')) {
     exit;
 }
 
+// 处理更新域名到期时间
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_expiration'])) {
+    $domain_id = getPost('domain_id');
+    
+    if ($domain_id) {
+        $domain = $db->querySingle("SELECT * FROM domains WHERE id = $domain_id", true);
+        if ($domain) {
+            $expiration_time = getDomainExpirationTime($domain['domain_name']);
+            
+            $stmt = $db->prepare("UPDATE domains SET expiration_time = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+            $stmt->bindValue(1, $expiration_time, SQLITE3_TEXT);
+            $stmt->bindValue(2, $domain_id, SQLITE3_INTEGER);
+            
+            if ($stmt->execute()) {
+                if ($expiration_time) {
+                    logAction('admin', $_SESSION['admin_id'], 'update_expiration', "更新域名到期时间: {$domain['domain_name']} -> $expiration_time");
+                    echo json_encode(['success' => true, 'message' => '域名到期时间更新成功！', 'expiration_time' => $expiration_time]);
+                } else {
+                    echo json_encode(['success' => true, 'message' => '该域名为永久域名或无法获取到期时间', 'expiration_time' => null]);
+                }
+            } else {
+                echo json_encode(['success' => false, 'message' => '更新失败！']);
+            }
+        } else {
+            echo json_encode(['success' => false, 'message' => '域名不存在！']);
+        }
+    } else {
+        echo json_encode(['success' => false, 'message' => '缺少域名ID！']);
+    }
+    exit;
+}
+
 // 处理删除域名
 if ($action === 'delete' && getGet('id')) {
     $id = (int)getGet('id');
@@ -992,6 +1024,7 @@ include 'includes/header.php';
                                     <th>Zone ID</th>
                                     <th>默认代理</th>
                                     <th>状态</th>
+                                    <th>到期时间</th>
                                     <th>创建时间</th>
                                     <th>操作</th>
                                 </tr>
@@ -1037,6 +1070,22 @@ include 'includes/header.php';
                                         <?php else: ?>
                                             <span class="badge bg-danger">禁用</span>
                                         <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <span id="expiration-<?php echo $domain['id']; ?>">
+                                            <?php if (!empty($domain['expiration_time'])): ?>
+                                                <?php echo htmlspecialchars($domain['expiration_time']); ?>
+                                            <?php else: ?>
+                                                <span class="text-muted">未获取</span>
+                                            <?php endif; ?>
+                                        </span>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-info ms-1" 
+                                                onclick="fetchExpiration(<?php echo $domain['id']; ?>)"
+                                                id="fetch-btn-<?php echo $domain['id']; ?>"
+                                                title="获取到期时间">
+                                            <i class="fas fa-sync-alt"></i>
+                                        </button>
                                     </td>
                                     <td><?php echo formatTime($domain['created_at']); ?></td>
                                     <td>
@@ -1383,6 +1432,51 @@ function confirmDomainDelete(domainName, domainId) {
         });
     
     return false; // 阻止直接跳转
+}
+
+// 获取域名到期时间
+function fetchExpiration(domainId) {
+    const btn = document.getElementById('fetch-btn-' + domainId);
+    const expirationSpan = document.getElementById('expiration-' + domainId);
+    const originalBtnHtml = btn.innerHTML;
+    
+    // 禁用按钮并显示加载状态
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    // 发送AJAX请求
+    fetch('domains.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'update_expiration=1&domain_id=' + domainId
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 更新显示的到期时间
+            if (data.expiration_time) {
+                expirationSpan.innerHTML = data.expiration_time;
+            } else {
+                expirationSpan.innerHTML = '<span class="text-muted">永久域名</span>';
+            }
+            
+            // 显示成功消息
+            alert(data.message);
+        } else {
+            alert('错误: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('请求失败，请检查网络连接！');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        btn.disabled = false;
+        btn.innerHTML = originalBtnHtml;
+    });
 }
 </script>
 

@@ -202,34 +202,127 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     <link href="../assets/css/fontawesome.min.css" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
+            padding: 20px 0;
         }
         .auth-container {
             background: white;
             border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             overflow: hidden;
+            max-width: 500px;
+            margin: 0 auto;
         }
         .auth-header {
-            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 2rem;
+            padding: 2.5rem 2rem;
             text-align: center;
         }
+        .auth-header h3 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
         .auth-body {
-            padding: 2rem;
+            padding: 2.5rem 2rem;
         }
-        .nav-tabs .nav-link {
+        .form-control {
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            transition: all 0.3s;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border: none;
-            color: #6c757d;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 500;
+            border-radius: 8px;
+            transition: all 0.3s;
         }
-        .nav-tabs .nav-link.active {
-            background: none;
-            border-bottom: 2px solid #0984e3;
-            color: #0984e3;
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #63408b 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn-outline-primary {
+            color: #667eea;
+            border-color: #667eea;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .btn-outline-primary:hover {
+            background-color: #667eea;
+            border-color: #667eea;
+            transform: translateY(-1px);
+        }
+        .btn-outline-secondary {
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .btn-outline-secondary:hover {
+            transform: translateY(-1px);
+        }
+        .btn-dark {
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .btn-dark:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 1.5rem 0;
+        }
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .divider span {
+            padding: 0 1rem;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .captcha-img {
+            height: 46px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            border-radius: 8px;
+        }
+        .captcha-img:hover {
+            transform: scale(1.05);
+        }
+        .quick-links a {
+            transition: all 0.3s;
+        }
+        .alert {
+            border-radius: 8px;
+        }
+        @media (max-width: 576px) {
+            .auth-body {
+                padding: 1.5rem 1rem;
+            }
+            .auth-header {
+                padding: 2rem 1rem;
+            }
+            .btn-outline-primary, .btn-outline-secondary {
+                font-size: 0.875rem;
+                padding: 0.5rem 0.75rem;
+            }
         }
     </style>
 </head>
@@ -250,27 +343,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                             </h4>
                             
                             <!-- 快速注册和找回密码链接 -->
-                            <?php if (getSetting('allow_registration', 1)): ?>
-                            <div class="mb-3">
+                            <div class="quick-links mb-3">
+                                <?php if (getSetting('allow_registration', 1)): ?>
                                 <a href="register_verify.php" class="btn btn-outline-primary me-2">
                                     <i class="fas fa-user-plus me-1"></i>新用户注册
                                 </a>
+                                <?php endif; ?>
                                 <a href="forgot_password.php" class="btn btn-outline-secondary">
                                     <i class="fas fa-key me-1"></i>忘记密码
                                 </a>
                             </div>
-                            <?php else: ?>
-                            <div class="mb-3">
-                                <a href="forgot_password.php" class="btn btn-outline-secondary">
-                                    <i class="fas fa-key me-1"></i>忘记密码
-                                </a>
-                            </div>
-                            <?php endif; ?>
                         </div>
                         
                         <!-- GitHub OAuth 登录 -->
                         <?php 
-                        
                         if (getSetting('github_oauth_enabled', 0)): 
                             require_once '../config/github_oauth.php';
                             try {
@@ -278,15 +364,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                                 if ($github->isConfigured()) {
                                     $github_auth_url = $github->getAuthUrl();
                         ?>
-                        <div class="text-center mb-4">
-                            <div class="d-flex align-items-center mb-3">
-                                <hr class="flex-grow-1">
-                                <span class="px-3 text-muted small">或使用第三方登录</span>
-                                <hr class="flex-grow-1">
-                            </div>
-                            <a href="<?php echo htmlspecialchars($github_auth_url); ?>" class="btn btn-dark btn-lg w-100">
+                        <div class="mb-4">
+                            <a href="<?php echo htmlspecialchars($github_auth_url); ?>" class="btn btn-dark w-100">
                                 <i class="fab fa-github me-2"></i>使用 GitHub 登录
                             </a>
+                            <div class="divider mt-3">
+                                <span>或使用账号登录</span>
+                            </div>
                         </div>
                         <?php 
                                 }
@@ -298,99 +382,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         
                         <!-- 消息提示 -->
                         <?php if ($error): ?>
-                            <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <i class="fas fa-exclamation-circle me-2"></i><?php echo htmlspecialchars($error); ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
                         <?php endif; ?>
                         
                         <?php if ($success): ?>
-                            <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                <i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars($success); ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
                         <?php endif; ?>
                         
                         <!-- 登录表单 -->
-                        <div class="login-form">
-                                <form method="POST">
-                                    <div class="mb-3">
-                                        <label for="login_username" class="form-label">用户名</label>
-                                        <input type="text" class="form-control" id="login_username" name="username" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="login_password" class="form-label">密码</label>
-                                        <input type="password" class="form-control" id="login_password" name="password" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="login_captcha" class="form-label">验证码</label>
-                                        <div class="row">
-                                            <div class="col-6">
-                                                <input type="text" class="form-control" id="login_captcha" name="captcha_code" required placeholder="请输入验证码">
-                                            </div>
-                                            <div class="col-6">
-                                                <img src="../captcha_image.php" alt="验证码" class="img-fluid border rounded" 
-                                                     id="login_captcha_img" style="height: 38px; cursor: pointer;" 
-                                                     onclick="refreshCaptcha('login_captcha_img')" title="点击刷新验证码">
-                                            </div>
-                                        </div>
-                                        <small class="form-text text-muted">点击图片可刷新验证码</small>
-                                    </div>
-                                    <div class="d-grid">
-                                        <button type="submit" name="login" class="btn btn-primary btn-lg">
-                                            <i class="fas fa-sign-in-alt me-1"></i>登录
-                                        </button>
-                                    </div>
-                                </form>
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label for="login_username" class="form-label">
+                                    <i class="fas fa-user me-1"></i>用户名
+                                </label>
+                                <input type="text" class="form-control" id="login_username" name="username" 
+                                       placeholder="请输入用户名" required autofocus>
                             </div>
-                            
-                            <!-- 注册表单 -->
-                            <?php if (getSetting('allow_registration', 1)): ?>
-                            <div class="tab-pane fade" id="register" role="tabpanel">
-                                <form method="POST">
-                                    <div class="mb-3">
-                                        <label for="reg_username" class="form-label">用户名</label>
-                                        <input type="text" class="form-control" id="reg_username" name="username" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="reg_email" class="form-label">邮箱</label>
-                                        <input type="email" class="form-control" id="reg_email" name="email" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="reg_password" class="form-label">密码</label>
-                                        <input type="password" class="form-control" id="reg_password" name="password" required>
-                                        <div class="form-text">密码至少6个字符</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="confirm_password" class="form-label">确认密码</label>
-                                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="invitation_code" class="form-label">邀请码 <span class="text-muted">(可选)</span></label>
-                                        <input type="text" class="form-control" id="invitation_code" name="invitation_code" 
-                                               value="<?php echo htmlspecialchars($invite_code ?? ''); ?>" 
-                                               placeholder="请输入邀请码，可获得额外积分">
-                                        <div class="form-text">
-                                            <i class="fas fa-gift me-1 text-success"></i>
-                                            使用邀请码注册可额外获得 <strong><?php echo getSetting('invitee_bonus_points', '5'); ?></strong> 积分
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="reg_captcha" class="form-label">验证码</label>
-                                        <div class="row">
-                                            <div class="col-6">
-                                                <input type="text" class="form-control" id="reg_captcha" name="captcha_code" required placeholder="请输入验证码">
-                                            </div>
-                                            <div class="col-6">
-                                                <img src="../captcha_image.php" alt="验证码" class="img-fluid border rounded" 
-                                                     id="reg_captcha_img" style="height: 38px; cursor: pointer;" 
-                                                     onclick="refreshCaptcha('reg_captcha_img')" title="点击刷新验证码">
-                                            </div>
-                                        </div>
-                                        <small class="form-text text-muted">点击图片可刷新验证码</small>
-                                    </div>
-                                    <div class="d-grid">
-                                        <button type="submit" name="register" class="btn btn-success btn-lg">
-                                            <i class="fas fa-user-plus me-1"></i>注册
-                                        </button>
-                                    </div>
-                                </form>
+                            <div class="mb-3">
+                                <label for="login_password" class="form-label">
+                                    <i class="fas fa-lock me-1"></i>密码
+                                </label>
+                                <input type="password" class="form-control" id="login_password" name="password" 
+                                       placeholder="请输入密码" required>
                             </div>
-                            <?php endif; ?>
+                            <div class="mb-3">
+                                <label for="login_captcha" class="form-label">
+                                    <i class="fas fa-shield-alt me-1"></i>验证码
+                                </label>
+                                <div class="row g-2">
+                                    <div class="col-7">
+                                        <input type="text" class="form-control" id="login_captcha" name="captcha_code" 
+                                               placeholder="请输入验证码" required>
+                                    </div>
+                                    <div class="col-5">
+                                        <img src="../captcha_image.php" alt="验证码" class="img-fluid border captcha-img" 
+                                             id="login_captcha_img" 
+                                             onclick="refreshCaptcha('login_captcha_img')" 
+                                             title="点击刷新验证码">
+                                    </div>
+                                </div>
+                                <small class="form-text text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>点击图片可刷新验证码
+                                </small>
+                            </div>
+                            <div class="d-grid mt-4">
+                                <button type="submit" name="login" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-sign-in-alt me-2"></i>登录
+                                </button>
+                            </div>
+                        </form>
+                        
+                        <!-- 底部链接 -->
+                        <div class="text-center mt-4">
+                            <small class="text-muted">
+                                <a href="../admin/login.php" class="text-decoration-none">
+                                    <i class="fas fa-user-shield me-1"></i>管理员入口
+                                </a>
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -408,20 +462,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         // 页面加载时初始化验证码
         document.addEventListener('DOMContentLoaded', function() {
             refreshCaptcha('login_captcha_img');
-            refreshCaptcha('reg_captcha_img');
-        });
-        
-        // 切换标签页时刷新验证码
-        document.getElementById('login-tab').addEventListener('click', function() {
-            setTimeout(function() {
-                refreshCaptcha('login_captcha_img');
-            }, 100);
-        });
-        
-        document.getElementById('register-tab').addEventListener('click', function() {
-            setTimeout(function() {
-                refreshCaptcha('reg_captcha_img');
-            }, 100);
         });
     </script>
 </body>
