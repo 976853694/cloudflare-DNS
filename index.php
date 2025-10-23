@@ -29,7 +29,7 @@ $query_result = null;
 $query_prefix = '';
 $domain_results = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['check_prefix'])) {
-    $query_prefix = trim($_POST['prefix']);
+    $query_prefix = strtolower(trim($_POST['prefix']));
     if ($query_prefix) {
         // 检查前缀是否被禁用
         $stmt = $db->prepare("SELECT COUNT(*) FROM blocked_prefixes WHERE prefix = ? AND is_active = 1");
