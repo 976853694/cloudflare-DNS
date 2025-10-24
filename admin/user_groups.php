@@ -42,6 +42,7 @@ function initializeUserGroupTables($db) {
                 can_access_all_domains INTEGER DEFAULT 0,
                 max_records INTEGER DEFAULT -1,
                 priority INTEGER DEFAULT 0,
+                max_prefix_length INTEGER DEFAULT -1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )");
@@ -108,7 +109,24 @@ function initializeUserGroupTables($db) {
             $db->exec("CREATE INDEX IF NOT EXISTS idx_users_group_id ON users(group_id)");
         }
         
-        // 4. 创建索引
+        // 4. 检查 user_groups 表是否有 max_prefix_length 字段
+        $columns = $db->query("PRAGMA table_info(user_groups)");
+        $has_max_prefix_length = false;
+        
+        if ($columns) {
+            while ($column = $columns->fetchArray(SQLITE3_ASSOC)) {
+                if ($column['name'] === 'max_prefix_length') {
+                    $has_max_prefix_length = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!$has_max_prefix_length) {
+            $db->exec("ALTER TABLE user_groups ADD COLUMN max_prefix_length INTEGER DEFAULT -1");
+        }
+        
+        // 5. 创建索引
         $db->exec("CREATE INDEX IF NOT EXISTS idx_user_group_domains_group ON user_group_domains(group_id)");
         $db->exec("CREATE INDEX IF NOT EXISTS idx_user_group_domains_domain ON user_group_domains(domain_id)");
         
@@ -132,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_group'])) {
     $priority = intval($_POST['priority']);
     $description = trim($_POST['description']);
     $can_access_all_domains = isset($_POST['can_access_all_domains']) ? 1 : 0;
+    $max_prefix_length = intval($_POST['max_prefix_length']);
     
     if (empty($group_name) || empty($display_name)) {
         showError('组名和显示名称不能为空！');
@@ -139,8 +158,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_group'])) {
         try {
             $stmt = $db->prepare("
                 INSERT INTO user_groups 
-                (group_name, display_name, points_per_record, max_records, priority, description, can_access_all_domains, is_active) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                (group_name, display_name, points_per_record, max_records, priority, description, can_access_all_domains, max_prefix_length, is_active) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
             ");
             $stmt->bindValue(1, $group_name, SQLITE3_TEXT);
             $stmt->bindValue(2, $display_name, SQLITE3_TEXT);
@@ -149,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_group'])) {
             $stmt->bindValue(5, $priority, SQLITE3_INTEGER);
             $stmt->bindValue(6, $description, SQLITE3_TEXT);
             $stmt->bindValue(7, $can_access_all_domains, SQLITE3_INTEGER);
+            $stmt->bindValue(8, $max_prefix_length, SQLITE3_INTEGER);
             
             if ($stmt->execute()) {
                 logAction('admin', $_SESSION['admin_id'], 'add_user_group', "添加用户组: {$display_name}");
@@ -172,6 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_group'])) {
     $priority = intval($_POST['priority']);
     $description = trim($_POST['description']);
     $can_access_all_domains = isset($_POST['can_access_all_domains']) ? 1 : 0;
+    $max_prefix_length = intval($_POST['max_prefix_length']);
     $domain_ids = isset($_POST['domain_ids']) ? $_POST['domain_ids'] : [];
     
     if (empty($display_name)) {
@@ -186,6 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_group'])) {
                     priority = ?, 
                     description = ?, 
                     can_access_all_domains = ?,
+                    max_prefix_length = ?,
                     updated_at = datetime('now')
                 WHERE id = ?
             ");
@@ -195,7 +217,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_group'])) {
             $stmt->bindValue(4, $priority, SQLITE3_INTEGER);
             $stmt->bindValue(5, $description, SQLITE3_TEXT);
             $stmt->bindValue(6, $can_access_all_domains, SQLITE3_INTEGER);
-            $stmt->bindValue(7, $group_id, SQLITE3_INTEGER);
+            $stmt->bindValue(7, $max_prefix_length, SQLITE3_INTEGER);
+            $stmt->bindValue(8, $group_id, SQLITE3_INTEGER);
             
             if ($stmt->execute()) {
                 // 更新域名权限
@@ -350,6 +373,7 @@ if (isset($_GET['edit']) && !empty($_GET['edit'])) {
                                         <th>积分/条</th>
                                         <th>最大记录数</th>
                                         <th>优先级</th>
+                                        <th>前缀限制</th>
                                         <th>全域名访问</th>
                                         <th>状态</th>
                                         <th>用户数</th>
@@ -384,6 +408,13 @@ if (isset($_GET['edit']) && !empty($_GET['edit'])) {
                                                 ?>
                                             </td>
                                             <td><?php echo $group['priority']; ?></td>
+                                            <td>
+                                                <?php if (isset($group['max_prefix_length']) && $group['max_prefix_length'] > 0): ?>
+                                                    <span class="badge bg-warning"><?php echo $group['max_prefix_length']; ?> 字符</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-success">不限制</span>
+                                                <?php endif; ?>
+                                            </td>
                                             <td>
                                                 <?php if ($group['can_access_all_domains'] == 1): ?>
                                                     <span class="badge bg-success"><i class="fas fa-check"></i> 是</span>
@@ -522,6 +553,15 @@ if (isset($_GET['edit']) && !empty($_GET['edit'])) {
                             <textarea name="description" class="form-control" rows="2"></textarea>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">前缀字符数量限制 <span class="text-muted">(可选)</span></label>
+                            <input type="number" name="max_prefix_length" class="form-control" 
+                                   value="-1" min="-1" max="63">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                限制子域名前缀的最大字符数量。例如：设置为3，用户只能创建如"abc"、"123"等最多3个字符的子域名。-1或0表示不限制
+                            </small>
+                        </div>
+                        <div class="mb-3">
                             <div class="form-check">
                                 <input type="checkbox" name="can_access_all_domains" class="form-check-input" id="add_all_domains">
                                 <label class="form-check-label" for="add_all_domains">
@@ -583,6 +623,16 @@ if (isset($_GET['edit']) && !empty($_GET['edit'])) {
                         <div class="mb-3">
                             <label class="form-label">描述</label>
                             <textarea name="description" class="form-control" rows="2"><?php echo htmlspecialchars($edit_group['description']); ?></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">前缀字符数量限制 <span class="text-muted">(可选)</span></label>
+                            <input type="number" name="max_prefix_length" class="form-control" 
+                                   value="<?php echo isset($edit_group['max_prefix_length']) ? $edit_group['max_prefix_length'] : -1; ?>"
+                                   min="-1" max="63">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                限制子域名前缀的最大字符数量。例如：设置为3，用户只能创建如"abc"、"123"等最多3个字符的子域名。-1或0表示不限制
+                            </small>
                         </div>
                         <div class="mb-3">
                             <div class="form-check">

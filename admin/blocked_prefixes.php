@@ -19,8 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_prefixes'])) {
         $skipped_count = 0;
         
         foreach ($prefixes as $prefix) {
-            // 验证前缀格式（只允许字母、数字、连字符）
-            if (!preg_match('/^[a-zA-Z0-9\-]+$/', $prefix)) {
+            // 验证前缀格式（允许字母、数字、连字符、星号*和@符号）
+            if (!preg_match('/^[a-zA-Z0-9\-\*@]+$/', $prefix)) {
                 continue;
             }
             
@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_prefix'])) {
     $description = trim(getPost('description'));
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     
-    if (!empty($prefix) && preg_match('/^[a-zA-Z0-9\-]+$/', $prefix)) {
+    if (!empty($prefix) && preg_match('/^[a-zA-Z0-9\-\*@]+$/', $prefix)) {
         // 检查是否与其他前缀重复
         $existing = $db->querySingle("SELECT COUNT(*) FROM blocked_prefixes WHERE prefix = '$prefix' AND id != $id");
         if ($existing == 0) {
@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_prefix'])) {
             showError('该前缀已存在！');
         }
     } else {
-        showError('前缀格式不正确！只允许字母、数字和连字符');
+        showError('前缀格式不正确！只允许字母、数字、连字符、星号(*)和@符号');
     }
     redirect('blocked_prefixes.php');
 }
@@ -161,6 +161,8 @@ include 'includes/header.php';
                     <li>前缀匹配不区分大小写</li>
                     <li>只有启用状态的前缀才会生效</li>
                     <li>支持批量添加，每行一个前缀</li>
+                    <li><strong>支持星号(*)拦截泛解析</strong>，添加 * 可以阻止用户创建泛解析记录</li>
+                    <li><strong>支持@符号拦截根域名</strong>，添加 @ 可以阻止用户对根域名进行解析操作</li>
                 </ul>
             </div>
             
@@ -263,10 +265,10 @@ include 'includes/header.php';
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="prefixes_text" class="form-label">前缀列表</label>
-                        <textarea class="form-control" id="prefixes_text" name="prefixes_text" rows="8" required placeholder="admin&#10;api&#10;mail&#10;ftp&#10;www&#10;test"></textarea>
+                        <textarea class="form-control" id="prefixes_text" name="prefixes_text" rows="8" required placeholder="admin&#10;api&#10;mail&#10;ftp&#10;www&#10;*&#10;@&#10;test"></textarea>
                         <div class="form-text">
                             <i class="fas fa-info-circle me-1"></i>
-                            每行输入一个前缀，只允许字母、数字和连字符，系统会自动转换为小写
+                            每行输入一个前缀，允许字母、数字、连字符、星号(*)用于拦截泛解析、@符号代表根域名，系统会自动转换为小写
                         </div>
                     </div>
                     <div class="mb-3">
@@ -305,8 +307,8 @@ include 'includes/header.php';
                     <input type="hidden" id="edit_prefix_id" name="prefix_id">
                     <div class="mb-3">
                         <label for="edit_prefix" class="form-label">前缀</label>
-                        <input type="text" class="form-control" id="edit_prefix" name="prefix" required pattern="[a-zA-Z0-9\-]+" maxlength="50">
-                        <div class="form-text">只允许字母、数字和连字符</div>
+                        <input type="text" class="form-control" id="edit_prefix" name="prefix" required pattern="[a-zA-Z0-9\-\*@]+" maxlength="50">
+                        <div class="form-text">允许字母、数字、连字符、星号(*用于泛解析拦截)和@符号(根域名)</div>
                     </div>
                     <div class="mb-3">
                         <label for="edit_description" class="form-label">描述 <span class="text-muted">(可选)</span></label>

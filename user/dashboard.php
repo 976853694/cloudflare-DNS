@@ -87,34 +87,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $dns_manager = new DNSManager($current_domain);
             $full_name = $subdomain === '@' ? $current_domain['domain_name'] : $subdomain . '.' . $current_domain['domain_name'];
             
-            // 检查是否已存在冲突的DNS记录
-            $existing_records = $dns_manager->getDNSRecords($current_domain['zone_id']);
+            // 优先检查本地数据库中是否已存在该记录
+            $stmt = $db->prepare("
+                SELECT * FROM dns_records 
+                WHERE domain_id = ? AND subdomain = ? AND status = 1
+            ");
+            $stmt->bindValue(1, $current_domain['id'], SQLITE3_INTEGER);
+            $stmt->bindValue(2, $subdomain, SQLITE3_TEXT);
+            $result = $stmt->execute();
+            
+            $local_records = [];
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                $local_records[] = $row;
+            }
+            
+            // 检查本地记录是否有冲突
             $conflict_found = false;
             $existing_record = null;
             
-            foreach ($existing_records as $record) {
-                if (strtolower($record['name']) === strtolower($full_name)) {
-                    $record_type = strtoupper($record['type']);
-                    $target_type = strtoupper($type);
-                    
-                    // A、AAAA、CNAME记录之间会冲突
-                    $conflicting_types = ['A', 'AAAA', 'CNAME'];
-                    
-                    if (in_array($record_type, $conflicting_types) && in_array($target_type, $conflicting_types)) {
+            foreach ($local_records as $record) {
+                $record_type = strtoupper($record['type']);
+                $target_type = strtoupper($type);
+                
+                // A、AAAA、CNAME记录之间会冲突
+                $conflicting_types = ['A', 'AAAA', 'CNAME'];
+                
+                if (in_array($record_type, $conflicting_types) && in_array($target_type, $conflicting_types)) {
+                    $conflict_found = true;
+                    $existing_record = $record;
+                    break;
+                }
+                
+                // 完全相同的记录类型和内容
+                if ($record_type === $target_type) {
+                    if ($record['content'] === $content) {
+                        throw new Exception("相同的DNS记录已存在！记录名称: {$full_name}, 类型: {$type}, 内容: {$content}");
+                    } else {
                         $conflict_found = true;
                         $existing_record = $record;
                         break;
-                    }
-                    
-                    // 完全相同的记录类型和内容
-                    if ($record_type === $target_type) {
-                        if ($record['content'] === $content) {
-                            throw new Exception("相同的DNS记录已存在！记录名称: {$full_name}, 类型: {$type}, 内容: {$content}");
-                        } else {
-                            $conflict_found = true;
-                            $existing_record = $record;
-                            break;
-                        }
                     }
                 }
             }
@@ -125,6 +136,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
                 $conflict_msg .= "。无法添加 {$type} 记录到相同名称。";
                 $conflict_msg .= "建议：1) 使用不同的子域名前缀；2) 删除现有记录后重新添加；3) 使用编辑功能修改现有记录。";
                 throw new Exception($conflict_msg);
+            }
+            
+            // 如果本地没有冲突，再检查远程DNS提供商（可选，用于双重验证）
+            // 这可以捕获直接在DNS提供商后台添加的记录
+            try {
+                $remote_records = $dns_manager->getDNSRecords($current_domain['zone_id']);
+                foreach ($remote_records as $record) {
+                    if (strtolower($record['name']) === strtolower($full_name)) {
+                        $record_type = strtoupper($record['type']);
+                        $target_type = strtoupper($type);
+                        
+                        // 检查是否是同一条记录（通过cloudflare_id对比）
+                        $is_same_record = false;
+                        if (isset($record['id'])) {
+                            foreach ($local_records as $local_rec) {
+                                if ($local_rec['cloudflare_id'] == $record['id']) {
+                                    $is_same_record = true;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // 如果不是已知的本地记录，则检查冲突
+                        if (!$is_same_record) {
+                            $conflicting_types = ['A', 'AAAA', 'CNAME'];
+                            
+                            if (in_array($record_type, $conflicting_types) && in_array($target_type, $conflicting_types)) {
+                                $conflict_msg = "DNS记录冲突：域名 '{$full_name}' 在远程DNS提供商已存在 {$record_type} 记录";
+                                $conflict_msg .= "（内容: {$record['content']}）";
+                                $conflict_msg .= "。该记录可能是直接在DNS提供商后台添加的。请先删除该记录或使用不同的子域名。";
+                                throw new Exception($conflict_msg);
+                            }
+                            
+                            if ($record_type === $target_type && $record['content'] === $content) {
+                                throw new Exception("相同的DNS记录已存在于远程DNS提供商！记录名称: {$full_name}, 类型: {$type}, 内容: {$content}");
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                // 如果远程查询失败，记录日志但不阻止添加
+                error_log("远程DNS记录查询失败: " . $e->getMessage());
             }
             
             // 某些记录类型不能启用代理

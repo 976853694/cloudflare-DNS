@@ -91,10 +91,14 @@ if ($stats['total_domains'] > 0) {
 
 // 获取最近7天的用户注册趋势
 $weekly_registrations = [];
+$max_count = 0;
 for ($i = 6; $i >= 0; $i--) {
     $date = date('Y-m-d', strtotime("-$i days"));
     $count = $db->querySingle("SELECT COUNT(*) FROM users WHERE date(created_at) = '$date'");
     $weekly_registrations[] = ['date' => $date, 'count' => $count];
+    if ($count > $max_count) {
+        $max_count = $count;
+    }
 }
 
 // 获取最近的用户
@@ -458,9 +462,14 @@ include 'includes/header.php';
                         </div>
                         <div class="card-body">
                             <div class="trend-chart">
-                                <?php foreach ($weekly_registrations as $day): ?>
+                                <?php foreach ($weekly_registrations as $day): 
+                                    // 计算柱状图高度，确保不超过容器高度（90px为最大高度，留10px间距）
+                                    $bar_height = $max_count > 0 ? ($day['count'] / $max_count) * 90 : 0;
+                                    // 设置最小高度为5px，方便显示0值
+                                    $bar_height = max(5, $bar_height);
+                                ?>
                                 <div class="trend-bar" 
-                                     style="height: <?php echo max(20, $day['count'] * 15); ?>px;" 
+                                     style="height: <?php echo $bar_height; ?>px;" 
                                      data-count="<?php echo $day['count']; ?> 人"
                                      data-date="<?php echo date('m月d日', strtotime($day['date'])); ?>">
                                 </div>

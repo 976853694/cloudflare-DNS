@@ -362,5 +362,64 @@ class UserGroupManager {
             return false;
         }
     }
+    
+    /**
+     * 检查子域名前缀长度是否符合用户组的限制
+     * @param int $user_id 用户ID
+     * @param string $subdomain 子域名前缀
+     * @return array ['allowed' => bool, 'message' => string]
+     */
+    public function checkPrefixLengthRestriction($user_id, $subdomain) {
+        try {
+            $group = $this->getUserGroup($user_id);
+            
+            if (!$group) {
+                return ['allowed' => false, 'message' => '用户组信息获取失败'];
+            }
+            
+            // 如果没有设置前缀长度限制，则允许（-1或0表示不限制）
+            if (!isset($group['max_prefix_length']) || $group['max_prefix_length'] <= 0) {
+                return ['allowed' => true, 'message' => ''];
+            }
+            
+            $max_length = intval($group['max_prefix_length']);
+            $subdomain_length = strlen($subdomain);
+            
+            // 检查子域名长度是否超过限制
+            if ($subdomain_length > $max_length) {
+                return [
+                    'allowed' => false, 
+                    'message' => "子域名前缀长度超过限制！您的用户组最多允许 {$max_length} 个字符，当前为 {$subdomain_length} 个字符"
+                ];
+            }
+            
+            return ['allowed' => true, 'message' => ''];
+            
+        } catch (Exception $e) {
+            error_log("检查前缀长度限制失败: " . $e->getMessage());
+            return ['allowed' => false, 'message' => '系统错误'];
+        }
+    }
+    
+    /**
+     * 获取用户组的前缀长度限制
+     * @param int $user_id 用户ID
+     * @return int 最大长度，-1或0表示不限制
+     */
+    public function getMaxPrefixLength($user_id) {
+        try {
+            $group = $this->getUserGroup($user_id);
+            
+            if (!$group) {
+                return -1;
+            }
+            
+            return isset($group['max_prefix_length']) ? intval($group['max_prefix_length']) : -1;
+            
+        } catch (Exception $e) {
+            error_log("获取前缀长度限制失败: " . $e->getMessage());
+            return -1;
+        }
+    }
 }
 
