@@ -213,7 +213,7 @@ class EmailService {
         try {
             $this->mail->clearAddresses();
             $this->mail->addAddress($email, $username);
-            $this->mail->Subject = '六趣DNS - 注册验证码';
+            $this->mail->Subject = $this->getSetting('email_subject_registration', '六趣DNS - 注册验证码');
             
             $this->mail->Body = $this->getRegistrationEmailTemplate($username, $code);
             $this->mail->AltBody = "您的注册验证码是: {$code}，5分钟内有效。";
@@ -241,7 +241,7 @@ class EmailService {
         try {
             $this->mail->clearAddresses();
             $this->mail->addAddress($email, $username);
-            $this->mail->Subject = '六趣DNS - 密码重置验证码';
+            $this->mail->Subject = $this->getSetting('email_subject_password_reset', '六趣DNS - 密码重置验证码');
             
             $this->mail->Body = $this->getPasswordResetEmailTemplate($username, $code);
             $this->mail->AltBody = "您的密码重置验证码是: {$code}，5分钟内有效。";
@@ -263,7 +263,7 @@ class EmailService {
         try {
             $this->mail->clearAddresses();
             $this->mail->addAddress($email, $username);
-            $this->mail->Subject = '六趣DNS - 密码修改通知';
+            $this->mail->Subject = $this->getSetting('email_subject_password_change', '六趣DNS - 密码修改通知');
             
             $this->mail->Body = $this->getPasswordChangeNotificationTemplate($username);
             $this->mail->AltBody = "您的账户密码已成功修改。如非本人操作，请立即联系客服。";
@@ -290,7 +290,7 @@ class EmailService {
         try {
             $this->mail->clearAddresses();
             $this->mail->addAddress($new_email, $username);
-            $this->mail->Subject = '六趣DNS - 邮箱更换验证码';
+            $this->mail->Subject = $this->getSetting('email_subject_email_change', '六趣DNS - 邮箱更换验证码');
             
             $this->mail->Body = $this->getEmailChangeVerificationTemplate($username, $code);
             $this->mail->AltBody = "您的邮箱更换验证码是: {$code}，5分钟内有效。";
@@ -480,7 +480,7 @@ class EmailService {
             
             $this->mail->clearAddresses();
             $this->mail->addAddress($email);
-            $this->mail->Subject = '六趣DNS - SMTP测试邮件';
+            $this->mail->Subject = $this->getSetting('email_subject_test', '六趣DNS - SMTP测试邮件');
             
             $this->mail->Body = $this->getTestEmailTemplate();
             $this->mail->AltBody = "这是一封SMTP配置测试邮件，发送时间：" . date('Y-m-d H:i:s');

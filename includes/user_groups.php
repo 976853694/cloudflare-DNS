@@ -382,14 +382,14 @@ class UserGroupManager {
                 return ['allowed' => true, 'message' => ''];
             }
             
-            $max_length = intval($group['max_prefix_length']);
+            $min_length = intval($group['max_prefix_length']);
             $subdomain_length = strlen($subdomain);
             
-            // 检查子域名长度是否超过限制
-            if ($subdomain_length > $max_length) {
+            // 检查子域名长度是否低于最小限制
+            if ($subdomain_length < $min_length) {
                 return [
                     'allowed' => false, 
-                    'message' => "子域名前缀长度超过限制！您的用户组最多允许 {$max_length} 个字符，当前为 {$subdomain_length} 个字符"
+                    'message' => "子域名前缀长度不足！您的用户组最少需要 {$min_length} 个字符，当前为 {$subdomain_length} 个字符"
                 ];
             }
             
@@ -404,9 +404,9 @@ class UserGroupManager {
     /**
      * 获取用户组的前缀长度限制
      * @param int $user_id 用户ID
-     * @return int 最大长度，-1或0表示不限制
+     * @return int 最小长度，-1或0表示不限制
      */
-    public function getMaxPrefixLength($user_id) {
+    public function getMinPrefixLength($user_id) {
         try {
             $group = $this->getUserGroup($user_id);
             

@@ -22,7 +22,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_smtp'])) {
         'smtp_password' => trim(getPost('smtp_password')),
         'smtp_secure' => trim(getPost('smtp_secure')),
         'smtp_from_name' => trim(getPost('smtp_from_name')),
-        'smtp_debug' => trim(getPost('smtp_debug'))
+        'smtp_debug' => trim(getPost('smtp_debug')),
+        'email_subject_registration' => trim(getPost('email_subject_registration')),
+        'email_subject_password_reset' => trim(getPost('email_subject_password_reset')),
+        'email_subject_password_change' => trim(getPost('email_subject_password_change')),
+        'email_subject_email_change' => trim(getPost('email_subject_email_change')),
+        'email_subject_test' => trim(getPost('email_subject_test'))
     ];
     
     $success = true;
@@ -50,7 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_smtp'])) {
                     'smtp_password' => 'SMTP密码或授权码',
                     'smtp_secure' => 'SMTP安全连接类型（ssl/tls）',
                     'smtp_from_name' => '发件人显示名称',
-                    'smtp_debug' => 'SMTP调试模式（0-3）'
+                    'smtp_debug' => 'SMTP调试模式（0-3）',
+                    'email_subject_registration' => '注册验证邮件标题',
+                    'email_subject_password_reset' => '密码重置邮件标题',
+                    'email_subject_password_change' => '密码修改通知邮件标题',
+                    'email_subject_email_change' => '邮箱更换验证邮件标题',
+                    'email_subject_test' => '测试邮件标题'
                 ];
                 $stmt->bindValue(3, $descriptions[$key] ?? '', SQLITE3_TEXT);
             }
@@ -177,9 +187,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['test_email'])) {
     redirect('smtp_settings.php');
 }
 
-// 获取当前SMTP设置
+// 获取当前SMTP设置和邮件标题
 $current_settings = [];
-$result = $db->query("SELECT setting_key, setting_value FROM settings WHERE setting_key LIKE 'smtp_%'");
+$result = $db->query("SELECT setting_key, setting_value FROM settings WHERE setting_key LIKE 'smtp_%' OR setting_key LIKE 'email_subject_%'");
 while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
     $current_settings[$row['setting_key']] = $row['setting_value'];
 }
@@ -365,6 +375,40 @@ include 'includes/header.php';
                                     <input type="text" class="form-control" id="smtp_from_name" name="smtp_from_name" 
                                            value="<?php echo htmlspecialchars($current_settings['smtp_from_name'] ?? '六趣DNS'); ?>" required>
                                     <div class="form-text">收件人看到的发件人名称</div>
+                                </div>
+                                
+                                <hr class="my-4">
+                                
+                                <h6 class="mb-3"><i class="fas fa-heading me-2"></i>邮件标题配置</h6>
+                                
+                                <div class="mb-3">
+                                    <label for="email_subject_registration" class="form-label">注册验证邮件标题</label>
+                                    <input type="text" class="form-control" id="email_subject_registration" name="email_subject_registration" 
+                                           value="<?php echo htmlspecialchars($current_settings['email_subject_registration'] ?? '六趣DNS - 注册验证码'); ?>" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="email_subject_password_reset" class="form-label">密码重置邮件标题</label>
+                                    <input type="text" class="form-control" id="email_subject_password_reset" name="email_subject_password_reset" 
+                                           value="<?php echo htmlspecialchars($current_settings['email_subject_password_reset'] ?? '六趣DNS - 密码重置验证码'); ?>" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="email_subject_password_change" class="form-label">密码修改通知邮件标题</label>
+                                    <input type="text" class="form-control" id="email_subject_password_change" name="email_subject_password_change" 
+                                           value="<?php echo htmlspecialchars($current_settings['email_subject_password_change'] ?? '六趣DNS - 密码修改通知'); ?>" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="email_subject_email_change" class="form-label">邮箱更换验证邮件标题</label>
+                                    <input type="text" class="form-control" id="email_subject_email_change" name="email_subject_email_change" 
+                                           value="<?php echo htmlspecialchars($current_settings['email_subject_email_change'] ?? '六趣DNS - 邮箱更换验证码'); ?>" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="email_subject_test" class="form-label">测试邮件标题</label>
+                                    <input type="text" class="form-control" id="email_subject_test" name="email_subject_test" 
+                                           value="<?php echo htmlspecialchars($current_settings['email_subject_test'] ?? '六趣DNS - SMTP测试邮件'); ?>" required>
                                 </div>
                                 
                                 <div class="d-grid">

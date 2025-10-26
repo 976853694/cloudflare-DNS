@@ -52,7 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_code'])) {
     $password = trim($_POST['password']);
     $confirm_password = trim($_POST['confirm_password']);
     
-    if (empty($code) || empty($password) || empty($confirm_password)) {
+    // 检查会话变量是否存在
+    if (!isset($_SESSION['registration_email']) || !isset($_SESSION['registration_username'])) {
+        $messages['error'] = '会话已过期，请重新发送验证码';
+        $step = 'email';
+    } elseif (empty($code) || empty($password) || empty($confirm_password)) {
         $messages['error'] = '所有字段都必须填写';
     } elseif ($password !== $confirm_password) {
         $messages['error'] = '两次输入的密码不一致';

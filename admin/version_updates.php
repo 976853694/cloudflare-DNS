@@ -12,7 +12,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 $db = Database::getInstance()->getConnection();
 
 // 当前系统版本（在代码中维护）
-define('CURRENT_VERSION'， '2.0');
+define('CURRENT_VERSION', '2.1');
 
 // 强制每次都重新获取远程信息，禁用缓存
 function forceRefreshRemoteInfo() {

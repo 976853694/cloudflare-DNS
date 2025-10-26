@@ -148,13 +148,35 @@ if ($action === 'delete' && getGet('id')) {
         if ($record_count > 0) {
             showError('该用户还有DNS记录，请先删除相关记录！');
         } else {
-            // 删除用户相关数据
-            $db->exec("DELETE FROM card_key_usage WHERE user_id = $id");
-            $db->exec("DELETE FROM login_attempts WHERE ip_address IN (SELECT DISTINCT ip_address FROM action_logs WHERE user_type = 'user' AND user_id = $id)");
-            $db->exec("DELETE FROM users WHERE id = $id");
-            
-            logAction('admin', $_SESSION['admin_id'], 'delete_user', "删除用户: {$user['username']}");
-            showSuccess('用户删除成功！');
+            try {
+                // 开始事务
+                $db->exec("BEGIN TRANSACTION");
+                
+                // 删除用户相关数据（按照外键依赖顺序）
+                $db->exec("DELETE FROM card_key_usage WHERE user_id = $id");
+                $db->exec("DELETE FROM login_attempts WHERE ip_address IN (SELECT DISTINCT ip_address FROM action_logs WHERE user_type = 'user' AND user_id = $id)");
+                $db->exec("DELETE FROM action_logs WHERE user_type = 'user' AND user_id = $id");
+                
+                // 删除邀请相关记录
+                $db->exec("DELETE FROM invitation_history WHERE inviter_id = $id OR invitee_id = $id");
+                $db->exec("DELETE FROM invitations WHERE inviter_id = $id OR invitee_id = $id");
+                
+                // 删除积分历史记录
+                $db->exec("DELETE FROM points_history WHERE user_id = $id");
+                
+                // 最后删除用户
+                $db->exec("DELETE FROM users WHERE id = $id");
+                
+                // 提交事务
+                $db->exec("COMMIT");
+                
+                logAction('admin', $_SESSION['admin_id'], 'delete_user', "删除用户: {$user['username']}");
+                showSuccess('用户删除成功！');
+            } catch (Exception $e) {
+                // 回滚事务
+                $db->exec("ROLLBACK");
+                showError('删除用户失败: ' . $e->getMessage());
+            }
         }
     } else {
         showError('用户不存在！');

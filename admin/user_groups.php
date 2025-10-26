@@ -553,12 +553,12 @@ if (isset($_GET['edit']) && !empty($_GET['edit'])) {
                             <textarea name="description" class="form-control" rows="2"></textarea>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">前缀字符数量限制 <span class="text-muted">(可选)</span></label>
+                            <label class="form-label">前缀字符数量限制（最小值） <span class="text-muted">(可选)</span></label>
                             <input type="number" name="max_prefix_length" class="form-control" 
                                    value="-1" min="-1" max="63">
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
-                                限制子域名前缀的最大字符数量。例如：设置为3，用户只能创建如"abc"、"123"等最多3个字符的子域名。-1或0表示不限制
+                                限制子域名前缀的最小字符数量。例如：设置为3，用户只能创建3个字符或更多的子域名，如"abc"、"test"等。-1或0表示不限制
                             </small>
                         </div>
                         <div class="mb-3">
@@ -625,13 +625,13 @@ if (isset($_GET['edit']) && !empty($_GET['edit'])) {
                             <textarea name="description" class="form-control" rows="2"><?php echo htmlspecialchars($edit_group['description']); ?></textarea>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">前缀字符数量限制 <span class="text-muted">(可选)</span></label>
+                            <label class="form-label">前缀字符数量限制（最小值） <span class="text-muted">(可选)</span></label>
                             <input type="number" name="max_prefix_length" class="form-control" 
                                    value="<?php echo isset($edit_group['max_prefix_length']) ? $edit_group['max_prefix_length'] : -1; ?>"
                                    min="-1" max="63">
                             <small class="text-muted">
                                 <i class="fas fa-info-circle me-1"></i>
-                                限制子域名前缀的最大字符数量。例如：设置为3，用户只能创建如"abc"、"123"等最多3个字符的子域名。-1或0表示不限制
+                                限制子域名前缀的最小字符数量。例如：设置为3，用户只能创建3个字符或更多的子域名，如"abc"、"test"等。-1或0表示不限制
                             </small>
                         </div>
                         <div class="mb-3">
