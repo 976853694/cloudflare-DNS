@@ -45,12 +45,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_current_verifica
     } else {
         // 发送当前邮箱验证码
         try {
+            // 启用输出缓冲，防止调试信息显示到页面
+            ob_start();
             $emailService = new EmailService();
             $emailService->sendPasswordReset($user['email'], $user['username'], $user_id);
+            ob_end_clean();
             $_SESSION['email_change_step'] = 'verify_current';
             $messages['success'] = '验证码已发送到当前邮箱，请查收';
             $step = 'verify_current';
         } catch (Exception $e) {
+            ob_end_clean();
             $messages['error'] = '验证码发送失败：' . $e->getMessage();
             error_log("Email change current verification failed for user $user_id: " . $e->getMessage());
         }
@@ -79,13 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_current_email'
             if ($exists) {
                 $messages['error'] = '该邮箱已被其他用户使用';
             } else {
-                // 发送新邮箱验证码
+                // 验证通过，发送新邮箱验证码
+                ob_start();
                 if ($emailService->sendEmailChangeVerification($new_email, $user['username'], $user_id)) {
+                    ob_end_clean();
                     $_SESSION['new_email'] = $new_email;
                     $_SESSION['email_change_step'] = 'verify_new';
                     $messages['success'] = '验证码已发送到新邮箱，请查收';
                     $step = 'verify_new';
                 } else {
+                    ob_end_clean();
                     $messages['error'] = '验证邮件发送失败，请重试';
                 }
             }

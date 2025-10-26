@@ -32,13 +32,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_code'])) {
         } else {
             // 发送验证码
             try {
+                // 启用输出缓冲，防止调试信息显示到页面
+                ob_start();
                 $emailService = new EmailService();
                 $emailService->sendRegistrationVerification($email, $username);
+                // 清除并丢弃缓冲区内容
+                ob_end_clean();
+                
                 $_SESSION['registration_email'] = $email;
                 $_SESSION['registration_username'] = $username;
                 $messages['success'] = '验证码已发送到您的邮箱，请查收';
                 $step = 'verify';
             } catch (Exception $e) {
+                // 清除缓冲区
+                ob_end_clean();
                 $messages['error'] = '验证码发送失败：' . $e->getMessage();
                 error_log("Registration verification failed for $email: " . $e->getMessage());
             }

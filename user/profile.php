@@ -38,11 +38,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_password_code'])
         } else {
             // 发送密码修改验证码
             try {
+                // 启用输出缓冲，防止调试信息显示到页面
+                ob_start();
                 $emailService = new EmailService();
                 $emailService->sendPasswordReset($user['email'], $user['username'], $user['id']);
+                ob_end_clean();
+                
                 $_SESSION['password_change_step'] = 'verify';
                 showSuccess('验证码已发送到您的邮箱，请查收');
             } catch (Exception $e) {
+                ob_end_clean();
                 showError('验证码发送失败：' . $e->getMessage());
                 error_log("Password change verification failed for user {$user['id']}: " . $e->getMessage());
             }

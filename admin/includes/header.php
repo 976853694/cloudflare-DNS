@@ -1,3 +1,9 @@
+<?php
+// 确保必要的函数已加载
+if (!function_exists('getSetting')) {
+    require_once __DIR__ . '/../../includes/functions.php';
+}
+?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -59,6 +65,37 @@
             -webkit-backdrop-filter: blur(50px);
             border-right: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease-in-out, margin-left 0.3s ease-in-out;
+        }
+        
+        /* 侧边栏折叠状态 */
+        .sidebar.collapsed {
+            margin-left: -250px;
+        }
+        
+        /* 侧边栏折叠按钮 */
+        .sidebar-toggle {
+            position: fixed;
+            top: 60px;
+            left: 10px;
+            z-index: 1050;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .sidebar-toggle.collapsed {
+            left: 10px;
         }
         
         .sidebar-sticky {
@@ -187,6 +224,65 @@
                 height: auto;
                 max-height: none;
             }
+            
+            /* 手机端侧边栏改进 */
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .sidebar.collapsed {
+                margin-left: 0;
+                transform: translateX(-100%);
+            }
+            
+            /* 手机端主内容区域调整 */
+            .main-content {
+                margin: 10px;
+                padding: 15px;
+            }
+            
+            /* 手机端折叠按钮隐藏，使用导航栏按钮 */
+            .sidebar-toggle {
+                display: none;
+            }
+            
+            /* 确保内容可以滚动 */
+            body {
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+            
+            /* 手机端侧边栏遮罩 */
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 99;
+            }
+            
+            .sidebar-overlay.show {
+                display: block;
+            }
+        }
+        
+        /* 桌面端主内容区域随侧边栏调整 */
+        @media (min-width: 992px) {
+            .main-content {
+                margin-left: 250px;
+                transition: margin-left 0.3s ease-in-out;
+            }
+            
+            .main-content.sidebar-collapsed {
+                margin-left: 0;
+            }
         }
         
         /* 针对高DPI和缩放显示的优化 */
@@ -214,6 +310,17 @@
             margin: 20px;
             padding: 20px;
             min-height: calc(100vh - 100px);
+            overflow-x: auto;
+            overflow-y: visible;
+        }
+        
+        /* 容器改进，确保内容可以滚动 */
+        .container-fluid {
+            width: 100%;
+            padding-right: 15px;
+            padding-left: 15px;
+            margin-right: auto;
+            margin-left: auto;
         }
         
         /* 卡片毛玻璃效果 */
@@ -461,11 +568,91 @@
     </style>
 </head>
 <body>
+    <!-- 手机端侧边栏遮罩 -->
+    <div class="sidebar-overlay d-md-none" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+    
+    <!-- 侧边栏折叠按钮（仅桌面端显示） -->
+    <button class="sidebar-toggle d-none d-md-block" id="sidebarToggle" onclick="toggleSidebar()">
+        <i class="fas fa-bars"></i>
+    </button>
+    
     <nav class="navbar navbar-dark sticky-top flex-md-nowrap p-0 shadow">
         <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="dashboard.php">
             <i class="fas fa-cogs me-2"></i>管理后台
         </a>
-        <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+        <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" onclick="toggleMobileSidebar()">
             <span class="navbar-toggler-icon"></span>
         </button>
     </nav>
+    
+    <script>
+        // 桌面端侧边栏折叠功能
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebarMenu');
+            const mainContent = document.querySelector('.main-content');
+            const toggleBtn = document.getElementById('sidebarToggle');
+            
+            sidebar.classList.toggle('collapsed');
+            if (mainContent) {
+                mainContent.classList.toggle('sidebar-collapsed');
+            }
+            toggleBtn.classList.toggle('collapsed');
+            
+            // 保存状态到 localStorage
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            localStorage.setItem('sidebarCollapsed', isCollapsed);
+        }
+        
+        // 手机端侧边栏切换
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('sidebarMenu');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('show');
+            if (overlay) {
+                overlay.classList.toggle('show');
+            }
+        }
+        
+        // 关闭手机端侧边栏
+        function closeMobileSidebar() {
+            const sidebar = document.getElementById('sidebarMenu');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.remove('show');
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
+        }
+        
+        // 页面加载时恢复侧边栏状态
+        document.addEventListener('DOMContentLoaded', function() {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed && window.innerWidth >= 992) {
+                const sidebar = document.getElementById('sidebarMenu');
+                const mainContent = document.querySelector('.main-content');
+                const toggleBtn = document.getElementById('sidebarToggle');
+                
+                sidebar.classList.add('collapsed');
+                if (mainContent) {
+                    mainContent.classList.add('sidebar-collapsed');
+                }
+                if (toggleBtn) {
+                    toggleBtn.classList.add('collapsed');
+                }
+            }
+            
+            // 监听窗口大小变化
+            window.addEventListener('resize', function() {
+                if (window.innerWidth >= 992) {
+                    // 桌面端，关闭手机端遮罩
+                    const overlay = document.getElementById('sidebarOverlay');
+                    if (overlay) {
+                        overlay.classList.remove('show');
+                    }
+                    const sidebar = document.getElementById('sidebarMenu');
+                    if (sidebar) {
+                        sidebar.classList.remove('show');
+                    }
+                }
+            });
+        });
+    </script>

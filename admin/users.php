@@ -158,11 +158,14 @@ if ($action === 'delete' && getGet('id')) {
                 $db->exec("DELETE FROM action_logs WHERE user_type = 'user' AND user_id = $id");
                 
                 // 删除邀请相关记录
-                $db->exec("DELETE FROM invitation_history WHERE inviter_id = $id OR invitee_id = $id");
-                $db->exec("DELETE FROM invitations WHERE inviter_id = $id OR invitee_id = $id");
+                $db->exec("DELETE FROM invitation_uses WHERE invitee_id = $id");
+                $db->exec("DELETE FROM invitations WHERE inviter_id = $id");
                 
-                // 删除积分历史记录
-                $db->exec("DELETE FROM points_history WHERE user_id = $id");
+                // 删除用户公告查看记录
+                $db->exec("DELETE FROM user_announcement_views WHERE user_id = $id");
+                
+                // 删除邮箱验证记录
+                $db->exec("DELETE FROM email_verifications WHERE email IN (SELECT email FROM users WHERE id = $id)");
                 
                 // 最后删除用户
                 $db->exec("DELETE FROM users WHERE id = $id");

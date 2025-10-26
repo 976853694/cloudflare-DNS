@@ -28,13 +28,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_reset'])) {
         } else {
             // 发送重置邮件
             try {
+                // 启用输出缓冲，防止调试信息显示到页面
+                ob_start();
                 $emailService = new EmailService();
                 $emailService->sendPasswordReset($email, $user['username'], $user['id']);
+                ob_end_clean();
+                
                 $_SESSION['reset_email'] = $email;
                 $_SESSION['reset_user_id'] = $user['id'];
                 $messages['success'] = '密码重置邮件已发送，请查收';
                 $step = 'verify';
             } catch (Exception $e) {
+                ob_end_clean();
                 $messages['error'] = '邮件发送失败：' . $e->getMessage();
                 error_log("Password reset failed for $email: " . $e->getMessage());
             }
