@@ -797,7 +797,7 @@ include 'includes/header.php';
                                 <div class="mb-3">
                                 <label for="api_base_url" class="form-label">
                                     <i class="fas fa-exclamation-circle text-danger"></i>
-                                    API基础URL <span style="color: red;">*</span>
+                                    API基础URL <span class="text-danger">*</span>
                                 </label>
                                 <input type="url" class="form-control" id="api_base_url" name="api_base_url" 
                                        placeholder="https://6qu.cc" 
@@ -813,7 +813,7 @@ include 'includes/header.php';
                                 <div class="mb-3">
                                 <label for="provider_uid" class="form-label">
                                     <i class="fas fa-exclamation-circle text-danger"></i>
-                                    用户ID <span style="color: red;">*</span>
+                                    用户ID <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" class="form-control" id="provider_uid" name="provider_uid" 
                                        placeholder="例如：1000" 
@@ -831,7 +831,7 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-12">
                                 <div class="mb-3">
-                                    <label for="dnspod_secret_key" class="form-label">SecretKey <span style="color: red;">*</span></label>
+                                    <label for="dnspod_secret_key" class="form-label">SecretKey <span class="text-danger">*</span></label>
                                     <input type="password" class="form-control" id="dnspod_secret_key" name="provider_uid" placeholder="请输入DNSPod SecretKey">
                                     <div class="form-text">请在腾讯云DNSPod控制台获取SecretKey</div>
                                 </div>
@@ -844,7 +844,7 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-12">
                                 <div class="mb-3">
-                                    <label for="powerdns_api_url" class="form-label">API URL <span style="color: red;">*</span></label>
+                                    <label for="powerdns_api_url" class="form-label">API URL <span class="text-danger">*</span></label>
                                     <input type="url" class="form-control" id="powerdns_api_url" name="api_base_url" placeholder="例如: http://powerdns.example.com:8081">
                                     <div class="form-text">请输入PowerDNS API服务器完整URL地址</div>
                                 </div>
@@ -928,7 +928,7 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-12">
                                 <div class="mb-3">
-                                    <label for="edit_api_base_url" class="form-label">API基础URL <span style="color: red;">*</span></label>
+                                    <label for="edit_api_base_url" class="form-label">API基础URL <span class="text-danger">*</span></label>
                                     <input type="url" class="form-control" id="edit_api_base_url" name="api_base_url" placeholder="例如: https://api.rainbow.com/dns">
                                     <div class="form-text">请输入彩虹DNS服务的完整API基础URL地址</div>
                                 </div>
@@ -937,7 +937,7 @@ include 'includes/header.php';
                         <div class="row">
                             <div class="col-12">
                                 <div class="mb-3">
-                                    <label for="edit_provider_uid" class="form-label">用户ID <span style="color: red;">*</span></label>
+                                    <label for="edit_provider_uid" class="form-label">用户ID <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" id="edit_provider_uid" name="provider_uid" placeholder="请输入您的彩虹DNS用户ID">
                                     <div class="form-text">您可以在彩虹DNS控制面板的账户信息中找到用户ID</div>
                                 </div>
@@ -1260,155 +1260,140 @@ function testConnection() {
 </script>
 
 <style>
-/* 透明UI样式 */
+/* 卡片样式 */
 .card {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    background-color: #ffffff !important;
+    border: 1px solid #dee2e6 !important;
     border-radius: 0.5rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
 }
 
 .card-header {
-    background-color: rgba(255, 255, 255, 0.15) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-    backdrop-filter: blur(10px);
+    background-color: #f8f9fa !important;
+    border-bottom: 1px solid #dee2e6 !important;
 }
 
 .card-body {
-    background-color: transparent !important;
+    background-color: #ffffff !important;
 }
 
-/* 模态框透明化 */
+/* 模态框样式 */
 .modal-content {
-    background-color: rgba(0, 0, 0, 0.1) !important;
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
-    color: white !important;
+    background-color: #ffffff !important;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    color: #212529 !important;
 }
 
 .modal-header {
-    background-color: rgba(0, 0, 0, 0.2) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-    backdrop-filter: blur(10px);
-    color: white !important;
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #dee2e6 !important;
+    color: #212529 !important;
 }
 
 .modal-footer {
-    background-color: rgba(0, 0, 0, 0.2) !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.2) !important;
-    backdrop-filter: blur(10px);
-    color: white !important;
+    background-color: #ffffff !important;
+    border-top: 1px solid #dee2e6 !important;
+    color: #212529 !important;
 }
 
 .modal-title {
-    color: white !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    color: #212529 !important;
 }
 
-/* 表格透明化 */
+/* 表格样式 */
 .table {
-    background-color: transparent !important;
+    background-color: #ffffff !important;
 }
 
 .table thead th {
-    background-color: rgba(33, 37, 41, 0.8) !important;
-    border-color: rgba(255, 255, 255, 0.2) !important;
-    color: white !important;
+    background-color: #212529 !important;
+    border-color: #dee2e6 !important;
+    color: #212529 !important;
     font-weight: 600;
     font-size: 0.875rem;
 }
 
 .table tbody tr {
-    background-color: rgba(255, 255, 255, 0.05) !important;
+    background-color: #f8f9fa !important;
 }
 
 .table tbody tr:hover {
-    background-color: rgba(255, 255, 255, 0.15) !important;
+    background-color: #e9ecef !important;
 }
 
 .table td {
-    border-color: rgba(255, 255, 255, 0.1) !important;
+    border-color: #dee2e6 !important;
 }
 
-/* 表单元素透明化 */
+/* 表单元素样式 */
 .form-control, .form-select {
-    background-color: rgba(0, 0, 0, 0.3) !important;
-    border: 1px solid rgba(255, 255, 255, 0.4) !important;
-    backdrop-filter: blur(5px);
-    color: white !important;
+    background-color: #ffffff !important;
+    border: 1px solid #ced4da !important;
+    color: #212529 !important;
 }
 
 .form-control:focus, .form-select:focus {
-    background-color: rgba(0, 0, 0, 0.4) !important;
-    border-color: rgba(13, 110, 253, 0.7) !important;
+    background-color: #ffffff !important;
+    border-color: #0d6efd !important;
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
-    color: white !important;
+    color: #212529 !important;
 }
 
 .form-control::placeholder {
-    color: rgba(255, 255, 255, 0.7) !important;
+    color: #6c757d !important;
 }
 
 .form-select option {
-    background-color: rgba(0, 0, 0, 0.9) !important;
-    color: white !important;
+    background-color: #ffffff !important;
+    color: #212529 !important;
 }
 
-/* 文字颜色增强可读性 */
-.text-dark {
-    color: #ffffff !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-}
+/* 统计卡片文字保持黑色 - 白色背景上 */
+/* 不要全局覆盖 .text-dark */
 
-/* 按钮透明化 */
+/* 按钮样式 */
 .btn {
-    backdrop-filter: blur(5px);
+    /* 使用默认Bootstrap样式 */
 }
 
 /* 模态框按钮特殊样式 */
 .modal-content .btn-primary {
-    background-color: rgba(13, 110, 253, 0.8) !important;
-    border-color: rgba(13, 110, 253, 0.8) !important;
-    color: white !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    background-color: #0d6efd !important;
+    border-color: #0d6efd !important;
+    color: #ffffff !important;
 }
 
 .modal-content .btn-primary:hover {
-    background-color: rgba(13, 110, 253, 1) !important;
-    border-color: rgba(13, 110, 253, 1) !important;
+    background-color: #0b5ed7 !important;
+    border-color: #0a58ca !important;
 }
 
 .modal-content .btn-secondary {
-    background-color: rgba(108, 117, 125, 0.8) !important;
-    border-color: rgba(108, 117, 125, 0.8) !important;
-    color: white !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    background-color: #6c757d !important;
+    border-color: #6c757d !important;
+    color: #ffffff !important;
 }
 
 .modal-content .btn-secondary:hover {
-    background-color: rgba(108, 117, 125, 1) !important;
-    border-color: rgba(108, 117, 125, 1) !important;
+    background-color: #5c636a !important;
+    border-color: #565e64 !important;
 }
 
 .modal-content .btn-info {
-    background-color: rgba(23, 162, 184, 0.8) !important;
-    border-color: rgba(23, 162, 184, 0.8) !important;
-    color: white !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    background-color: #0dcaf0 !important;
+    border-color: #0dcaf0 !important;
+    color: #000000 !important;
 }
 
 .modal-content .btn-info:hover {
-    background-color: rgba(23, 162, 184, 1) !important;
-    border-color: rgba(23, 162, 184, 1) !important;
+    background-color: #31d2f2 !important;
+    border-color: #25cff2 !important;
 }
 
-/* 警告框透明化 */
+/* 警告框样式 */
 .alert {
-    background-color: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    /* 使用默认Bootstrap样式 */
 }
 
 /* 其他样式保持 */
@@ -1422,7 +1407,6 @@ function testConnection() {
 
 .badge {
     font-size: 0.75rem;
-    backdrop-filter: blur(5px);
 }
 
 .table-responsive {
@@ -1436,109 +1420,101 @@ function testConnection() {
 
 /* 确保内容可读性 */
 .card-body h5, .card-body .h5 {
-    color: #ffffff !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+    color: #212529 !important;
     font-weight: bold;
 }
 
 .small {
-    color: rgba(255, 255, 255, 0.9) !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    color: #6c757d !important;
 }
 
 /* 边框装饰保持显眼 */
 .border-primary {
-    border-left: 4px solid #007bff !important;
+    border-left: 4px solid #0d6efd !important;
 }
 
 .border-success {
-    border-left: 4px solid #28a745 !important;
+    border-left: 4px solid #198754 !important;
 }
 
 .border-info {
-    border-left: 4px solid #17a2b8 !important;
+    border-left: 4px solid #0dcaf0 !important;
 }
 
 .border-warning {
     border-left: 4px solid #ffc107 !important;
 }
 
-/* 页面主要内容区域透明化 */
+/* 页面主要内容区域 */
 .main {
-    background-color: transparent !important;
+    /* 使用默认背景 */
 }
 
 /* 面包屑和标题区域 */
 .border-bottom {
-    border-color: rgba(255, 255, 255, 0.2) !important;
+    border-color: #dee2e6 !important;
 }
 
 /* 图标颜色优化 */
 .text-muted {
-    color: rgba(255, 255, 255, 0.7) !important;
+    color: #6c757d !important;
 }
 
 /* 表格无数据状态 */
 .text-center {
-    color: rgba(255, 255, 255, 0.9) !important;
+    /* 使用默认颜色 */
 }
 
-/* 模态框body透明度 */
+/* 模态框body */
 .modal-body {
-    background-color: transparent !important;
-    color: white !important;
+    /* 使用默认背景 */
+    color: #212529 !important;
 }
 
-/* 模态框内所有文本白色 */
+/* 模态框内文本颜色 */
 .modal-content label {
-    color: white !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    color: #212529 !important;
 }
 
 .modal-content .form-label {
-    color: white !important;
+    color: #212529 !important;
     font-weight: 500;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .modal-content .form-check-label {
-    color: white !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    color: #212529 !important;
 }
 
 .modal-content .text-muted {
-    color: rgba(255, 255, 255, 0.8) !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    color: #6c757d !important;
 }
 
 /* 复选框样式优化 */
 .form-check-input {
-    background-color: rgba(0, 0, 0, 0.3) !important;
-    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    /* 使用默认样式 */
 }
 
 .form-check-input:checked {
-    background-color: rgba(13, 110, 253, 0.8) !important;
-    border-color: rgba(13, 110, 253, 0.8) !important;
+    background-color: #0d6efd !important;
+    border-color: #0d6efd !important;
 }
 
 /* 必填标记颜色 */
 .modal-content span[style*="color: red"] {
-    color: #ff6b6b !important;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    color: #dc3545 !important;
 }
 
-/* 徽章透明化 */
+/* 徽章样式 */
 .bg-secondary {
-    background-color: rgba(108, 117, 125, 0.8) !important;
+    background-color: #6c757d !important;
 }
 
 .bg-success {
-    background-color: rgba(40, 167, 69, 0.8) !important;
+    background-color: #198754 !important;
 }
 
 .bg-danger {
-    background-color: rgba(220, 53, 69, 0.8) !important;
+    background-color: #dc3545 !important;
 }
 </style>
 

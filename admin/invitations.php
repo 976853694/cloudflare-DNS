@@ -824,19 +824,19 @@ document.addEventListener('DOMContentLoaded', function() {
 <style>
 /* 渐变背景卡片 */
 .bg-gradient-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
 }
 
 .bg-gradient-success {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    background: linear-gradient(135deg, #198754 0%, #0d5132 100%);
 }
 
 .bg-gradient-warning {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%);
 }
 
 .bg-gradient-info {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    background: linear-gradient(135deg, #0dcaf0 0%, #087990 100%);
 }
 
 /* 头像样式 */
@@ -966,13 +966,13 @@ document.addEventListener('DOMContentLoaded', function() {
     box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.25);
 }
 
-/* 统计卡片文字颜色 */
+/* 统计卡片文字颜色 - 使用白色以保持在渐变背景上的可读性 */
 .text-white-75 {
-    color: rgba(255, 255, 255, 0.75) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
 }
 
 .text-white-25 {
-    color: rgba(255, 255, 255, 0.25) !important;
+    color: rgba(255, 255, 255, 0.75) !important;
 }
 
 /* 响应式优化 */

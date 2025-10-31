@@ -19,7 +19,12 @@
         <ul class="nav flex-column">
             <li class="nav-item">
                 <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'active' : ''; ?>" href="dashboard.php">
-                    <i class="fas fa-tachometer-alt me-2"></i>DNS管理
+                    <i class="fas fa-tachometer-alt me-2"></i>仪表盘
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'dns_manage.php' ? 'active' : ''; ?>" href="dns_manage.php">
+                    <i class="fas fa-cog me-2"></i>DNS管理
                 </a>
             </li>
             <li class="nav-item">

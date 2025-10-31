@@ -268,21 +268,7 @@ try {
     <title>GitHub登录处理 - <?php echo getSetting('site_name', 'DNS管理系统'); ?></title>
     <link href="../assets/css/bootstrap.min.css" rel="stylesheet">
     <link href="../assets/css/fontawesome.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-        }
-        .callback-container {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            padding: 2rem;
-            text-align: center;
-        }
-    </style>
+    <link href="../assets/css/white-auth.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">

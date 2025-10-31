@@ -1,0 +1,375 @@
+/* 简洁白色认证页面主题 - Clean White Authentication Theme */
+
+body {
+    background: #f5f5f5 !important;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    padding: 20px 0;
+}
+
+/* 认证容器 */
+.auth-container, .reset-card, .register-card {
+    background: #ffffff !important;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.register-card {
+    max-width: 550px;
+}
+
+/* 头部样式 */
+.auth-header, .reset-header, .register-header, .step-indicator {
+    background: #007bff !important;
+    color: white !important;
+    padding: 2rem;
+    text-align: center;
+}
+
+.auth-header h3, .reset-header h3, .register-header h3 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: white !important;
+}
+
+.auth-header p, .reset-header p, .register-header p {
+    color: rgba(255, 255, 255, 0.95) !important;
+    margin: 0;
+}
+
+/* 主体内容 */
+.auth-body, .reset-body, .register-body {
+    padding: 2.5rem 2rem;
+    background: #ffffff !important;
+}
+
+/* 表单控件 */
+.form-control, .form-select {
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    transition: all 0.3s;
+    background: #ffffff !important;
+    color: #333333 !important;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15);
+    background: #ffffff !important;
+    color: #333333 !important;
+}
+
+.form-control::placeholder {
+    color: #999999 !important;
+}
+
+.form-label {
+    color: #333333 !important;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+/* 按钮样式 */
+.btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    border-radius: 6px;
+    transition: all 0.3s;
+    border: none;
+}
+
+.btn-primary {
+    background: #007bff !important;
+    color: #ffffff !important;
+}
+
+.btn-primary:hover {
+    background: #0056b3 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+}
+
+.btn-outline-primary {
+    color: #007bff !important;
+    border: 2px solid #007bff !important;
+    background: transparent !important;
+}
+
+.btn-outline-primary:hover {
+    background: #007bff !important;
+    color: #ffffff !important;
+    border-color: #007bff !important;
+    transform: translateY(-1px);
+}
+
+.btn-outline-secondary {
+    color: #6c757d !important;
+    border: 2px solid #6c757d !important;
+    background: transparent !important;
+}
+
+.btn-outline-secondary:hover {
+    background: #6c757d !important;
+    color: #ffffff !important;
+    transform: translateY(-1px);
+}
+
+.btn-success {
+    background: #28a745 !important;
+    color: #ffffff !important;
+}
+
+.btn-success:hover {
+    background: #218838 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.btn-dark {
+    background: #343a40 !important;
+    color: #ffffff !important;
+}
+
+.btn-dark:hover {
+    background: #23272b !important;
+    transform: translateY(-1px);
+}
+
+.btn-link {
+    color: #007bff !important;
+    text-decoration: none;
+}
+
+.btn-link:hover {
+    color: #0056b3 !important;
+    text-decoration: underline;
+}
+
+/* 警告框 */
+.alert {
+    border-radius: 8px;
+    border: none;
+    color: #333333 !important;
+}
+
+.alert-success {
+    background: #d4edda !important;
+    color: #155724 !important;
+}
+
+.alert-danger {
+    background: #f8d7da !important;
+    color: #721c24 !important;
+}
+
+.alert-info {
+    background: #d1ecf1 !important;
+    color: #0c5460 !important;
+}
+
+/* 步骤指示器 */
+.step-indicator {
+    background: #007bff !important;
+    padding: 1.5rem;
+    border-bottom: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.step-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+
+.step-circle {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    color: white !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.2rem;
+    transition: all 0.3s;
+    border: 3px solid transparent;
+}
+
+.step.active .step-circle {
+    background: white !important;
+    color: #007bff !important;
+    border-color: white;
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.4);
+    transform: scale(1.1);
+}
+
+.step.completed .step-circle {
+    background: #28a745 !important;
+    border-color: #28a745;
+    color: white !important;
+}
+
+.step-label {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    font-weight: 500;
+}
+
+.step.active .step-label {
+    color: white !important;
+    font-weight: 600;
+}
+
+.step-line {
+    position: absolute;
+    top: 22px;
+    left: 50%;
+    width: 100px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.3);
+    z-index: 1;
+}
+
+.step.completed ~ .step .step-line {
+    background: #28a745;
+}
+
+/* Tab 样式 */
+.nav-tabs {
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 2rem;
+}
+
+.nav-tabs .nav-link {
+    color: #6c757d !important;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s;
+}
+
+.nav-tabs .nav-link:hover {
+    color: #007bff !important;
+    border-color: transparent;
+}
+
+.nav-tabs .nav-link.active {
+    color: #007bff !important;
+    background: transparent !important;
+    border-color: transparent transparent #007bff transparent;
+}
+
+/* 输入组 */
+.input-group-text {
+    background: #f8f9fa !important;
+    border: 1px solid #ced4da;
+    color: #333333 !important;
+}
+
+/* 验证码容器 */
+.captcha-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.captcha-container img {
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* 卡片 */
+.card {
+    background: #ffffff !important;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+    background: #f8f9fa !important;
+    border-bottom: 1px solid #e0e0e0;
+    color: #333333 !important;
+    font-weight: 600;
+}
+
+.card-body {
+    color: #333333 !important;
+}
+
+/* 文本样式 */
+h1, h2, h3, h4, h5, h6 {
+    color: #333333 !important;
+}
+
+p, span, div, label, small, strong, em, b {
+    color: #333333 !important;
+}
+
+.text-muted {
+    color: #6c757d !important;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* GitHub 按钮 */
+.btn-github {
+    background: #24292e !important;
+    color: #ffffff !important;
+    border: none;
+}
+
+.btn-github:hover {
+    background: #1a1e22 !important;
+    transform: translateY(-1px);
+}
+
+/* 成功消息卡片 */
+.success-icon {
+    width: 80px;
+    height: 80px;
+    background: #28a745;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    color: white;
+    font-size: 2.5rem;
+}
+
+/* 响应式 */
+@media (max-width: 576px) {
+    .auth-container, .reset-card, .register-card {
+        margin: 0 15px;
+    }
+    
+    .auth-body, .reset-body, .register-body {
+        padding: 2rem 1.5rem;
+    }
+    
+    .step-line {
+        width: 60px;
+    }
+}

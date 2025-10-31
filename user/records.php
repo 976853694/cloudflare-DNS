@@ -1,11 +1,138 @@
 <?php
 session_start();
 require_once '../config/database.php';
+require_once '../config/cloudflare.php';
+require_once '../config/dns_manager.php';
 require_once '../includes/functions.php';
+require_once '../includes/user_groups.php';
 
 checkUserLogin();
 
 $db = Database::getInstance()->getConnection();
+$messages = getMessages();
+
+// 更新用户积分到session
+$user_points = $db->querySingle("SELECT points FROM users WHERE id = {$_SESSION['user_id']}");
+$_SESSION['user_points'] = $user_points;
+
+// 获取用户组信息
+$user_group = getUserGroup($_SESSION['user_id']);
+$required_points = getRequiredPoints($_SESSION['user_id']);
+$current_record_count = getUserCurrentRecordCount($_SESSION['user_id']);
+
+// 获取用户可访问的域名（根据用户组权限）
+$domains = getUserAccessibleDomains($_SESSION['user_id']);
+
+// 获取启用的DNS记录类型
+$enabled_dns_types = [];
+$result = $db->query("SELECT * FROM dns_record_types WHERE enabled = 1 ORDER BY type_name");
+while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+    $enabled_dns_types[] = $row;
+}
+
+// 处理添加DNS记录
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
+    $domain_id = (int)getPost('domain_id');
+    $subdomain = getPost('subdomain');
+    $type = getPost('type');
+    $content = getPost('content');
+    $proxied = getPost('proxied', 0);
+    $remark = getPost('remark', '');
+    
+    // 获取选中的域名
+    $selected_domain = null;
+    foreach ($domains as $domain) {
+        if ($domain['id'] == $domain_id) {
+            $selected_domain = $domain;
+            break;
+        }
+    }
+    
+    if (!$selected_domain) {
+        showError('请选择一个有效的域名！');
+    } elseif (!$subdomain || !$type || !$content) {
+        showError('请填写完整信息！');
+    } elseif (!isDNSTypeEnabled($type)) {
+        showError('该DNS记录类型未启用！');
+    } elseif (!checkUserDomainPermission($_SESSION['user_id'], $selected_domain['id'])) {
+        showError('您的用户组无权访问此域名！请联系管理员升级用户组。');
+    } elseif (!checkUserRecordLimit($_SESSION['user_id'])) {
+        $max = $user_group['max_records'];
+        showError("您已达到用户组的最大记录数限制（{$max}条）！请联系管理员升级用户组。");
+    } elseif ($user_points < $required_points) {
+        showError("积分不足！需要 {$required_points} 积分，您当前有 {$user_points} 积分。");
+    } elseif (isSubdomainBlocked($subdomain)) {
+        showError("前缀 \"$subdomain\" 已被系统拦截，无法创建此子域名！");
+    } else {
+        try {
+            // 使用统一的DNS管理器
+            $dns_manager = new DNSManager($selected_domain);
+            $full_name = $subdomain === '@' ? $selected_domain['domain_name'] : $subdomain . '.' . $selected_domain['domain_name'];
+            
+            // 优先检查本地数据库中是否已存在该记录
+            $stmt = $db->prepare("
+                SELECT * FROM dns_records 
+                WHERE domain_id = ? AND subdomain = ? AND status = 1
+            ");
+            $stmt->bindValue(1, $selected_domain['id'], SQLITE3_INTEGER);
+            $stmt->bindValue(2, $subdomain, SQLITE3_TEXT);
+            $result = $stmt->execute();
+            
+            $local_records = [];
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                $local_records[] = $row;
+            }
+            
+            // 检查DNS冲突
+            $conflict_result = checkLocalDNSConflict($local_records, $type, $content);
+            
+            if ($conflict_result['hasConflict']) {
+                showError($conflict_result['message']);
+            } else {
+                // 添加DNS记录到服务商
+                $remote_result = $dns_manager->addRecord($subdomain, $type, $content, $proxied);
+                
+                if ($remote_result['success']) {
+                    // 保存到本地数据库
+                    $stmt = $db->prepare("
+                        INSERT INTO dns_records (
+                            domain_id, user_id, subdomain, type, content, 
+                            proxied, ttl, remark, remote_id, status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                    ");
+                    $stmt->bindValue(1, $selected_domain['id'], SQLITE3_INTEGER);
+                    $stmt->bindValue(2, $_SESSION['user_id'], SQLITE3_INTEGER);
+                    $stmt->bindValue(3, $subdomain, SQLITE3_TEXT);
+                    $stmt->bindValue(4, $type, SQLITE3_TEXT);
+                    $stmt->bindValue(5, $content, SQLITE3_TEXT);
+                    $stmt->bindValue(6, $proxied ? 1 : 0, SQLITE3_INTEGER);
+                    $stmt->bindValue(7, $remote_result['ttl'] ?? 1, SQLITE3_INTEGER);
+                    $stmt->bindValue(8, $remark, SQLITE3_TEXT);
+                    $stmt->bindValue(9, $remote_result['remote_id'] ?? '', SQLITE3_TEXT);
+                    
+                    if ($stmt->execute()) {
+                        // 扣除积分
+                        if ($required_points > 0) {
+                            $db->exec("UPDATE users SET points = points - {$required_points} WHERE id = {$_SESSION['user_id']}");
+                            $_SESSION['user_points'] -= $required_points;
+                        }
+                        
+                        logAction('user', $_SESSION['user_id'], 'add_dns_record', "添加DNS记录: {$full_name} ({$type})");
+                        showSuccess("DNS记录添加成功！完整域名：{$full_name}");
+                        redirect('records.php');
+                    } else {
+                        showError('保存到数据库失败！');
+                    }
+                } else {
+                    showError('添加DNS记录失败：' . $remote_result['message']);
+                }
+            }
+        } catch (Exception $e) {
+            logAction('user', $_SESSION['user_id'], 'add_dns_record_error', $e->getMessage());
+            showError('添加DNS记录时发生错误：' . $e->getMessage());
+        }
+    }
+}
 
 // 获取用户的所有DNS记录（包含域名信息，排除系统同步的记录）
 $dns_records = [];
@@ -40,14 +167,23 @@ include 'includes/header.php';
         
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
             <div class="main-content">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid #e0e0e0;">
                 <h1 class="h2">我的DNS记录</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
-                    <a href="dashboard.php" class="btn btn-primary">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRecordModal">
                         <i class="fas fa-plus me-1"></i>添加记录
-                    </a>
+                    </button>
                 </div>
             </div>
+            
+            <?php if (!empty($messages)): ?>
+                <?php foreach ($messages as $type => $message): ?>
+                    <div class="alert alert-<?php echo $type === 'error' ? 'danger' : $type; ?> alert-dismissible fade show">
+                        <?php echo $message; ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
             
             <!-- 统计卡片 -->
             <div class="row mb-4">
@@ -211,9 +347,9 @@ include 'includes/header.php';
                         <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
                         <h5 class="text-muted">暂无DNS记录</h5>
                         <p class="text-muted">您还没有添加任何DNS记录</p>
-                        <a href="dashboard.php" class="btn btn-primary">
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRecordModal">
                             <i class="fas fa-plus me-1"></i>添加第一条记录
-                        </a>
+                        </button>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -223,30 +359,191 @@ include 'includes/header.php';
     </div>
 </div>
 
-<style>
-.border-left-primary {
-    border-left: 0.25rem solid #4e73df !important;
+<!-- 添加DNS记录模态框 -->
+<div class="modal fade" id="addRecordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加DNS记录</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <?php if ($user_group): ?>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        您的用户组：<strong><?php echo htmlspecialchars($user_group['display_name']); ?></strong> | 
+                        <?php if ($required_points > 0): ?>
+                            添加一条DNS记录需要消耗 <strong><?php echo $required_points; ?></strong> 积分
+                        <?php else: ?>
+                            <strong class="text-success">免费添加</strong> DNS记录
+                        <?php endif; ?>
+                        <?php if ($user_group['max_records'] != -1): ?>
+                            | 已用 <strong><?php echo $current_record_count; ?>/<?php echo $user_group['max_records']; ?></strong> 条
+                        <?php else: ?>
+                            | 已用 <strong><?php echo $current_record_count; ?></strong> 条（无限制）
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <div class="mb-3">
+                        <label for="domain_id" class="form-label">选择域名</label>
+                        <select class="form-select" id="domain_id" name="domain_id" required onchange="updateDomainDisplay()">
+                            <?php if (empty($domains)): ?>
+                                <option value="">暂无可用域名</option>
+                            <?php else: ?>
+                                <?php foreach ($domains as $domain): ?>
+                                    <option value="<?php echo $domain['id']; ?>" 
+                                            data-domain="<?php echo htmlspecialchars($domain['domain_name']); ?>"
+                                            data-provider="<?php echo htmlspecialchars($domain['provider_type'] ?? 'cloudflare'); ?>">
+                                        <?php echo htmlspecialchars($domain['domain_name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </select>
+                        <?php if (empty($domains)): ?>
+                            <div class="form-text text-danger">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                暂无可用域名，请联系管理员。
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="subdomain" class="form-label">子域名</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="subdomain" name="subdomain" 
+                                   placeholder="www" required>
+                            <span class="input-group-text" id="domain-display">
+                                <?php echo !empty($domains) ? '.' . htmlspecialchars($domains[0]['domain_name']) : ''; ?>
+                            </span>
+                        </div>
+                        <div class="form-text">输入 @ 表示根域名</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="type" class="form-label">记录类型</label>
+                        <select class="form-select" id="type" name="type" required onchange="updateContentPlaceholder()">
+                            <?php if (empty($enabled_dns_types)): ?>
+                                <option value="">暂无可用的记录类型</option>
+                            <?php else: ?>
+                                <?php foreach ($enabled_dns_types as $dns_type): ?>
+                                    <option value="<?php echo $dns_type['type_name']; ?>">
+                                        <?php echo htmlspecialchars($dns_type['type_name']); ?> - <?php echo htmlspecialchars($dns_type['description']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </select>
+                        <?php if (empty($enabled_dns_types)): ?>
+                            <div class="form-text text-danger">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                管理员暂未启用任何DNS记录类型，请联系管理员。
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="content" class="form-label">记录值</label>
+                        <input type="text" class="form-control" id="content" name="content" placeholder="192.168.1.1" required>
+                        <div class="form-text" id="content-help">
+                            请输入对应记录类型的值
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="remark" class="form-label">备注 <span class="text-muted">(可选)</span></label>
+                        <input type="text" class="form-control" id="remark" name="remark" placeholder="例如：网站主页、API接口、邮件服务器等" maxlength="100">
+                        <div class="form-text">添加备注可以帮助您区分不同解析记录的用途</div>
+                    </div>
+                    
+                    <div class="mb-3" id="proxied-section">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="proxied" name="proxied" value="1">
+                            <label class="form-check-label" for="proxied">
+                                启用Cloudflare代理
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            仅A、AAAA、CNAME记录支持代理功能。NS、MX、TXT、SRV等记录类型会自动禁用代理。
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" name="add_record" class="btn btn-primary" <?php echo (empty($enabled_dns_types) || empty($domains)) ? 'disabled' : ''; ?>>
+                        添加记录
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// 更新域名显示
+function updateDomainDisplay() {
+    const domainSelect = document.getElementById('domain_id');
+    const domainDisplay = document.getElementById('domain-display');
+    const proxiedSection = document.getElementById('proxied-section');
+    
+    if (domainSelect && domainDisplay) {
+        const selectedOption = domainSelect.options[domainSelect.selectedIndex];
+        const domainName = selectedOption.getAttribute('data-domain');
+        const providerType = selectedOption.getAttribute('data-provider');
+        
+        domainDisplay.textContent = '.' + domainName;
+        
+        // 根据服务商类型显示/隐藏代理选项
+        if (providerType === 'rainbow') {
+            proxiedSection.style.display = 'none';
+        } else {
+            proxiedSection.style.display = 'block';
+        }
+    }
 }
 
-.border-left-success {
-    border-left: 0.25rem solid #1cc88a !important;
+// 更新内容占位符
+function updateContentPlaceholder() {
+    const typeSelect = document.getElementById('type');
+    const contentInput = document.getElementById('content');
+    const contentHelp = document.getElementById('content-help');
+    const proxiedCheckbox = document.getElementById('proxied');
+    
+    if (!typeSelect || !contentInput || !contentHelp) return;
+    
+    const type = typeSelect.value;
+    const placeholders = {
+        'A': { placeholder: '192.168.1.1', help: '请输入IPv4地址', proxyable: true },
+        'AAAA': { placeholder: '2001:0db8::1', help: '请输入IPv6地址', proxyable: true },
+        'CNAME': { placeholder: 'example.com', help: '请输入目标域名', proxyable: true },
+        'MX': { placeholder: 'mail.example.com', help: '请输入邮件服务器地址', proxyable: false },
+        'TXT': { placeholder: '"v=spf1 include:example.com ~all"', help: '请输入文本内容', proxyable: false },
+        'NS': { placeholder: 'ns1.example.com', help: '请输入名称服务器', proxyable: false },
+        'SRV': { placeholder: '10 60 5060 sipserver.example.com', help: '格式: priority weight port target', proxyable: false },
+        'CAA': { placeholder: '0 issue "letsencrypt.org"', help: '格式: flags tag value', proxyable: false }
+    };
+    
+    const config = placeholders[type] || { placeholder: '', help: '请输入对应记录类型的值', proxyable: false };
+    contentInput.placeholder = config.placeholder;
+    contentHelp.textContent = config.help;
+    
+    // 根据记录类型启用/禁用代理选项
+    if (proxiedCheckbox) {
+        if (!config.proxyable) {
+            proxiedCheckbox.checked = false;
+            proxiedCheckbox.disabled = true;
+        } else {
+            proxiedCheckbox.disabled = false;
+        }
+    }
 }
 
-.border-left-info {
-    border-left: 0.25rem solid #36b9cc !important;
-}
-
-.border-left-warning {
-    border-left: 0.25rem solid #f6c23e !important;
-}
-
-.text-gray-800 {
-    color: #5a5c69 !important;
-}
-
-.text-gray-300 {
-    color: #dddfeb !important;
-}
-</style>
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    updateDomainDisplay();
+    updateContentPlaceholder();
+});
+</script>
 
 <?php include 'includes/footer.php'; ?>

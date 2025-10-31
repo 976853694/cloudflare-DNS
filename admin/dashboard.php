@@ -141,7 +141,7 @@ include 'includes/header.php';
 .trend-bar {
     flex: 1;
     margin: 0 2px;
-    background: linear-gradient(to top, #667eea, #764ba2);
+    background: linear-gradient(to top, #0d6efd, #0056b3);
     border-radius: 3px 3px 0 0;
     transition: all 0.3s ease;
     cursor: pointer;
@@ -154,7 +154,7 @@ include 'includes/header.php';
     top: -25px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0,0,0,0.8);
+    background: #212529;
     color: white;
     padding: 2px 6px;
     border-radius: 3px;
@@ -184,7 +184,7 @@ include 'includes/header.php';
         
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
             <div class="main-content">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2">仪表板</h1>
                 <div class="text-muted small">
                     <i class="fas fa-clock me-1"></i>
@@ -266,7 +266,7 @@ include 'includes/header.php';
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card shadow-sm border-0">
-                        <div class="card-header bg-gradient-primary text-white" style="background: transparent !important;">
+                        <div class="card-header bg-primary text-white">
                             <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>系统概览</h5>
                         </div>
                         <div class="card-body p-0">
@@ -457,7 +457,7 @@ include 'includes/header.php';
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card shadow-sm border-0">
-                        <div class="card-header" style="background: transparent !important;">
+                        <div class="card-header" class="bg-light">
                             <h6 class="mb-0"><i class="fas fa-chart-area me-2"></i>最近7天用户注册趋势</h6>
                         </div>
                         <div class="card-body">
@@ -489,7 +489,7 @@ include 'includes/header.php';
                 <!-- 最近用户 -->
                 <div class="col-lg-6 mb-4">
                     <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background: transparent !important;">
+                        <div class="card-header d-flex justify-content-between align-items-center" class="bg-light">
                             <h6 class="mb-0"><i class="fas fa-user-plus me-2"></i>最近注册用户</h6>
                             <a href="users.php" class="btn btn-sm btn-outline-primary">查看全部</a>
                         </div>
@@ -531,7 +531,7 @@ include 'includes/header.php';
                 <!-- 最近DNS记录 -->
                 <div class="col-lg-6 mb-4">
                     <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header d-flex justify-content-between align-items-center" style="background: transparent !important;">
+                        <div class="card-header d-flex justify-content-between align-items-center" class="bg-light">
                             <h6 class="mb-0"><i class="fas fa-dns me-2"></i>最近DNS记录</h6>
                             <a href="dns_records.php" class="btn btn-sm btn-outline-primary">查看全部</a>
                         </div>
@@ -575,7 +575,7 @@ include 'includes/header.php';
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card shadow-sm border-0">
-                        <div class="card-header" style="background: transparent !important;">
+                        <div class="card-header" class="bg-light">
                             <h6 class="mb-0"><i class="fas fa-bolt me-2"></i>快速操作</h6>
                         </div>
                         <div class="card-body">

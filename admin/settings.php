@@ -125,15 +125,15 @@ include 'includes/header.php';
 }
 
 .modern-switch-container {
-    background: transparent;
+    background: white;
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid #dee2e6;
     transition: all 0.3s ease;
 }
 
 .modern-switch-container:hover {
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: #0d6efd;
     transform: translateY(-2px);
 }
 
@@ -157,11 +157,11 @@ include 'includes/header.php';
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, transparent, #dee2e6, transparent);
+    background: #dee2e6;
 }
 
 .divider-content {
-    background: transparent;
+    background: white;
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
     padding: 0 2rem;
@@ -172,10 +172,10 @@ include 'includes/header.php';
 }
 
 .info-card {
-    background: transparent;
+    background: white;
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #dee2e6;
     transition: all 0.3s ease;
 }
 
@@ -185,10 +185,10 @@ include 'includes/header.php';
 }
 
 .github-config-info {
-    background: transparent;
+    background: white;
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #dee2e6;
 }
 
 .config-step {
@@ -230,10 +230,10 @@ include 'includes/header.php';
 }
 
 .dns-actions {
-    background: transparent;
+    background: white;
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid #dee2e6;
 }
 
 .info-item {
@@ -275,13 +275,13 @@ include 'includes/header.php';
 }
 
 .bg-success-subtle {
-    background: transparent;
+    background: white;
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
 }
 
 .glass-container {
-    background: transparent;
+    background: white;
     backdrop-filter: blur(50px);
     -webkit-backdrop-filter: blur(50px);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -384,32 +384,6 @@ include 'includes/header.php';
                                         </label>
                                     </div>
                                     <small class="text-muted">关闭后新用户无法注册账户</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- 界面设置 -->
-                        <div class="settings-divider my-5">
-                            <div class="divider-line"></div>
-                            <div class="divider-content">
-                                <i class="fas fa-palette text-primary fs-4"></i>
-                                <h5 class="fw-bold text-primary mb-0 ms-2">界面设置</h5>
-                            </div>
-                        </div>
-                        
-                        <div class="row g-4">
-                            <div class="col-md-12">
-                                <div class="form-floating mb-3">
-                                    <input type="url" class="form-control form-control-lg border-2" id="background_image_url" name="background_image_url" 
-                                           value="<?php echo htmlspecialchars($current_settings['background_image_url']); ?>" 
-                                           placeholder="https://example.com/image.jpg">
-                                    <label for="background_image_url"><i class="fas fa-image me-2"></i>背景图片URL</label>
-                                </div>
-                                <div class="glass-container p-3 rounded-3">
-                                    <small class="text-muted">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        设置网站背景图片，支持HTTPS链接。留空则使用默认背景。
-                                    </small>
                                 </div>
                             </div>
                         </div>
