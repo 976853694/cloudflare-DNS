@@ -65,14 +65,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
     $content = getPost('content');
     $proxied = getPost('proxied', 0);
     $remark = getPost('remark', '');
+    $add_domain_id = getPost('add_domain_id'); // 从表单中获取选择的域名ID
     
-    if (!$current_domain) {
-        showError('请先选择一个域名！');
+    // 根据表单选择的域名ID获取域名信息
+    $add_domain = null;
+    foreach ($domains as $domain) {
+        if ($domain['id'] == $add_domain_id) {
+            $add_domain = $domain;
+            break;
+        }
+    }
+    
+    if (!$add_domain) {
+        showError('请选择一个有效的域名！');
     } elseif (!$subdomain || !$type || !$content) {
         showError('请填写完整信息！');
     } elseif (!isDNSTypeEnabled($type)) {
         showError('该DNS记录类型未启用！');
-    } elseif (!checkUserDomainPermission($_SESSION['user_id'], $current_domain['id'])) {
+    } elseif (!checkUserDomainPermission($_SESSION['user_id'], $add_domain['id'])) {
         showError('您的用户组无权访问此域名！请联系管理员升级用户组。');
     } elseif (!checkUserRecordLimit($_SESSION['user_id'])) {
         $max = $user_group['max_records'];
@@ -84,15 +94,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
     } else {
         try {
             // 使用统一的DNS管理器
-            $dns_manager = new DNSManager($current_domain);
-            $full_name = $subdomain === '@' ? $current_domain['domain_name'] : $subdomain . '.' . $current_domain['domain_name'];
+            $dns_manager = new DNSManager($add_domain);
+            $full_name = $subdomain === '@' ? $add_domain['domain_name'] : $subdomain . '.' . $add_domain['domain_name'];
             
             // 优先检查本地数据库中是否已存在该记录
             $stmt = $db->prepare("
                 SELECT * FROM dns_records 
                 WHERE domain_id = ? AND subdomain = ? AND status = 1
             ");
-            $stmt->bindValue(1, $current_domain['id'], SQLITE3_INTEGER);
+            $stmt->bindValue(1, $add_domain['id'], SQLITE3_INTEGER);
             $stmt->bindValue(2, $subdomain, SQLITE3_TEXT);
             $result = $stmt->execute();
             
@@ -141,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             // 如果本地没有冲突，再检查远程DNS提供商（可选，用于双重验证）
             // 这可以捕获直接在DNS提供商后台添加的记录
             try {
-                $remote_records = $dns_manager->getDNSRecords($current_domain['zone_id']);
+                $remote_records = $dns_manager->getDNSRecords($add_domain['zone_id']);
                 foreach ($remote_records as $record) {
                     if (strtolower($record['name']) === strtolower($full_name)) {
                         $record_type = strtoupper($record['type']);
@@ -185,18 +195,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $final_proxied = in_array(strtoupper($type), $non_proxiable_types) ? false : (bool)$proxied;
             
             // 对于彩虹DNS，代理功能不可用
-            if (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') {
+            if (isset($add_domain['provider_type']) && $add_domain['provider_type'] === 'rainbow') {
                 $final_proxied = false;
             }
             
             // 对于彩虹DNS，需要使用子域名而不是完整域名
-            if (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') {
+            if (isset($add_domain['provider_type']) && $add_domain['provider_type'] === 'rainbow') {
                 $record_name = $subdomain; // 彩虹DNS使用子域名
             } else {
                 $record_name = $full_name; // Cloudflare使用完整域名
             }
             
-            $result = $dns_manager->createDNSRecord($current_domain['zone_id'], $type, $record_name, $content, [
+            $result = $dns_manager->createDNSRecord($add_domain['zone_id'], $type, $record_name, $content, [
                 'proxied' => $final_proxied,
                 'remark' => $remark
             ]);
@@ -204,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             // 保存到数据库
             $stmt = $db->prepare("INSERT INTO dns_records (user_id, domain_id, subdomain, type, content, proxied, cloudflare_id, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->bindValue(1, $_SESSION['user_id'], SQLITE3_INTEGER);
-            $stmt->bindValue(2, $current_domain['id'], SQLITE3_INTEGER);
+            $stmt->bindValue(2, $add_domain['id'], SQLITE3_INTEGER);
             $stmt->bindValue(3, $subdomain, SQLITE3_TEXT);
             $stmt->bindValue(4, $type, SQLITE3_TEXT);
             $stmt->bindValue(5, $content, SQLITE3_TEXT);
@@ -231,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             showError('添加失败: ' . $e->getMessage());
         }
     }
-    redirect('dashboard.php');
+    redirect('dns_manage.php');
 }
 
 // 处理修改DNS记录
@@ -248,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
         // 检查新的前缀是否被拦截（如果前缀发生了变化）
         if ($subdomain !== $record['subdomain'] && isSubdomainBlocked($subdomain)) {
             showError("前缀 \"$subdomain\" 已被系统拦截，无法修改为此子域名！");
-            redirect('dashboard.php');
+            redirect('dns_manage.php');
         }
         
         try {
@@ -292,7 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
     } else {
         showError('记录不存在或无权限修改！');
     }
-    redirect('dashboard.php');
+    redirect('dns_manage.php');
 }
 
 // 处理删除DNS记录
@@ -316,19 +326,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
     } else {
         showError('记录不存在或无权限删除！');
     }
-    redirect('dashboard.php');
+    redirect('dns_manage.php');
 }
 
-// 获取用户的DNS记录
+// 获取用户的所有DNS记录（包含域名信息）
 $dns_records = [];
-if ($current_domain) {
-    $stmt = $db->prepare("SELECT * FROM dns_records WHERE user_id = ? AND domain_id = ? AND (is_system = 0 OR is_system IS NULL) ORDER BY created_at DESC");
-    $stmt->bindValue(1, $_SESSION['user_id'], SQLITE3_INTEGER);
-    $stmt->bindValue(2, $current_domain['id'], SQLITE3_INTEGER);
-    $result = $stmt->execute();
-    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-        $dns_records[] = $row;
+$stmt = $db->prepare("
+    SELECT dr.*, d.domain_name, d.provider_type 
+    FROM dns_records dr 
+    JOIN domains d ON dr.domain_id = d.id 
+    WHERE dr.user_id = ? AND (dr.is_system = 0 OR dr.is_system IS NULL)
+    ORDER BY dr.created_at DESC
+");
+$stmt->bindValue(1, $_SESSION['user_id'], SQLITE3_INTEGER);
+$result = $stmt->execute();
+while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+    $dns_records[] = $row;
+}
+
+// 按域名分组记录
+$records_by_domain = [];
+foreach ($dns_records as $record) {
+    $domain_id = $record['domain_id'];
+    if (!isset($records_by_domain[$domain_id])) {
+        $records_by_domain[$domain_id] = [
+            'domain_name' => $record['domain_name'],
+            'provider_type' => $record['provider_type'],
+            'records' => []
+        ];
     }
+    $records_by_domain[$domain_id]['records'][] = $record;
 }
 
 // 获取启用的DNS记录类型
@@ -352,8 +379,10 @@ include 'includes/header.php';
             <div class="main-content">
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
                 <div>
-                    <h1 class="h2">DNS管理面板</h1>
-                    <?php if ($auto_fill_mode): ?>
+                    <h1 class="h2">
+                        <i class="fas fa-cog me-2"></i>DNS记录管理
+                    </h1>
+                    <?php if ($auto_fill_mode && $current_domain): ?>
                     <p class="text-muted mb-0">
                         <i class="fas fa-magic me-1"></i>
                         准备添加解析：<strong><?php echo htmlspecialchars($auto_prefix . '.' . $current_domain['domain_name']); ?></strong>
@@ -376,7 +405,7 @@ include 'includes/header.php';
                     <span class="badge bg-success fs-6 me-2">
                         <i class="fas fa-list me-1"></i>记录: <?php echo $current_record_count; ?><?php if ($user_group && $user_group['max_records'] != -1): ?>/<?php echo $user_group['max_records']; ?><?php endif; ?>
                     </span>
-                    <?php if ($current_domain): ?>
+                    <?php if (!empty($domains)): ?>
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRecordModal" 
                             <?php if ($auto_fill_mode): ?>onclick="autoFillForm()"<?php endif; ?>>
                         <i class="fas fa-plus me-1"></i>添加记录
@@ -400,116 +429,156 @@ include 'includes/header.php';
                 </div>
             <?php endif; ?>
             
-            <!-- 域名选择 -->
-            <?php if (!empty($domains)): ?>
-            <div class="card mb-4">
-                <div class="card-body">
-                    <form method="POST" class="row g-3 align-items-end">
-                        <div class="col-md-8">
-                            <label for="domain_id" class="form-label">选择域名</label>
-                            <select class="form-select" id="domain_id" name="domain_id" onchange="switchDomain(this.value)">
-                                <?php foreach ($domains as $domain): ?>
-                                <option value="<?php echo $domain['id']; ?>" <?php echo $domain['id'] == $selected_domain_id ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($domain['domain_name']); ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
+            <!-- 统计信息 -->
+            <div class="row mb-4">
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card border-left-primary shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">总记录数</div>
+                                    <div class="h5 mb-0 font-weight-bold"><?php echo count($dns_records); ?></div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-list fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-4">
-                            <button type="submit" name="select_domain" class="btn btn-outline-primary">
-                                <i class="fas fa-sync me-1"></i>手动切换
-                            </button>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card border-left-success shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">可用域名</div>
+                                    <div class="h5 mb-0 font-weight-bold"><?php echo count($domains); ?></div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-globe fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
                         </div>
-                    </form>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card border-left-info shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">当前积分</div>
+                                    <div class="h5 mb-0 font-weight-bold"><?php echo $_SESSION['user_points']; ?></div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-coins fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-3">
+                    <div class="card border-left-warning shadow h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">代理记录</div>
+                                    <div class="h5 mb-0 font-weight-bold"><?php echo count(array_filter($dns_records, function($r) { return $r['proxied']; })); ?></div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-shield-alt fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- DNS记录列表 -->
-            <?php if ($current_domain): ?>
-            <div class="card shadow">
-                <div class="card-header">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <?php echo htmlspecialchars($current_domain['domain_name']); ?> - DNS记录
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <?php if (!empty($dns_records)): ?>
-                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>子域名</th>
-                                    <th>类型</th>
-                                    <th>内容</th>
-                                    <th>备注</th>
-                                    <th>代理状态</th>
-                                    <th>创建时间</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($dns_records as $record): ?>
-                                <tr>
-                                    <td>
-                                        <code><?php echo htmlspecialchars($record['subdomain']); ?></code>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-info"><?php echo $record['type']; ?></span>
-                                    </td>
-                                    <td><?php echo htmlspecialchars($record['content']); ?></td>
-                                    <td>
-                                        <?php if (!empty($record['remark'])): ?>
-                                            <span class="text-muted" title="<?php echo htmlspecialchars($record['remark']); ?>">
-                                                <i class="fas fa-comment-alt me-1"></i>
-                                                <?php echo htmlspecialchars(mb_strlen($record['remark']) > 20 ? mb_substr($record['remark'], 0, 20) . '...' : $record['remark']); ?>
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="text-muted">-</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ($record['proxied']): ?>
-                                            <span class="badge bg-warning">已代理</span>
-                                        <?php else: ?>
-                                            <span class="badge bg-secondary">仅DNS</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?php echo formatTime($record['created_at']); ?></td>
-                                    <td>
-                                        <button type="button" class="btn btn-sm btn-primary me-1" 
-                                                onclick="editRecord(<?php echo htmlspecialchars(json_encode($record)); ?>)"
-                                                title="修改记录">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <form method="POST" style="display: inline;">
-                                            <input type="hidden" name="record_id" value="<?php echo $record['id']; ?>">
-                                            <button type="submit" name="delete_record" class="btn btn-sm btn-danger" 
-                                                    onclick="return confirmDelete('确定要删除这条DNS记录吗？')"
-                                                    title="删除记录">
-                                                <i class="fas fa-trash"></i>
+            <!-- DNS记录列表 - 按域名分组显示 -->
+            <?php if (!empty($records_by_domain)): ?>
+                <?php foreach ($records_by_domain as $domain_id => $domain_data): ?>
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-globe me-2"></i><?php echo htmlspecialchars($domain_data['domain_name']); ?>
+                            <span class="badge bg-secondary ms-2"><?php echo count($domain_data['records']); ?> 条记录</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>子域名</th>
+                                        <th>类型</th>
+                                        <th>内容</th>
+                                        <th>备注</th>
+                                        <th>代理状态</th>
+                                        <th>创建时间</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($domain_data['records'] as $record): ?>
+                                    <tr>
+                                        <td>
+                                            <code><?php echo htmlspecialchars($record['subdomain']); ?></code>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info"><?php echo $record['type']; ?></span>
+                                        </td>
+                                        <td class="text-break"><?php echo htmlspecialchars($record['content']); ?></td>
+                                        <td>
+                                            <?php if (!empty($record['remark'])): ?>
+                                                <span class="text-muted" title="<?php echo htmlspecialchars($record['remark']); ?>">
+                                                    <i class="fas fa-comment-alt me-1"></i>
+                                                    <?php echo htmlspecialchars(mb_strlen($record['remark']) > 20 ? mb_substr($record['remark'], 0, 20) . '...' : $record['remark']); ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($record['proxied']): ?>
+                                                <span class="badge bg-warning">已代理</span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary">仅DNS</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo formatTime($record['created_at']); ?></td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-primary me-1" 
+                                                    onclick="editRecord(<?php echo htmlspecialchars(json_encode($record)); ?>)"
+                                                    title="修改记录">
+                                                <i class="fas fa-edit"></i>
                                             </button>
-                                        </form>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                                            <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="record_id" value="<?php echo $record['id']; ?>">
+                                                <button type="submit" name="delete_record" class="btn btn-sm btn-danger" 
+                                                        onclick="return confirmDelete('确定要删除这条DNS记录吗？')"
+                                                        title="删除记录">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    <?php else: ?>
-                    <div class="text-center py-4">
-                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">暂无DNS记录</p>
-                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addRecordModal"
-                                <?php if ($auto_fill_mode): ?>onclick="autoFillForm()"<?php endif; ?>>
-                            <i class="fas fa-plus me-1"></i>添加第一条记录
-                        </button>
-                    </div>
-                    <?php endif; ?>
                 </div>
-            </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="card shadow">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">暂无DNS记录</h5>
+                        <p class="text-muted">点击上方"添加记录"按钮创建您的第一条DNS记录</p>
+                    </div>
+                </div>
             <?php endif; ?>
             
-            <?php else: ?>
+            <?php if (empty($domains)): ?>
             <div class="alert alert-warning">
                 <i class="fas fa-exclamation-triangle me-2"></i>
                 系统暂无可用域名，请联系管理员添加域名配置。
@@ -521,7 +590,7 @@ include 'includes/header.php';
 </div>
 
 <!-- 添加DNS记录模态框 -->
-<?php if ($current_domain): ?>
+<?php if (!empty($domains)): ?>
 <div class="modal fade" id="addRecordModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -548,13 +617,28 @@ include 'includes/header.php';
                     </div>
                     <?php endif; ?>
                     <div class="mb-3">
+                        <label for="add_domain_id" class="form-label">选择域名</label>
+                        <select class="form-select" id="add_domain_id" name="add_domain_id" required onchange="updateDomainSuffix()">
+                            <?php foreach ($domains as $domain): ?>
+                                <option value="<?php echo $domain['id']; ?>" 
+                                        data-domain-name="<?php echo htmlspecialchars($domain['domain_name']); ?>"
+                                        data-provider-type="<?php echo htmlspecialchars($domain['provider_type'] ?? 'cloudflare'); ?>"
+                                        data-proxied-default="<?php echo $domain['proxied_default'] ? '1' : '0'; ?>"
+                                        <?php echo ($auto_fill_mode && $domain['id'] == $auto_domain_id) || (!$auto_fill_mode && $domain['id'] == $selected_domain_id) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($domain['domain_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">选择要添加DNS记录的域名</div>
+                    </div>
+                    <div class="mb-3">
                         <label for="subdomain" class="form-label">子域名</label>
                         <div class="input-group">
                             <input type="text" class="form-control" id="subdomain" name="subdomain" 
                                    placeholder="www" 
                                    value="<?php echo $auto_fill_mode ? htmlspecialchars($auto_prefix) : ''; ?>" 
                                    required oninput="checkAndUpdateConflict()">
-                            <span class="input-group-text">.<?php echo htmlspecialchars($current_domain['domain_name']); ?></span>
+                            <span class="input-group-text" id="domain-suffix">.<?php echo htmlspecialchars(($auto_fill_mode && $current_domain) ? $current_domain['domain_name'] : $domains[0]['domain_name']); ?></span>
                         </div>
                         <div class="form-text">输入 @ 表示根域名</div>
                         <div id="conflict-warning-add" style="display: none;"></div>
@@ -596,11 +680,13 @@ include 'includes/header.php';
                         <input type="text" class="form-control" id="remark" name="remark" placeholder="例如：网站主页、API接口、邮件服务器等" maxlength="100">
                         <div class="form-text">添加备注可以帮助您区分不同解析记录的用途</div>
                     </div>
-                    <?php if (!isset($current_domain['provider_type']) || $current_domain['provider_type'] !== 'rainbow'): ?>
-                    <div class="mb-3" id="proxied-section">
+                    <div class="mb-3" id="proxied-section" style="display: <?php 
+                        $first_domain = ($auto_fill_mode && $current_domain) ? $current_domain : $domains[0];
+                        echo (isset($first_domain['provider_type']) && $first_domain['provider_type'] === 'rainbow') ? 'none' : 'block'; 
+                    ?>;">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="proxied" name="proxied" value="1" 
-                                   <?php echo $current_domain['proxied_default'] ? 'checked' : ''; ?>>
+                                   <?php echo $first_domain['proxied_default'] ? 'checked' : ''; ?>>
                             <label class="form-check-label" for="proxied">
                                 启用Cloudflare代理
                             </label>
@@ -610,12 +696,12 @@ include 'includes/header.php';
                             仅A、AAAA、CNAME记录支持代理功能。NS、MX、TXT、SRV等记录类型会自动禁用代理。
                         </div>
                     </div>
-                    <?php else: ?>
-                    <div class="alert alert-info">
+                    <div class="alert alert-info" id="rainbow-info-alert" style="display: <?php 
+                        echo (isset($first_domain['provider_type']) && $first_domain['provider_type'] === 'rainbow') ? 'block' : 'none'; 
+                    ?>;">
                         <i class="fas fa-info-circle me-2"></i>
                         彩虹DNS不支持代理功能，所有记录将直接解析。
                     </div>
-                    <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -630,7 +716,7 @@ include 'includes/header.php';
 <?php endif; ?>
 
 <!-- 修改DNS记录模态框 -->
-<?php if ($current_domain): ?>
+<?php if (!empty($domains)): ?>
 <div class="modal fade" id="editRecordModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -645,7 +731,7 @@ include 'includes/header.php';
                         <label for="edit_subdomain" class="form-label">子域名</label>
                         <div class="input-group">
                             <input type="text" class="form-control" id="edit_subdomain" name="subdomain" placeholder="www" required>
-                            <span class="input-group-text">.<?php echo htmlspecialchars($current_domain['domain_name']); ?></span>
+                            <span class="input-group-text" id="edit-domain-suffix"></span>
                         </div>
                         <div class="form-text">输入 @ 表示根域名</div>
                     </div>
@@ -675,7 +761,6 @@ include 'includes/header.php';
                         <input type="text" class="form-control" id="edit_remark" name="remark" placeholder="例如：网站主页、API接口、邮件服务器等" maxlength="100">
                         <div class="form-text">添加备注可以帮助您区分不同解析记录的用途</div>
                     </div>
-                    <?php if (!isset($current_domain['provider_type']) || $current_domain['provider_type'] !== 'rainbow'): ?>
                     <div class="mb-3" id="edit-proxied-section">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="edit_proxied" name="proxied" value="1">
@@ -683,13 +768,11 @@ include 'includes/header.php';
                                 启用Cloudflare代理
                             </label>
                         </div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            仅A、AAAA、CNAME记录支持代理功能
+                        </div>
                     </div>
-                    <?php else: ?>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        彩虹DNS不支持代理功能，所有记录将直接解析。
-                    </div>
-                    <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -712,6 +795,51 @@ function switchDomain(domainId) {
     if (domainId) {
         window.location.href = 'dashboard.php?domain_id=' + domainId;
     }
+}
+
+// 更新域名后缀显示
+function updateDomainSuffix() {
+    const selectElement = document.getElementById('add_domain_id');
+    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const domainName = selectedOption.getAttribute('data-domain-name');
+    const providerType = selectedOption.getAttribute('data-provider-type');
+    const proxiedDefault = selectedOption.getAttribute('data-proxied-default');
+    
+    // 更新域名后缀显示
+    const suffixElement = document.getElementById('domain-suffix');
+    if (suffixElement) {
+        suffixElement.textContent = '.' + domainName;
+    }
+    
+    // 更新代理选项的显示和默认值
+    const proxiedSection = document.getElementById('proxied-section');
+    const proxiedCheckbox = document.getElementById('proxied');
+    const rainbowInfoAlert = document.getElementById('rainbow-info-alert');
+    
+    if (providerType === 'rainbow') {
+        // 彩虹DNS不支持代理
+        if (proxiedSection) {
+            proxiedSection.style.display = 'none';
+        }
+        if (rainbowInfoAlert) {
+            rainbowInfoAlert.style.display = 'block';
+        }
+    } else {
+        // Cloudflare支持代理
+        if (proxiedSection) {
+            proxiedSection.style.display = 'block';
+        }
+        if (rainbowInfoAlert) {
+            rainbowInfoAlert.style.display = 'none';
+        }
+        // 设置默认值
+        if (proxiedCheckbox) {
+            proxiedCheckbox.checked = (proxiedDefault === '1');
+        }
+    }
+    
+    // 触发冲突检查
+    checkAndUpdateConflict();
 }
 
 function autoFillForm() {
@@ -855,7 +983,6 @@ function updateEditContentPlaceholder() {
     const proxiedSection = document.getElementById('edit-proxied-section');
     
     const type = typeSelect.value;
-    const isRainbowDNS = <?php echo (isset($current_domain['provider_type']) && $current_domain['provider_type'] === 'rainbow') ? 'true' : 'false'; ?>;
     
     // 定义记录类型的配置
     const typeConfigs = {
@@ -910,16 +1037,10 @@ function updateEditContentPlaceholder() {
     if (config) {
         contentInput.placeholder = config.placeholder;
         contentHelp.textContent = config.help;
-        // 对于彩虹DNS，隐藏代理选项
-        if (proxiedSection) {
-            proxiedSection.style.display = (config.showProxied && !isRainbowDNS) ? 'block' : 'none';
-        }
+        // 代理选项的显示/隐藏由 editRecord 函数控制，这里不做处理
     } else {
         contentInput.placeholder = '';
         contentHelp.textContent = '请输入对应记录类型的值';
-        if (proxiedSection) {
-            proxiedSection.style.display = 'none';
-        }
     }
 }
 
@@ -931,6 +1052,22 @@ function editRecord(record) {
     document.getElementById('edit_content').value = record.content;
     document.getElementById('edit_remark').value = record.remark || '';
     document.getElementById('edit_proxied').checked = record.proxied == 1;
+    
+    // 更新域名后缀显示
+    const editSuffixElement = document.getElementById('edit-domain-suffix');
+    if (editSuffixElement && record.domain_name) {
+        editSuffixElement.textContent = '.' + record.domain_name;
+    }
+    
+    // 根据提供商类型显示/隐藏代理选项
+    const editProxiedSection = document.getElementById('edit-proxied-section');
+    if (editProxiedSection) {
+        if (record.provider_type === 'rainbow') {
+            editProxiedSection.style.display = 'none';
+        } else {
+            editProxiedSection.style.display = 'block';
+        }
+    }
     
     // 更新内容占位符和帮助文本
     updateEditContentPlaceholder();

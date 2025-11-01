@@ -23,13 +23,8 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'dns_manage.php' ? 'active' : ''; ?>" href="dns_manage.php">
+                <a class="nav-link <?php echo (basename($_SERVER['PHP_SELF']) == 'dns_manage.php' || basename($_SERVER['PHP_SELF']) == 'records.php') ? 'active' : ''; ?>" href="dns_manage.php">
                     <i class="fas fa-cog me-2"></i>DNS管理
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'records.php' ? 'active' : ''; ?>" href="records.php">
-                    <i class="fas fa-list me-2"></i>我的记录
                 </a>
             </li>
             <li class="nav-item">
