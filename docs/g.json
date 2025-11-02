@@ -1,11 +1,18 @@
 {
-  "version": "2.1",
+  "version": "2.2",
   "announcements": [
     {
       "id": 1,
       "title": "2.1更新日志",
       "content": "2.1更新日志<br>1.修复用户组前缀字符限制逻辑，改为最小值限制（设置3则要求3个字符以上）<br>2.修改checkPrefixLengthRestriction验证方法，从检查最大长度改为检查最小长度<br>3.更新用户组管理界面说明文字，明确显示为最小值限制<br>4.修复删除用户时的外键约束错误<br>5.新增用户删除事务处理，确保关联数据完整删除<br>6.删除用户时自动清理action_logs、invitation_history、invitations、points_history等关联表数据<br>7.新增邮件标题后台配置功能<br>8.支持自定义5种邮件标题：注册验证、密码重置、密码修改通知、邮箱更换、测试邮件<br>9.邮件标题存储在数据库settings表，支持动态修改<br>10.优化SMTP设置页面，新增邮件标题配置区域<br>11.修复注册验证页面会话过期警告问题<br>12.新增会话变量检查，防止undefined index错误<br>13.改进用户体验，会话过期时友好提示并返回邮箱输入步骤",
       "date": "2025-10-26",
+      "priority": "high"
+    },
+    {
+      "id": 1,
+      "title": "2.2更新日志",
+      "content": "懒得写了",
+      "date": "2025-11-2",
       "priority": "high"
     }
   ]

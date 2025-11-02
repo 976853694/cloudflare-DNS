@@ -16,15 +16,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_announcement'])) 
     $show_frequency = getPost('show_frequency');
     $interval_hours = (int)getPost('interval_hours');
     $is_active = isset($_POST['is_active']) ? 1 : 0;
+    $target_user_ids = trim(getPost('target_user_ids', ''));
+    $auto_close_seconds = (int)getPost('auto_close_seconds', 0);
     
     if (!empty($title) && !empty($content)) {
-        $stmt = $db->prepare("INSERT INTO announcements (title, content, type, show_frequency, interval_hours, is_active) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt = $db->prepare("INSERT INTO announcements (title, content, type, show_frequency, interval_hours, is_active, target_user_ids, auto_close_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->bindValue(1, $title, SQLITE3_TEXT);
         $stmt->bindValue(2, $content, SQLITE3_TEXT);
         $stmt->bindValue(3, $type, SQLITE3_TEXT);
         $stmt->bindValue(4, $show_frequency, SQLITE3_TEXT);
         $stmt->bindValue(5, $interval_hours, SQLITE3_INTEGER);
         $stmt->bindValue(6, $is_active, SQLITE3_INTEGER);
+        $stmt->bindValue(7, $target_user_ids ? $target_user_ids : null, SQLITE3_TEXT);
+        $stmt->bindValue(8, $auto_close_seconds, SQLITE3_INTEGER);
         $stmt->execute();
         
         logAction('admin', $_SESSION['admin_id'], 'add_announcement', "添加公告: $title");
@@ -44,16 +48,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_announcement']))
     $show_frequency = getPost('show_frequency');
     $interval_hours = (int)getPost('interval_hours');
     $is_active = isset($_POST['is_active']) ? 1 : 0;
+    $target_user_ids = trim(getPost('target_user_ids', ''));
+    $auto_close_seconds = (int)getPost('auto_close_seconds', 0);
     
     if (!empty($title) && !empty($content)) {
-        $stmt = $db->prepare("UPDATE announcements SET title = ?, content = ?, type = ?, show_frequency = ?, interval_hours = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
+        $stmt = $db->prepare("UPDATE announcements SET title = ?, content = ?, type = ?, show_frequency = ?, interval_hours = ?, is_active = ?, target_user_ids = ?, auto_close_seconds = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
         $stmt->bindValue(1, $title, SQLITE3_TEXT);
         $stmt->bindValue(2, $content, SQLITE3_TEXT);
         $stmt->bindValue(3, $type, SQLITE3_TEXT);
         $stmt->bindValue(4, $show_frequency, SQLITE3_TEXT);
         $stmt->bindValue(5, $interval_hours, SQLITE3_INTEGER);
         $stmt->bindValue(6, $is_active, SQLITE3_INTEGER);
-        $stmt->bindValue(7, $id, SQLITE3_INTEGER);
+        $stmt->bindValue(7, $target_user_ids ? $target_user_ids : null, SQLITE3_TEXT);
+        $stmt->bindValue(8, $auto_close_seconds, SQLITE3_INTEGER);
+        $stmt->bindValue(9, $id, SQLITE3_INTEGER);
         $stmt->execute();
         
         logAction('admin', $_SESSION['admin_id'], 'edit_announcement', "修改公告ID: $id");
@@ -166,6 +174,8 @@ include 'includes/header.php';
                                     <th>标题</th>
                                     <th>类型</th>
                                     <th>显示频率</th>
+                                    <th>目标用户</th>
+                                    <th>延迟关闭</th>
                                     <th>状态</th>
                                     <th>创建时间</th>
                                     <th>操作</th>
@@ -211,6 +221,22 @@ include 'includes/header.php';
                                         ];
                                         echo $frequency_names[$announcement['show_frequency']] ?? $announcement['show_frequency'];
                                         ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($announcement['target_user_ids'])): ?>
+                                            <span class="badge bg-primary" title="用户ID: <?php echo htmlspecialchars($announcement['target_user_ids']); ?>">
+                                                <i class="fas fa-user me-1"></i>指定用户
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary">全部用户</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($announcement['auto_close_seconds'] > 0): ?>
+                                            <span class="badge bg-warning text-dark"><?php echo $announcement['auto_close_seconds']; ?>秒后可关闭</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-success">立即可关闭</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php if ($announcement['is_active']): ?>
@@ -308,6 +334,22 @@ include 'includes/header.php';
                         <div class="form-text">设置公告显示的时间间隔，单位为小时</div>
                     </div>
                     <div class="mb-3">
+                        <label for="target_user_ids" class="form-label">目标用户ID <span class="text-muted">(可选)</span></label>
+                        <input type="text" class="form-control" id="target_user_ids" name="target_user_ids" placeholder="例如：1,2,3">
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            留空表示向所有用户显示；填写用户ID（多个ID用英文逗号分隔）表示仅向指定用户显示
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="auto_close_seconds" class="form-label">延迟关闭时间（秒） <span class="text-muted">(可选)</span></label>
+                        <input type="number" class="form-control" id="auto_close_seconds" name="auto_close_seconds" value="0" min="0" max="3600">
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            设置为0表示可以立即手动关闭；设置大于0的数值表示公告将在指定秒数后才能手动关闭（强制用户阅读）
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" checked>
                             <label class="form-check-label" for="is_active">
@@ -371,6 +413,22 @@ include 'includes/header.php';
                         <div class="form-text">设置公告显示的时间间隔，单位为小时</div>
                     </div>
                     <div class="mb-3">
+                        <label for="edit_target_user_ids" class="form-label">目标用户ID <span class="text-muted">(可选)</span></label>
+                        <input type="text" class="form-control" id="edit_target_user_ids" name="target_user_ids" placeholder="例如：1,2,3">
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            留空表示向所有用户显示；填写用户ID（多个ID用英文逗号分隔）表示仅向指定用户显示
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_auto_close_seconds" class="form-label">延迟关闭时间（秒） <span class="text-muted">(可选)</span></label>
+                        <input type="number" class="form-control" id="edit_auto_close_seconds" name="auto_close_seconds" value="0" min="0" max="3600">
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            设置为0表示可以立即手动关闭；设置大于0的数值表示公告将在指定秒数后才能手动关闭（强制用户阅读）
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active" value="1">
                             <label class="form-check-label" for="edit_is_active">
@@ -408,6 +466,8 @@ function editAnnouncement(announcement) {
     document.getElementById('edit_type').value = announcement.type;
     document.getElementById('edit_show_frequency').value = announcement.show_frequency;
     document.getElementById('edit_interval_hours').value = announcement.interval_hours;
+    document.getElementById('edit_target_user_ids').value = announcement.target_user_ids || '';
+    document.getElementById('edit_auto_close_seconds').value = announcement.auto_close_seconds || 0;
     document.getElementById('edit_is_active').checked = announcement.is_active == 1;
     
     toggleEditIntervalInput();

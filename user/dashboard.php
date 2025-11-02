@@ -141,18 +141,23 @@ include 'includes/header.php';
                     <?php endforeach; ?>
                 <?php endif; ?>
                 
-                <!-- 公告通知 -->
+                <!-- 公告通知（页面顶部提示条，仅用于 auto_close_seconds = 0 的公告） -->
                 <?php if (!empty($user_announcements)): ?>
                     <?php foreach ($user_announcements as $announcement): ?>
-                    <div class="alert alert-<?php echo $announcement['type']; ?> alert-dismissible fade show">
-                        <h5 class="alert-heading">
-                            <i class="fas fa-bullhorn me-2"></i><?php echo htmlspecialchars($announcement['title']); ?>
-                        </h5>
-                        <p class="mb-0"><?php echo nl2br(htmlspecialchars($announcement['content'])); ?></p>
-                        <small class="text-muted">发布时间: <?php echo formatTime($announcement['created_at']); ?></small>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" 
-                                onclick="markAnnouncementAsViewed(<?php echo $announcement['id']; ?>)"></button>
-                    </div>
+                        <?php if (empty($announcement['auto_close_seconds']) || $announcement['auto_close_seconds'] == 0): ?>
+                        <div class="alert alert-<?php echo $announcement['type']; ?> alert-dismissible fade show">
+                            <h5 class="alert-heading">
+                                <i class="fas fa-bullhorn me-2"></i><?php echo htmlspecialchars($announcement['title']); ?>
+                            </h5>
+                            <p class="mb-0"><?php echo nl2br(htmlspecialchars($announcement['content'])); ?></p>
+                            <small class="text-muted">
+                                发布时间: <?php echo formatTime($announcement['created_at']); ?>
+                            </small>
+                            <button type="button" class="btn-close" 
+                                    data-bs-dismiss="alert" 
+                                    onclick="markAnnouncementAsViewed(<?php echo $announcement['id']; ?>)"></button>
+                        </div>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
                 
@@ -509,6 +514,54 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- 强制阅读公告模态框 -->
+<?php if (!empty($user_announcements)): ?>
+    <?php foreach ($user_announcements as $announcement): ?>
+        <?php if (!empty($announcement['auto_close_seconds']) && $announcement['auto_close_seconds'] > 0): ?>
+        <div class="modal fade" id="announcement-modal-<?php echo $announcement['id']; ?>" 
+             data-bs-backdrop="static" 
+             data-bs-keyboard="false" 
+             tabindex="-1" 
+             data-announcement-id="<?php echo $announcement['id']; ?>"
+             data-auto-close-seconds="<?php echo $announcement['auto_close_seconds']; ?>">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content border-<?php echo $announcement['type']; ?>" style="border-width: 3px;">
+                    <div class="modal-header bg-<?php echo $announcement['type']; ?> text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-bullhorn me-2"></i><?php echo htmlspecialchars($announcement['title']); ?>
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        <div class="p-3 mb-3" style="background-color: rgba(var(--bs-<?php echo $announcement['type']; ?>-rgb), 0.1); border-left: 4px solid var(--bs-<?php echo $announcement['type']; ?>);">
+                            <div style="font-size: 1.1rem; line-height: 1.6;">
+                                <?php echo nl2br(htmlspecialchars($announcement['content'])); ?>
+                            </div>
+                        </div>
+                        <div class="text-muted small">
+                            <i class="fas fa-clock me-1"></i>发布时间: <?php echo formatTime($announcement['created_at']); ?>
+                        </div>
+                    </div>
+                    <div class="modal-footer d-flex justify-content-between align-items-center">
+                        <div id="countdown-modal-<?php echo $announcement['id']; ?>" class="text-warning fw-bold">
+                            <i class="fas fa-lock me-1"></i>还需等待 <strong><?php echo $announcement['auto_close_seconds']; ?></strong> 秒后才能关闭
+                        </div>
+                        <button type="button" 
+                                class="btn btn-primary" 
+                                id="close-modal-btn-<?php echo $announcement['id']; ?>"
+                                data-bs-dismiss="modal"
+                                onclick="markAnnouncementAsViewed(<?php echo $announcement['id']; ?>)"
+                                disabled
+                                style="min-width: 120px;">
+                            <i class="fas fa-check me-1"></i>我已阅读
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+    <?php endforeach; ?>
+<?php endif; ?>
+
 <script>
 function markAnnouncementAsViewed(announcementId) {
     fetch('mark_announcement_viewed.php', {
@@ -519,6 +572,54 @@ function markAnnouncementAsViewed(announcementId) {
         body: 'announcement_id=' + announcementId
     });
 }
+
+// 处理强制阅读公告模态框
+document.addEventListener('DOMContentLoaded', function() {
+    // 查找所有需要强制阅读的公告模态框
+    const modals = document.querySelectorAll('[data-auto-close-seconds]');
+    
+    modals.forEach(function(modalElement, index) {
+        const autoCloseSeconds = parseInt(modalElement.getAttribute('data-auto-close-seconds'));
+        const announcementId = modalElement.getAttribute('data-announcement-id');
+        
+        if (autoCloseSeconds > 0) {
+            // 延迟显示模态框，避免多个模态框同时弹出
+            setTimeout(function() {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+                
+                // 启动倒计时
+                let remainingSeconds = autoCloseSeconds;
+                const countdownElement = document.getElementById('countdown-modal-' + announcementId);
+                const closeButton = document.getElementById('close-modal-btn-' + announcementId);
+                
+                const countdownInterval = setInterval(function() {
+                    remainingSeconds--;
+                    
+                    if (countdownElement) {
+                        countdownElement.innerHTML = '<i class="fas fa-lock me-1"></i>还需等待 <strong>' + remainingSeconds + '</strong> 秒后才能关闭';
+                    }
+                    
+                    if (remainingSeconds <= 0) {
+                        clearInterval(countdownInterval);
+                        
+                        // 启用关闭按钮
+                        if (closeButton) {
+                            closeButton.disabled = false;
+                            closeButton.classList.remove('btn-secondary');
+                            closeButton.classList.add('btn-success');
+                        }
+                        
+                        // 更新提示信息
+                        if (countdownElement) {
+                            countdownElement.innerHTML = '<i class="fas fa-check-circle me-1 text-success"></i>您现在可以关闭此公告了';
+                        }
+                    }
+                }, 1000);
+            }, index * 500); // 每个模态框间隔0.5秒显示，避免堆叠
+        }
+    });
+});
 </script>
 
 <?php include 'includes/footer.php'; ?>

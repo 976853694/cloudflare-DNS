@@ -224,6 +224,17 @@ function getUserAnnouncements($user_id) {
         $announcement_id = $row['id'];
         $show_frequency = $row['show_frequency'];
         $interval_hours = $row['interval_hours'];
+        $target_user_ids = $row['target_user_ids'];
+        
+        // 检查是否为用户专属公告
+        if (!empty($target_user_ids)) {
+            // 将目标用户ID字符串转换为数组
+            $target_ids = array_map('trim', explode(',', $target_user_ids));
+            // 如果当前用户不在目标用户列表中，跳过此公告
+            if (!in_array((string)$user_id, $target_ids)) {
+                continue;
+            }
+        }
         
         // 检查用户是否已查看过此公告
         $view_record = $db->querySingle("

@@ -206,10 +206,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
                 $record_name = $full_name; // Cloudflare使用完整域名
             }
             
-            $result = $dns_manager->createDNSRecord($add_domain['zone_id'], $type, $record_name, $content, [
-                'proxied' => $final_proxied,
-                'remark' => $remark
-            ]);
+            $result = null;
+            $synced_record_id = null;
+            
+            try {
+                // 尝试创建DNS记录
+                $result = $dns_manager->createDNSRecord($add_domain['zone_id'], $type, $record_name, $content, [
+                    'proxied' => $final_proxied,
+                    'remark' => $remark
+                ]);
+            } catch (Exception $create_error) {
+                // 检查是否是"记录已存在"错误
+                if (strpos($create_error->getMessage(), 'identical record already exists') !== false ||
+                    strpos($create_error->getMessage(), 'already exists') !== false ||
+                    strpos($create_error->getMessage(), '记录已存在') !== false) {
+                    
+                    // 尝试从DNS提供商找到这条已存在的记录
+                    try {
+                        $remote_records = $dns_manager->getDNSRecords($add_domain['zone_id']);
+                        $found_record = null;
+                        
+                        foreach ($remote_records as $remote_record) {
+                            $remote_name = $remote_record['name'] ?? '';
+                            $remote_type = strtoupper($remote_record['type'] ?? '');
+                            $remote_content = $remote_record['content'] ?? '';
+                            $target_type = strtoupper($type);
+                            
+                            // 标准化记录名称以进行比较
+                            $compare_name = ($add_domain['provider_type'] === 'rainbow') ? $subdomain : $full_name;
+                            
+                            // 匹配名称、类型和内容
+                            if ($remote_name === $compare_name && 
+                                $remote_type === $target_type && 
+                                $remote_content === $content) {
+                                $found_record = $remote_record;
+                                break;
+                            }
+                        }
+                        
+                        if ($found_record) {
+                            // 找到了已存在的记录，检查本地数据库是否已有记录
+                            $existing_id = $found_record['id'] ?? $found_record['RecordId'] ?? null;
+                            
+                            if ($existing_id) {
+                                // 检查本地数据库中是否已有此记录
+                                $check_stmt = $db->prepare("SELECT * FROM dns_records WHERE cloudflare_id = ? AND domain_id = ?");
+                                $check_stmt->bindValue(1, $existing_id, SQLITE3_TEXT);
+                                $check_stmt->bindValue(2, $add_domain['id'], SQLITE3_INTEGER);
+                                $check_result = $check_stmt->execute();
+                                $local_existing = $check_result->fetchArray(SQLITE3_ASSOC);
+                                
+                                if ($local_existing) {
+                                    // 本地已有此记录
+                                    if ($local_existing['user_id'] == $_SESSION['user_id']) {
+                                        throw new Exception("此DNS记录已存在于您的记录列表中！记录名称: {$full_name}, 类型: {$type}, 内容: {$content}");
+                                    } else {
+                                        throw new Exception("此DNS记录已被其他用户占用！记录名称: {$full_name}, 类型: {$type}");
+                                    }
+                                } else {
+                                    // 远程有记录但本地没有，将其同步到本地数据库
+                                    $synced_record_id = $existing_id;
+                                    $result = $found_record; // 使用找到的记录
+                                }
+                            }
+                        } else {
+                            // 找不到匹配的记录，抛出原始错误
+                            throw new Exception('DNS记录已存在，但无法在远程找到匹配的记录。请检查DNS提供商后台或稍后重试。');
+                        }
+                    } catch (Exception $sync_error) {
+                        // 如果同步查找失败，抛出更友好的错误信息
+                        if (strpos($sync_error->getMessage(), '已存在') !== false || 
+                            strpos($sync_error->getMessage(), '已被') !== false) {
+                            throw $sync_error; // 保留业务逻辑错误
+                        } else {
+                            throw new Exception('DNS记录已存在于远程服务器，但同步失败: ' . $sync_error->getMessage());
+                        }
+                    }
+                } else {
+                    // 其他类型的错误，直接抛出
+                    throw $create_error;
+                }
+            }
+            
+            if (!$result) {
+                throw new Exception('创建DNS记录失败，未获得有效响应');
+            }
             
             // 保存到数据库
             $stmt = $db->prepare("INSERT INTO dns_records (user_id, domain_id, subdomain, type, content, proxied, cloudflare_id, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
@@ -219,8 +300,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $stmt->bindValue(4, $type, SQLITE3_TEXT);
             $stmt->bindValue(5, $content, SQLITE3_TEXT);
             $stmt->bindValue(6, $final_proxied ? 1 : 0, SQLITE3_INTEGER);
-            // 对于彩虹DNS，使用RecordId；对于Cloudflare，使用id
-            $record_id = isset($result['RecordId']) ? $result['RecordId'] : $result['id'];
+            // 使用同步的ID（如果存在），否则从结果中提取
+            if ($synced_record_id) {
+                $record_id = $synced_record_id;
+            } else {
+                // 对于彩虹DNS，使用RecordId；对于Cloudflare，使用id
+                $record_id = isset($result['RecordId']) ? $result['RecordId'] : $result['id'];
+            }
             $stmt->bindValue(7, $record_id, SQLITE3_TEXT);
             $stmt->bindValue(8, $remark, SQLITE3_TEXT);
             
@@ -278,24 +364,113 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
                 $record_name = $full_name; // Cloudflare使用完整域名
             }
             
-            // 更新DNS记录
-            $dns_manager->updateDNSRecord($current_domain['zone_id'], $record['cloudflare_id'], $type, $record_name, $content, [
-                'proxied' => (bool)$proxied,
-                'remark' => $remark
-            ]);
+            // 获取原始记录的完整域名
+            $old_full_name = $record['subdomain'] === '@' ? $current_domain['domain_name'] : $record['subdomain'] . '.' . $current_domain['domain_name'];
             
-            // 更新本地数据库
-            $stmt = $db->prepare("UPDATE dns_records SET subdomain = ?, type = ?, content = ?, remark = ?, proxied = ? WHERE id = ?");
-            $stmt->bindValue(1, $subdomain, SQLITE3_TEXT);
-            $stmt->bindValue(2, $type, SQLITE3_TEXT);
-            $stmt->bindValue(3, $content, SQLITE3_TEXT);
-            $stmt->bindValue(4, $remark, SQLITE3_TEXT);
-            $stmt->bindValue(5, $proxied, SQLITE3_INTEGER);
-            $stmt->bindValue(6, $record_id, SQLITE3_INTEGER);
-            $stmt->execute();
+            $update_success = false;
+            $current_cloudflare_id = $record['cloudflare_id'];
             
-            logAction('user', $_SESSION['user_id'], 'edit_dns_record', "修改DNS记录: {$subdomain}.{$current_domain['domain_name']}");
-            showSuccess('DNS记录修改成功！');
+            try {
+                // 尝试更新DNS记录
+                $dns_manager->updateDNSRecord($current_domain['zone_id'], $current_cloudflare_id, $type, $record_name, $content, [
+                    'proxied' => (bool)$proxied,
+                    'remark' => $remark
+                ]);
+                $update_success = true;
+            } catch (Exception $update_error) {
+                // 检查是否是"记录不存在"错误
+                if (strpos($update_error->getMessage(), 'Record does not exist') !== false || 
+                    strpos($update_error->getMessage(), 'does not exist') !== false ||
+                    strpos($update_error->getMessage(), '记录不存在') !== false) {
+                    
+                    // 尝试从DNS提供商重新同步记录ID
+                    try {
+                        $remote_records = $dns_manager->getDNSRecords($current_domain['zone_id']);
+                        $found_record = null;
+                        
+                        foreach ($remote_records as $remote_record) {
+                            // 匹配记录名称和类型
+                            $remote_name = $remote_record['name'] ?? '';
+                            $remote_type = strtoupper($remote_record['type'] ?? '');
+                            $local_type = strtoupper($record['type']);
+                            
+                            // 标准化记录名称以进行比较
+                            if ($current_domain['provider_type'] === 'rainbow') {
+                                // 彩虹DNS使用子域名
+                                $compare_name = $record['subdomain'];
+                            } else {
+                                // Cloudflare使用完整域名
+                                $compare_name = $old_full_name;
+                            }
+                            
+                            if ($remote_name === $compare_name && $remote_type === $local_type) {
+                                $found_record = $remote_record;
+                                break;
+                            }
+                        }
+                        
+                        if ($found_record) {
+                            // 找到匹配的记录，更新本地数据库中的cloudflare_id
+                            $new_cloudflare_id = $found_record['id'] ?? $found_record['RecordId'] ?? null;
+                            
+                            if ($new_cloudflare_id) {
+                                // 更新本地数据库中的cloudflare_id
+                                $update_stmt = $db->prepare("UPDATE dns_records SET cloudflare_id = ? WHERE id = ?");
+                                $update_stmt->bindValue(1, $new_cloudflare_id, SQLITE3_TEXT);
+                                $update_stmt->bindValue(2, $record_id, SQLITE3_INTEGER);
+                                $update_stmt->execute();
+                                
+                                // 使用新的ID重试更新
+                                $dns_manager->updateDNSRecord($current_domain['zone_id'], $new_cloudflare_id, $type, $record_name, $content, [
+                                    'proxied' => (bool)$proxied,
+                                    'remark' => $remark
+                                ]);
+                                
+                                $update_success = true;
+                                $current_cloudflare_id = $new_cloudflare_id;
+                            }
+                        } else {
+                            // 记录在DNS提供商中不存在，自动重新创建
+                            // 某些记录类型不能启用代理
+                            $non_proxiable_types = ['NS', 'MX', 'TXT', 'SRV', 'CAA'];
+                            $final_proxied = in_array(strtoupper($type), $non_proxiable_types) ? false : (bool)$proxied;
+                            
+                            // 创建新记录
+                            $create_result = $dns_manager->createDNSRecord($current_domain['zone_id'], $type, $record_name, $content, [
+                                'proxied' => $final_proxied,
+                                'remark' => $remark
+                            ]);
+                            
+                            // 更新本地数据库中的cloudflare_id
+                            $new_cloudflare_id = isset($create_result['RecordId']) ? $create_result['RecordId'] : $create_result['id'];
+                            $update_success = true;
+                            $current_cloudflare_id = $new_cloudflare_id;
+                        }
+                    } catch (Exception $sync_error) {
+                        // 如果同步失败，抛出原始错误
+                        throw new Exception('DNS记录同步失败: ' . $sync_error->getMessage());
+                    }
+                } else {
+                    // 其他类型的错误，直接抛出
+                    throw $update_error;
+                }
+            }
+            
+            if ($update_success) {
+                // 更新本地数据库
+                $stmt = $db->prepare("UPDATE dns_records SET subdomain = ?, type = ?, content = ?, remark = ?, proxied = ?, cloudflare_id = ? WHERE id = ?");
+                $stmt->bindValue(1, $subdomain, SQLITE3_TEXT);
+                $stmt->bindValue(2, $type, SQLITE3_TEXT);
+                $stmt->bindValue(3, $content, SQLITE3_TEXT);
+                $stmt->bindValue(4, $remark, SQLITE3_TEXT);
+                $stmt->bindValue(5, $proxied, SQLITE3_INTEGER);
+                $stmt->bindValue(6, $current_cloudflare_id, SQLITE3_TEXT);
+                $stmt->bindValue(7, $record_id, SQLITE3_INTEGER);
+                $stmt->execute();
+                
+                logAction('user', $_SESSION['user_id'], 'edit_dns_record', "修改DNS记录: {$subdomain}.{$current_domain['domain_name']}");
+                showSuccess('DNS记录修改成功！');
+            }
         } catch (Exception $e) {
             showError('修改失败: ' . $e->getMessage());
         }
@@ -314,12 +489,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
         try {
             // 使用统一的DNS管理器
             $dns_manager = new DNSManager($current_domain);
-            $dns_manager->deleteDNSRecord($current_domain['zone_id'], $record['cloudflare_id']);
             
-            $db->exec("DELETE FROM dns_records WHERE id = $record_id");
+            $delete_success = false;
             
-            logAction('user', $_SESSION['user_id'], 'delete_dns_record', "删除DNS记录: {$record['subdomain']}.{$current_domain['domain_name']}");
-            showSuccess('DNS记录删除成功！');
+            try {
+                // 尝试删除DNS记录
+                $dns_manager->deleteDNSRecord($current_domain['zone_id'], $record['cloudflare_id']);
+                $delete_success = true;
+            } catch (Exception $delete_error) {
+                // 检查是否是"记录不存在"错误
+                if (strpos($delete_error->getMessage(), 'Record does not exist') !== false || 
+                    strpos($delete_error->getMessage(), 'does not exist') !== false ||
+                    strpos($delete_error->getMessage(), '记录不存在') !== false) {
+                    
+                    // 记录在远程已经不存在了，直接删除本地记录即可
+                    $delete_success = true;
+                } else {
+                    // 其他类型的错误，直接抛出
+                    throw $delete_error;
+                }
+            }
+            
+            if ($delete_success) {
+                $db->exec("DELETE FROM dns_records WHERE id = $record_id");
+                
+                logAction('user', $_SESSION['user_id'], 'delete_dns_record', "删除DNS记录: {$record['subdomain']}.{$current_domain['domain_name']}");
+                showSuccess('DNS记录删除成功！');
+            }
         } catch (Exception $e) {
             showError('删除失败: ' . $e->getMessage());
         }
@@ -361,8 +557,8 @@ foreach ($dns_records as $record) {
 // 获取启用的DNS记录类型
 $enabled_dns_types = getEnabledDNSTypes();
 
-// 获取用户需要显示的公告
-$user_announcements = getUserAnnouncements($_SESSION['user_id']);
+// 公告仅在首页显示，此页面不需要获取公告
+// $user_announcements = getUserAnnouncements($_SESSION['user_id']);
 
 // 获取被拦截的前缀列表（用于前端验证）
 $blocked_prefixes = getBlockedPrefixes();
@@ -1166,7 +1362,8 @@ function validateSubdomain(input, warningId) {
 
 // 显示公告弹窗
 function showAnnouncements() {
-    const announcements = <?php echo json_encode($user_announcements); ?>;
+    // 公告功能已移除，仅在首页显示
+    const announcements = [];
     
     if (announcements.length > 0) {
         // 延迟1秒显示公告，让页面完全加载
@@ -1379,34 +1576,6 @@ function checkAndUpdateConflict() {
 </script>
 
 
-<!-- 公告弹窗模态框 -->
-<?php if (!empty($user_announcements)): ?>
-<div class="modal fade" id="announcementModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-bullhorn me-2"></i>
-                    <span id="announcementTitle">系统公告</span>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="announcementContent" class="mb-3">
-                    <!-- 公告内容将通过JavaScript填充 -->
-                </div>
-                <div class="text-muted small" id="announcementTime">
-                    <!-- 发布时间将通过JavaScript填充 -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
-                    <i class="fas fa-check me-1"></i>我知道了
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
+<!-- 公告功能已移至首页 (dashboard.php)，此页面不再显示公告 -->
 
 <?php include 'includes/footer.php'; ?>
