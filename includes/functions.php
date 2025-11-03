@@ -473,3 +473,190 @@ function getDomainExpirationTime($domain) {
     // 如果没有expiration_time参数，说明是永久域名或无法获取
     return null;
 }
+
+/**
+ * 验证DNS记录内容是否有效
+ * @param string $type 记录类型
+ * @param string $content 记录内容
+ * @return array ['valid' => bool, 'message' => string]
+ */
+function validateDNSRecordContent($type, $content) {
+    $content = trim($content);
+    
+    switch (strtoupper($type)) {
+        case 'A':
+            // 验证IPv4地址
+            if (!filter_var($content, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                return ['valid' => false, 'message' => '无效的IPv4地址格式！'];
+            }
+            
+            // 检查是否为私有IP地址（Cloudflare不允许）
+            if (isPrivateIP($content)) {
+                return ['valid' => false, 'message' => '不能使用私有IP地址（如 10.x.x.x, 172.16-31.x.x, 192.168.x.x）！Cloudflare不支持私有IP地址。'];
+            }
+            
+            // 检查是否为保留IP地址
+            if (isReservedIP($content)) {
+                return ['valid' => false, 'message' => '不能使用保留IP地址（如 0.0.0.0, 127.x.x.x, 169.254.x.x 等）！'];
+            }
+            break;
+            
+        case 'AAAA':
+            // 验证IPv6地址
+            if (!filter_var($content, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                return ['valid' => false, 'message' => '无效的IPv6地址格式！'];
+            }
+            break;
+            
+        case 'CNAME':
+            // CNAME值应该是域名格式
+            if (empty($content) || !preg_match('/^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\.?$/', $content)) {
+                return ['valid' => false, 'message' => '无效的域名格式！'];
+            }
+            break;
+            
+        case 'MX':
+            // MX记录格式: "优先级 邮件服务器"
+            $parts = preg_split('/\s+/', $content, 2);
+            if (count($parts) < 2) {
+                return ['valid' => false, 'message' => 'MX记录格式错误！应为：优先级 邮件服务器（如：10 mail.example.com）'];
+            }
+            if (!is_numeric($parts[0]) || $parts[0] < 0 || $parts[0] > 65535) {
+                return ['valid' => false, 'message' => 'MX记录优先级必须是0-65535之间的数字！'];
+            }
+            break;
+            
+        case 'TXT':
+            // TXT记录长度限制
+            if (strlen($content) > 4096) {
+                return ['valid' => false, 'message' => 'TXT记录内容过长！最大支持4096个字符。'];
+            }
+            break;
+    }
+    
+    return ['valid' => true, 'message' => ''];
+}
+
+/**
+ * 检查是否为私有IP地址
+ * @param string $ip IP地址
+ * @return bool
+ */
+function isPrivateIP($ip) {
+    // 使用PHP内置函数检查私有IP
+    $ip_long = ip2long($ip);
+    
+    if ($ip_long === false) {
+        return false;
+    }
+    
+    // 私有IP范围:
+    // 10.0.0.0 – 10.255.255.255
+    // 172.16.0.0 – 172.31.255.255
+    // 192.168.0.0 – 192.168.255.255
+    
+    return (
+        ($ip_long >= ip2long('10.0.0.0') && $ip_long <= ip2long('10.255.255.255')) ||
+        ($ip_long >= ip2long('172.16.0.0') && $ip_long <= ip2long('172.31.255.255')) ||
+        ($ip_long >= ip2long('192.168.0.0') && $ip_long <= ip2long('192.168.255.255'))
+    );
+}
+
+/**
+ * 检查是否为保留IP地址
+ * @param string $ip IP地址
+ * @return bool
+ */
+function isReservedIP($ip) {
+    $ip_long = ip2long($ip);
+    
+    if ($ip_long === false) {
+        return false;
+    }
+    
+    // 保留IP范围:
+    // 0.0.0.0/8 - 当前网络
+    // 127.0.0.0/8 - 回环地址
+    // 169.254.0.0/16 - 链路本地地址
+    // 224.0.0.0/4 - 多播地址
+    // 240.0.0.0/4 - 保留地址
+    
+    return (
+        ($ip_long >= ip2long('0.0.0.0') && $ip_long <= ip2long('0.255.255.255')) ||
+        ($ip_long >= ip2long('127.0.0.0') && $ip_long <= ip2long('127.255.255.255')) ||
+        ($ip_long >= ip2long('169.254.0.0') && $ip_long <= ip2long('169.254.255.255')) ||
+        ($ip_long >= ip2long('224.0.0.0') && $ip_long <= ip2long('239.255.255.255')) ||
+        ($ip_long >= ip2long('240.0.0.0') && $ip_long <= ip2long('255.255.255.255'))
+    );
+}
+
+/**
+ * 检查DNS记录冲突（本地数据库）
+ * @param array $existing_records 现有记录数组
+ * @param string $new_type 新记录类型
+ * @param string $new_content 新记录内容
+ * @return array ['hasConflict' => bool, 'message' => string]
+ */
+function checkLocalDNSConflict($existing_records, $new_type, $new_content) {
+    if (empty($existing_records)) {
+        return ['hasConflict' => false, 'message' => ''];
+    }
+    
+    $new_type = strtoupper(trim($new_type));
+    $new_content = trim($new_content);
+    
+    foreach ($existing_records as $record) {
+        $record_type = strtoupper(trim($record['type']));
+        $record_content = trim($record['content']);
+        
+        // 检查完全相同的记录（同类型同内容）
+        if ($record_type === $new_type && $record_content === $new_content) {
+            return [
+                'hasConflict' => true,
+                'message' => "该DNS记录已存在！类型: {$new_type}, 内容: {$new_content}"
+            ];
+        }
+        
+        // 对于A记录，不允许同一子域名有多个不同IP
+        if ($new_type === 'A' && $record_type === 'A' && $record_content !== $new_content) {
+            return [
+                'hasConflict' => true,
+                'message' => "该子域名已存在A记录（IP: {$record_content}）！一个子域名只能有一个A记录。如需更换IP，请先删除现有记录。"
+            ];
+        }
+        
+        // 对于AAAA记录，不允许同一子域名有多个不同IPv6
+        if ($new_type === 'AAAA' && $record_type === 'AAAA' && $record_content !== $new_content) {
+            return [
+                'hasConflict' => true,
+                'message' => "该子域名已存在AAAA记录（IPv6: {$record_content}）！一个子域名只能有一个AAAA记录。如需更换IP，请先删除现有记录。"
+            ];
+        }
+        
+        // CNAME记录不能与其他任何记录共存
+        if ($new_type === 'CNAME' || $record_type === 'CNAME') {
+            return [
+                'hasConflict' => true,
+                'message' => "CNAME记录不能与其他记录类型共存！该子域名已有 {$record_type} 记录。"
+            ];
+        }
+        
+        // 对于MX记录，不允许完全相同的优先级和服务器
+        if ($new_type === 'MX' && $record_type === 'MX') {
+            // MX记录格式: "优先级 服务器"
+            $new_parts = preg_split('/\s+/', $new_content, 2);
+            $record_parts = preg_split('/\s+/', $record_content, 2);
+            
+            if (count($new_parts) >= 2 && count($record_parts) >= 2) {
+                if ($new_parts[0] === $record_parts[0] && $new_parts[1] === $record_parts[1]) {
+                    return [
+                        'hasConflict' => true,
+                        'message' => "该MX记录已存在！优先级: {$new_parts[0]}, 服务器: {$new_parts[1]}"
+                    ];
+                }
+            }
+        }
+    }
+    
+    return ['hasConflict' => false, 'message' => ''];
+}

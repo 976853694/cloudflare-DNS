@@ -64,6 +64,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
     } elseif (isSubdomainBlocked($subdomain)) {
         showError("前缀 \"$subdomain\" 已被系统拦截，无法创建此子域名！");
     } else {
+        // 检查子域名前缀长度限制
+        $groupManager = new UserGroupManager($db);
+        $prefixCheck = $groupManager->checkPrefixLengthRestriction($_SESSION['user_id'], $subdomain);
+        if (!$prefixCheck['allowed']) {
+            showError($prefixCheck['message']);
+            redirect('records.php');
+        }
+        
+        // 验证DNS记录内容格式
+        $contentValidation = validateDNSRecordContent($type, $content);
+        if (!$contentValidation['valid']) {
+            showError($contentValidation['message']);
+            redirect('records.php');
+        }
+        
         try {
             // 使用统一的DNS管理器
             $dns_manager = new DNSManager($selected_domain);
@@ -370,19 +385,34 @@ include 'includes/header.php';
             <form method="POST">
                 <div class="modal-body">
                     <?php if ($user_group): ?>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        您的用户组：<strong><?php echo htmlspecialchars($user_group['display_name']); ?></strong> | 
-                        <?php if ($required_points > 0): ?>
-                            添加一条DNS记录需要消耗 <strong><?php echo $required_points; ?></strong> 积分
-                        <?php else: ?>
-                            <strong class="text-success">免费添加</strong> DNS记录
-                        <?php endif; ?>
-                        <?php if ($user_group['max_records'] != -1): ?>
-                            | 已用 <strong><?php echo $current_record_count; ?>/<?php echo $user_group['max_records']; ?></strong> 条
-                        <?php else: ?>
-                            | 已用 <strong><?php echo $current_record_count; ?></strong> 条（无限制）
-                        <?php endif; ?>
+                    <div class="alert alert-info mb-3" role="alert" style="border-left: 4px solid #0dcaf0;">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-info-circle me-2 mt-1" style="font-size: 1.2em;"></i>
+                            <div class="flex-grow-1">
+                                <strong>用户组信息</strong><br>
+                                <div class="mt-2">
+                                    <span class="badge bg-primary me-2"><?php echo htmlspecialchars($user_group['display_name']); ?></span>
+                                    <?php if ($required_points > 0): ?>
+                                        <span class="badge bg-warning text-dark me-2">
+                                            <i class="fas fa-coins me-1"></i>消耗 <?php echo $required_points; ?> 积分/条
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-success me-2">
+                                            <i class="fas fa-gift me-1"></i>免费添加
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if ($user_group['max_records'] != -1): ?>
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-list me-1"></i>已用 <?php echo $current_record_count; ?>/<?php echo $user_group['max_records']; ?> 条
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-infinity me-1"></i>已用 <?php echo $current_record_count; ?> 条
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <?php endif; ?>
                     

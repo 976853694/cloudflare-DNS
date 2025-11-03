@@ -237,17 +237,66 @@ if ($action === 'revoke_github' && getGet('id')) {
     redirect('users.php');
 }
 
+// 获取筛选参数
+$search = getGet('search', '');
+$group_filter = getGet('group', '');
+$status_filter = getGet('status', '');
+$record_filter = getGet('records', ''); // 'has' 或 'none'
+
+// 构建查询条件
+$where_conditions = [];
+$where_params = [];
+
+if (!empty($search)) {
+    $where_conditions[] = "(u.username LIKE ? OR u.email LIKE ?)";
+    $search_param = '%' . $search . '%';
+    $where_params[] = $search_param;
+    $where_params[] = $search_param;
+}
+
+if ($group_filter !== '') {
+    $where_conditions[] = "u.group_id = ?";
+    $where_params[] = (int)$group_filter;
+}
+
+if ($status_filter !== '') {
+    $where_conditions[] = "u.status = ?";
+    $where_params[] = (int)$status_filter;
+}
+
+$where_clause = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
+
 // 获取用户列表
 $users = [];
-$result = $db->query("
+$query = "
     SELECT u.*, 
            COUNT(dr.id) as record_count,
            MAX(dr.created_at) as last_record_time
     FROM users u 
     LEFT JOIN dns_records dr ON u.id = dr.user_id 
-    GROUP BY u.id 
-    ORDER BY u.created_at DESC
-");
+    $where_clause
+    GROUP BY u.id
+";
+
+// 根据记录数筛选
+if ($record_filter === 'has') {
+    $query .= " HAVING record_count > 0";
+} elseif ($record_filter === 'none') {
+    $query .= " HAVING record_count = 0";
+}
+
+$query .= " ORDER BY u.created_at DESC";
+
+if (!empty($where_params)) {
+    $stmt = $db->prepare($query);
+    foreach ($where_params as $index => $param) {
+        $stmt->bindValue($index + 1, $param, is_int($param) ? SQLITE3_INTEGER : SQLITE3_TEXT);
+    }
+    $result = $stmt->execute();
+} else {
+    $result = $db->query($query);
+}
+
 while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
     $users[] = $row;
 }
@@ -265,12 +314,91 @@ include 'includes/header.php';
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3" style="border-bottom: 1px solid rgba(255, 255, 255, 0.2);">
                 <h1 class="h2">用户管理</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
-                    <div class="input-group">
-                        <input type="text" class="form-control" placeholder="搜索用户..." id="searchInput" onkeyup="searchTable('searchInput', 'usersTable')">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <button type="button" class="btn btn-outline-primary me-2" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
+                        <i class="fas fa-filter me-1"></i>高级筛选
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 筛选面板 -->
+            <div class="collapse mb-3 <?php echo (!empty($search) || $group_filter !== '' || $status_filter !== '' || $record_filter !== '') ? 'show' : ''; ?>" id="filterCollapse">
+                <div class="card">
+                    <div class="card-body">
+                        <form method="GET" action="users.php" id="filterForm">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label for="search" class="form-label">搜索用户</label>
+                                    <input type="text" class="form-control" id="search" name="search" 
+                                           placeholder="用户名或邮箱" value="<?php echo htmlspecialchars($search); ?>">
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="group" class="form-label">用户组</label>
+                                    <select class="form-select" id="group" name="group">
+                                        <option value="">全部</option>
+                                        <?php
+                                        $all_groups = $groupManager->getAllGroups(true);
+                                        foreach ($all_groups as $g):
+                                        ?>
+                                            <option value="<?php echo $g['id']; ?>" <?php echo $group_filter == $g['id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($g['display_name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="status" class="form-label">状态</label>
+                                    <select class="form-select" id="status" name="status">
+                                        <option value="">全部</option>
+                                        <option value="1" <?php echo $status_filter === '1' ? 'selected' : ''; ?>>启用</option>
+                                        <option value="0" <?php echo $status_filter === '0' ? 'selected' : ''; ?>>禁用</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label for="records" class="form-label">DNS记录</label>
+                                    <select class="form-select" id="records" name="records">
+                                        <option value="">全部</option>
+                                        <option value="has" <?php echo $record_filter === 'has' ? 'selected' : ''; ?>>有记录</option>
+                                        <option value="none" <?php echo $record_filter === 'none' ? 'selected' : ''; ?>>无记录</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label d-block">&nbsp;</label>
+                                    <button type="submit" class="btn btn-primary me-2">
+                                        <i class="fas fa-search me-1"></i>筛选
+                                    </button>
+                                    <a href="users.php" class="btn btn-secondary">
+                                        <i class="fas fa-redo me-1"></i>重置
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
+            
+            <!-- 筛选结果提示 -->
+            <?php if (!empty($search) || $group_filter !== '' || $status_filter !== '' || $record_filter !== ''): ?>
+            <div class="alert alert-info alert-dismissible fade show">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>筛选结果：</strong>共找到 <?php echo count($users); ?> 个用户
+                <?php if (!empty($search)): ?>
+                    | 搜索: <strong><?php echo htmlspecialchars($search); ?></strong>
+                <?php endif; ?>
+                <?php if ($group_filter !== ''): 
+                    $filtered_group = array_filter($all_groups, function($g) use ($group_filter) { return $g['id'] == $group_filter; });
+                    $filtered_group = reset($filtered_group);
+                ?>
+                    | 用户组: <strong><?php echo htmlspecialchars($filtered_group['display_name']); ?></strong>
+                <?php endif; ?>
+                <?php if ($status_filter !== ''): ?>
+                    | 状态: <strong><?php echo $status_filter === '1' ? '启用' : '禁用'; ?></strong>
+                <?php endif; ?>
+                <?php if ($record_filter !== ''): ?>
+                    | 记录: <strong><?php echo $record_filter === 'has' ? '有记录' : '无记录'; ?></strong>
+                <?php endif; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            <?php endif; ?>
             
             <!-- 消息提示 -->
             <?php if (isset($messages['success'])): ?>
@@ -370,6 +498,11 @@ include 'includes/header.php';
                                     <td><?php echo formatTime($user['created_at']); ?></td>
                                     <td>
                                         <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm btn-info" 
+                                                    onclick="showUserRecords(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>')"
+                                                    title="查看DNS记录">
+                                                <i class="fas fa-list"></i> <?php echo $user['record_count']; ?>
+                                            </button>
                                             <button type="button" class="btn btn-sm btn-success" 
                                                     onclick="showPointsModal(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['username']); ?>', <?php echo $user['points']; ?>)"
                                                     title="管理积分">
@@ -572,6 +705,57 @@ include 'includes/header.php';
                     <button type="submit" name="change_user_group" class="btn btn-primary">确认修改</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- 查看用户DNS记录模态框 -->
+<div class="modal fade" id="userRecordsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-list me-2"></i>用户DNS记录 - <span id="records_username"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="records_loading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2 text-muted">正在加载DNS记录...</p>
+                </div>
+                <div id="records_content" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>域名</th>
+                                    <th>子域名</th>
+                                    <th>完整域名</th>
+                                    <th>类型</th>
+                                    <th>内容</th>
+                                    <th>代理</th>
+                                    <th>备注</th>
+                                    <th>创建时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="records_table_body">
+                                <!-- 动态加载 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="records_empty" style="display: none;" class="text-center py-5">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">该用户暂无DNS记录</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
         </div>
     </div>
 </div>

@@ -309,70 +309,38 @@ class EmailService {
      * 注册验证邮件模板
      */
     private function getRegistrationEmailTemplate($username, $code) {
-        return "
-        <div style='max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;'>
-            <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;'>
-                <h1 style='color: white; margin: 0; font-size: 28px;'>六趣DNS</h1>
-                <p style='color: rgba(255,255,255,0.9); margin: 10px 0 0 0;'>欢迎注册我们的服务</p>
-            </div>
-            
-            <div style='background: white; padding: 40px; border-left: 4px solid #667eea;'>
-                <h2 style='color: #333; margin-top: 0;'>Hi {$username},</h2>
-                <p style='color: #666; line-height: 1.6; font-size: 16px;'>
-                    感谢您注册六趣DNS！为了完成注册，请使用以下验证码：
-                </p>
-                
-                <div style='background: #f8f9fa; border: 2px dashed #667eea; padding: 20px; text-align: center; margin: 30px 0;'>
-                    <div style='font-size: 32px; font-weight: bold; color: #667eea; letter-spacing: 5px;'>{$code}</div>
-                    <p style='color: #999; margin: 10px 0 0 0; font-size: 14px;'>验证码5分钟内有效</p>
-                </div>
-                
-                <p style='color: #666; line-height: 1.6;'>
-                    如果您没有申请注册，请忽略此邮件。
-                </p>
-                
-                <div style='margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 14px;'>
-                    <p>此邮件由系统自动发送，请勿回复。</p>
-                    <p>© " . date('Y') . " 六趣DNS. All rights reserved.</p>
-                </div>
-            </div>
-        </div>";
+        $template = $this->getSetting('email_template_registration', '');
+        
+        // 如果数据库中没有模板，使用默认模板
+        if (empty($template)) {
+            $template = "
+        ";
+        }
+        
+        // 替换变量
+        $template = str_replace('{username}', $username, $template);
+        $template = str_replace('{code}', $code, $template);
+        $template = str_replace('{year}', date('Y'), $template);
+        
+        return $template;
     }
     
     /**
      * 密码重置邮件模板
      */
     private function getPasswordResetEmailTemplate($username, $code) {
-        return "
-        <div style='max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;'>
-            <div style='background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%); padding: 30px; text-align: center;'>
-                <h1 style='color: white; margin: 0; font-size: 28px;'>六趣DNS</h1>
-                <p style='color: rgba(255,255,255,0.9); margin: 10px 0 0 0;'>密码重置请求</p>
-            </div>
-            
-            <div style='background: white; padding: 40px; border-left: 4px solid #ff6b6b;'>
-                <h2 style='color: #333; margin-top: 0;'>Hi {$username},</h2>
-                <p style='color: #666; line-height: 1.6; font-size: 16px;'>
-                    我们收到了您的密码重置请求。请使用以下验证码来重置您的密码：
-                </p>
-                
-                <div style='background: #fff5f5; border: 2px dashed #ff6b6b; padding: 20px; text-align: center; margin: 30px 0;'>
-                    <div style='font-size: 32px; font-weight: bold; color: #ff6b6b; letter-spacing: 5px;'>{$code}</div>
-                    <p style='color: #999; margin: 10px 0 0 0; font-size: 14px;'>验证码5分钟内有效</p>
-                </div>
-                
-                <div style='background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;'>
-                    <p style='color: #856404; margin: 0; font-size: 14px;'>
-                        <strong>安全提示：</strong>如果您没有申请密码重置，请立即检查您的账户安全。
-                    </p>
-                </div>
-                
-                <div style='margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 14px;'>
-                    <p>此邮件由系统自动发送，请勿回复。</p>
-                    <p>© " . date('Y') . " 六趣DNS. All rights reserved.</p>
-                </div>
-            </div>
-        </div>";
+        $template = $this->getSetting('email_template_password_reset', '');
+        
+        if (empty($template)) {
+            $template = "
+        ";
+        }
+        
+        $template = str_replace('{username}', $username, $template);
+        $template = str_replace('{code}', $code, $template);
+        $template = str_replace('{year}', date('Y'), $template);
+        
+        return $template;
     }
     
     /**
@@ -380,81 +348,36 @@ class EmailService {
      */
     private function getPasswordChangeNotificationTemplate($username) {
         $change_time = date('Y-m-d H:i:s');
+        $template = $this->getSetting('email_template_password_change', '');
         
-        return "
-        <div style='max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;'>
-            <div style='background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); padding: 30px; text-align: center;'>
-                <h1 style='color: white; margin: 0; font-size: 28px;'>六趣DNS</h1>
-                <p style='color: rgba(255,255,255,0.9); margin: 10px 0 0 0;'>密码修改成功</p>
-            </div>
-            
-            <div style='background: white; padding: 40px; border-left: 4px solid #4ecdc4;'>
-                <h2 style='color: #333; margin-top: 0;'>Hi {$username},</h2>
-                <p style='color: #666; line-height: 1.6; font-size: 16px;'>
-                    您的账户密码已于 <strong>{$change_time}</strong> 成功修改。
-                </p>
-                
-                <div style='background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0;'>
-                    <p style='color: #155724; margin: 0; font-size: 14px;'>
-                        ✅ 密码修改成功，您的账户安全性已得到提升。
-                    </p>
-                </div>
-                
-                <p style='color: #666; line-height: 1.6;'>
-                    如果这不是您本人的操作，请立即：
-                </p>
-                <ul style='color: #666; line-height: 1.6;'>
-                    <li>联系我们的客服支持</li>
-                    <li>检查您的账户安全设置</li>
-                    <li>考虑启用更强的安全措施</li>
-                </ul>
-                
-                <div style='margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 14px;'>
-                    <p>此邮件由系统自动发送，请勿回复。</p>
-                    <p>© " . date('Y') . " 六趣DNS. All rights reserved.</p>
-                </div>
-            </div>
-        </div>";
+        if (empty($template)) {
+            $template = "
+        ";
+        }
+        
+        $template = str_replace('{username}', $username, $template);
+        $template = str_replace('{change_time}', $change_time, $template);
+        $template = str_replace('{year}', date('Y'), $template);
+        
+        return $template;
     }
     
     /**
      * 邮箱更换验证邮件模板
      */
     private function getEmailChangeVerificationTemplate($username, $code) {
-        return "
-        <div style='max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;'>
-            <div style='background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; text-align: center;'>
-                <h1 style='color: white; margin: 0; font-size: 28px;'>六趣DNS</h1>
-                <p style='color: rgba(255,255,255,0.9); margin: 10px 0 0 0;'>邮箱更换验证</p>
-            </div>
-            
-            <div style='background: white; padding: 40px; border-left: 4px solid #f093fb;'>
-                <h2 style='color: #333; margin-top: 0;'>Hi {$username},</h2>
-                <p style='color: #666; line-height: 1.6; font-size: 16px;'>
-                    您正在更换账户绑定的邮箱地址。请使用以下验证码来确认此操作：
-                </p>
-                
-                <div style='background: #fdf2f8; border: 2px dashed #f093fb; padding: 20px; text-align: center; margin: 30px 0;'>
-                    <div style='font-size: 32px; font-weight: bold; color: #f093fb; letter-spacing: 5px;'>{$code}</div>
-                    <p style='color: #999; margin: 10px 0 0 0; font-size: 14px;'>验证码5分钟内有效</p>
-                </div>
-                
-                <div style='background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;'>
-                    <p style='color: #856404; margin: 0; font-size: 14px;'>
-                        <strong>重要提示：</strong>确认后，您将无法再使用旧邮箱接收系统通知。
-                    </p>
-                </div>
-                
-                <p style='color: #666; line-height: 1.6;'>
-                    如果您没有申请更换邮箱，请忽略此邮件并检查您的账户安全。
-                </p>
-                
-                <div style='margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 14px;'>
-                    <p>此邮件由系统自动发送，请勿回复。</p>
-                    <p>© " . date('Y') . " 六趣DNS. All rights reserved.</p>
-                </div>
-            </div>
-        </div>";
+        $template = $this->getSetting('email_template_email_change', '');
+        
+        if (empty($template)) {
+            $template = "
+   ";
+        }
+        
+        $template = str_replace('{username}', $username, $template);
+        $template = str_replace('{code}', $code, $template);
+        $template = str_replace('{year}', date('Y'), $template);
+        
+        return $template;
     }
     
     /**
@@ -517,40 +440,16 @@ class EmailService {
      */
     private function getTestEmailTemplate() {
         $test_time = date('Y-m-d H:i:s');
+        $template = $this->getSetting('email_template_test', '');
         
-        return "
-        <div style='max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif;'>
-            <div style='background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%); padding: 30px; text-align: center;'>
-                <h1 style='color: white; margin: 0; font-size: 28px;'>六趣DNS</h1>
-                <p style='color: rgba(255,255,255,0.9); margin: 10px 0 0 0;'>SMTP配置测试</p>
-            </div>
-            
-            <div style='background: white; padding: 40px; border-left: 4px solid #4ecdc4;'>
-                <h2 style='color: #333; margin-top: 0;'>🎉 SMTP配置测试成功！</h2>
-                <p style='color: #666; line-height: 1.6; font-size: 16px;'>
-                    恭喜！您的SMTP邮件服务器配置正确，可以正常发送邮件。
-                </p>
-                
-                <div style='background: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; border-radius: 5px; margin: 20px 0;'>
-                    <h4 style='color: #4ecdc4; margin-top: 0;'>测试信息</h4>
-                    <p style='color: #666; margin: 5px 0;'><strong>测试时间:</strong> {$test_time}</p>
-                    <p style='color: #666; margin: 5px 0;'><strong>发件服务器:</strong> {$this->smtp_host}:{$this->smtp_port}</p>
-                    <p style='color: #666; margin: 5px 0;'><strong>发件邮箱:</strong> {$this->smtp_username}</p>
-                    <p style='color: #666; margin: 5px 0;'><strong>加密方式:</strong> " . strtoupper($this->smtp_secure) . "</p>
-                </div>
-                
-                <div style='background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0;'>
-                    <p style='color: #155724; margin: 0; font-size: 14px;'>
-                        ✅ <strong>配置验证成功</strong><br>
-                        您的系统现在可以正常发送用户注册、密码重置等功能邮件。
-                    </p>
-                </div>
-                
-                <div style='margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 14px;'>
-                    <p>此邮件由系统自动发送，请勿回复。</p>
-                    <p>© " . date('Y') . " 六趣DNS. All rights reserved.</p>
-                </div>
-            </div>
-        </div>";
+        if (empty($template)) {
+            $template = "
+       ";
+        }
+        
+        $template = str_replace('{test_time}', $test_time, $template);
+        $template = str_replace('{year}', date('Y'), $template);
+        
+        return $template;
     }
 }

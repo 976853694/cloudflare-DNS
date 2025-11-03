@@ -90,36 +90,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_smtp'])) {
 // 处理邮件模板更新
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_templates'])) {
     $templates = [
-        'registration' => trim($_POST['registration_template'] ?? ''),
-        'password_reset' => trim($_POST['password_reset_template'] ?? ''),
-        'password_change' => trim($_POST['password_change_template'] ?? ''),
-        'email_change' => trim($_POST['email_change_template'] ?? ''),
-        'test_email' => trim($_POST['test_email_template'] ?? '')
+        'email_template_registration' => trim($_POST['registration_template'] ?? ''),
+        'email_template_password_reset' => trim($_POST['password_reset_template'] ?? ''),
+        'email_template_password_change' => trim($_POST['password_change_template'] ?? ''),
+        'email_template_email_change' => trim($_POST['email_change_template'] ?? ''),
+        'email_template_test' => trim($_POST['test_email_template'] ?? '')
     ];
     
     try {
-        // 读取当前的smtp.php文件
-        $smtp_file = '../config/smtp.php';
-        $content = file_get_contents($smtp_file);
-        
-        if ($content === false) {
-            throw new Exception('无法读取SMTP配置文件');
-        }
-        
-        // 更新每个模板
-        foreach ($templates as $template_type => $template_content) {
+        // 保存模板到数据库
+        foreach ($templates as $setting_key => $template_content) {
             if (!empty($template_content)) {
-                $content = updateEmailTemplate($content, $template_type, $template_content);
+                // 检查设置是否已存在
+                $stmt = $db->prepare("SELECT id FROM settings WHERE setting_key = ?");
+                $stmt->bindValue(1, $setting_key, SQLITE3_TEXT);
+                $result = $stmt->execute();
+                $existing = $result->fetchArray(SQLITE3_ASSOC);
+                
+                if ($existing) {
+                    // 更新现有设置
+                    $stmt = $db->prepare("UPDATE settings SET setting_value = ? WHERE setting_key = ?");
+                    $stmt->bindValue(1, $template_content, SQLITE3_TEXT);
+                    $stmt->bindValue(2, $setting_key, SQLITE3_TEXT);
+                    $stmt->execute();
+                } else {
+                    // 插入新设置
+                    $stmt = $db->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)");
+                    $stmt->bindValue(1, $setting_key, SQLITE3_TEXT);
+                    $stmt->bindValue(2, $template_content, SQLITE3_TEXT);
+                    $stmt->execute();
+                }
             }
         }
         
-        // 写回文件
-        if (file_put_contents($smtp_file, $content) === false) {
-            throw new Exception('无法写入SMTP配置文件');
-        }
-        
         logAction('admin', $_SESSION['admin_id'], 'update_email_templates', '更新邮件模板');
-        showSuccess('邮件模板更新成功！');
+        showSuccess('邮件模板更新成功！所有模板已保存到数据库。');
         
     } catch (Exception $e) {
         showError('邮件模板更新失败：' . $e->getMessage());
@@ -231,8 +236,26 @@ function updateEmailTemplate($content, $template_type, $new_template) {
     return $content;
 }
 
-// 获取当前模板内容
+// 获取当前模板内容（从数据库读取）
 function getCurrentTemplate($template_type) {
+    global $db;
+    
+    $template_key = 'email_template_' . $template_type;
+    $stmt = $db->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
+    $stmt->bindValue(1, $template_key, SQLITE3_TEXT);
+    $result = $stmt->execute();
+    $row = $result->fetchArray(SQLITE3_ASSOC);
+    
+    if ($row && !empty($row['setting_value'])) {
+        return $row['setting_value'];
+    }
+    
+    // 如果数据库中没有，返回空字符串
+    return '';
+}
+
+// 旧的从文件读取模板的函数（已废弃）
+function getCurrentTemplateFromFile($template_type) {
     $smtp_file = '../config/smtp.php';
     $content = file_get_contents($smtp_file);
     
@@ -271,6 +294,10 @@ include 'includes/header.php';
                         <!-- <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#testEmailModal">
                             <i class="fas fa-paper-plane me-1"></i>发送测试邮件
                         </button> -->
+                        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#templateModal">
+                        <a href="../config/migrate_email_templates.php">导入数据库</a>
+                        </button>
+                        
                         <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#templateModal">
                             <i class="fas fa-edit me-1"></i>邮件模板
                         </button>

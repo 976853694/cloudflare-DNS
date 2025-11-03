@@ -92,6 +92,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
     } elseif (isSubdomainBlocked($subdomain)) {
         showError("前缀 \"$subdomain\" 已被系统拦截，无法创建此子域名！");
     } else {
+        // 检查子域名前缀长度限制
+        $groupManager = new UserGroupManager($db);
+        $prefixCheck = $groupManager->checkPrefixLengthRestriction($_SESSION['user_id'], $subdomain);
+        if (!$prefixCheck['allowed']) {
+            showError($prefixCheck['message']);
+            redirect('dns_manage.php');
+        }
+        
+        // 验证DNS记录内容格式
+        $contentValidation = validateDNSRecordContent($type, $content);
+        if (!$contentValidation['valid']) {
+            showError($contentValidation['message']);
+            redirect('dns_manage.php');
+        }
+        
         try {
             // 使用统一的DNS管理器
             $dns_manager = new DNSManager($add_domain);
@@ -111,41 +126,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
                 $local_records[] = $row;
             }
             
-            // 检查本地记录是否有冲突
-            $conflict_found = false;
-            $existing_record = null;
+            // 使用统一的冲突检测函数
+            $conflict_result = checkLocalDNSConflict($local_records, $type, $content);
             
-            foreach ($local_records as $record) {
-                $record_type = strtoupper($record['type']);
-                $target_type = strtoupper($type);
-                
-                // A、AAAA、CNAME记录之间会冲突
-                $conflicting_types = ['A', 'AAAA', 'CNAME'];
-                
-                if (in_array($record_type, $conflicting_types) && in_array($target_type, $conflicting_types)) {
-                    $conflict_found = true;
-                    $existing_record = $record;
-                    break;
-                }
-                
-                // 完全相同的记录类型和内容
-                if ($record_type === $target_type) {
-                    if ($record['content'] === $content) {
-                        throw new Exception("相同的DNS记录已存在！记录名称: {$full_name}, 类型: {$type}, 内容: {$content}");
-                    } else {
-                        $conflict_found = true;
-                        $existing_record = $record;
-                        break;
-                    }
-                }
-            }
-            
-            if ($conflict_found) {
-                $conflict_msg = "DNS记录冲突：域名 '{$full_name}' 已存在 {$existing_record['type']} 记录";
-                $conflict_msg .= "（内容: {$existing_record['content']}）";
-                $conflict_msg .= "。无法添加 {$type} 记录到相同名称。";
-                $conflict_msg .= "建议：1) 使用不同的子域名前缀；2) 删除现有记录后重新添加；3) 使用编辑功能修改现有记录。";
-                throw new Exception($conflict_msg);
+            if ($conflict_result['hasConflict']) {
+                throw new Exception($conflict_result['message']);
             }
             
             // 如果本地没有冲突，再检查远程DNS提供商（可选，用于双重验证）
@@ -345,6 +330,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
         if ($subdomain !== $record['subdomain'] && isSubdomainBlocked($subdomain)) {
             showError("前缀 \"$subdomain\" 已被系统拦截，无法修改为此子域名！");
             redirect('dns_manage.php');
+        }
+        
+        // 检查子域名前缀长度限制（如果前缀发生了变化）
+        if ($subdomain !== $record['subdomain']) {
+            $groupManager = new UserGroupManager($db);
+            $prefixCheck = $groupManager->checkPrefixLengthRestriction($_SESSION['user_id'], $subdomain);
+            if (!$prefixCheck['allowed']) {
+                showError($prefixCheck['message']);
+                redirect('dns_manage.php');
+            }
+        }
+        
+        // 验证DNS记录内容格式（如果内容或类型发生了变化）
+        if ($content !== $record['content'] || $type !== $record['type']) {
+            $contentValidation = validateDNSRecordContent($type, $content);
+            if (!$contentValidation['valid']) {
+                showError($contentValidation['message']);
+                redirect('dns_manage.php');
+            }
         }
         
         try {
@@ -743,7 +747,7 @@ include 'includes/header.php';
                                         <td><?php echo formatTime($record['created_at']); ?></td>
                                         <td>
                                             <button type="button" class="btn btn-sm btn-primary me-1" 
-                                                    onclick="editRecord(<?php echo htmlspecialchars(json_encode($record)); ?>)"
+                                                    onclick="event.preventDefault(); event.stopPropagation(); editRecord(<?php echo htmlspecialchars(json_encode($record)); ?>); return false;"
                                                     title="修改记录">
                                                 <i class="fas fa-edit"></i>
                                             </button>
@@ -797,19 +801,34 @@ include 'includes/header.php';
             <form method="POST">
                 <div class="modal-body">
                     <?php if ($user_group): ?>
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        您的用户组：<strong><?php echo htmlspecialchars($user_group['display_name']); ?></strong> | 
-                        <?php if ($required_points > 0): ?>
-                            添加一条DNS记录需要消耗 <strong><?php echo $required_points; ?></strong> 积分
-                        <?php else: ?>
-                            <strong class="text-success">免费添加</strong> DNS记录
-                        <?php endif; ?>
-                        <?php if ($user_group['max_records'] != -1): ?>
-                            | 已用 <strong><?php echo $current_record_count; ?>/<?php echo $user_group['max_records']; ?></strong> 条
-                        <?php else: ?>
-                            | 已用 <strong><?php echo $current_record_count; ?></strong> 条（无限制）
-                        <?php endif; ?>
+                    <div class="alert alert-info mb-3" role="alert" style="border-left: 4px solid #0dcaf0;">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-info-circle me-2 mt-1" style="font-size: 1.2em;"></i>
+                            <div class="flex-grow-1">
+                                <strong>用户组信息</strong><br>
+                                <div class="mt-2">
+                                    <span class="badge bg-primary me-2"><?php echo htmlspecialchars($user_group['display_name']); ?></span>
+                                    <?php if ($required_points > 0): ?>
+                                        <span class="badge bg-warning text-dark me-2">
+                                            <i class="fas fa-coins me-1"></i>消耗 <?php echo $required_points; ?> 积分/条
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-success me-2">
+                                            <i class="fas fa-gift me-1"></i>免费添加
+                                        </span>
+                                    <?php endif; ?>
+                                    <?php if ($user_group['max_records'] != -1): ?>
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-list me-1"></i>已用 <?php echo $current_record_count; ?>/<?php echo $user_group['max_records']; ?> 条
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-infinity me-1"></i>已用 <?php echo $current_record_count; ?> 条
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <?php endif; ?>
                     <div class="mb-3">
@@ -866,10 +885,11 @@ include 'includes/header.php';
                     </div>
                     <div class="mb-3">
                         <label for="content" class="form-label">记录值</label>
-                        <input type="text" class="form-control" id="content" name="content" placeholder="192.168.1.1" required oninput="checkAndUpdateConflict()">
+                        <input type="text" class="form-control" id="content" name="content" placeholder="192.168.1.1" required oninput="checkAndUpdateConflict(); validateRecordContent();">
                         <div class="form-text" id="content-help">
                             请输入对应记录类型的值
                         </div>
+                        <div id="content-validation-warning" style="display: none;"></div>
                     </div>
                     <div class="mb-3">
                         <label for="remark" class="form-label">备注 <span class="text-muted">(可选)</span></label>
@@ -1570,6 +1590,118 @@ function checkAndUpdateConflict() {
                 submitButton.classList.add('btn-primary');
                 submitButton.classList.remove('btn-secondary');
             }
+        }
+    }
+}
+
+// 客户端验证DNS记录内容
+function validateRecordContent() {
+    const typeSelect = document.getElementById('type');
+    const contentInput = document.getElementById('content');
+    const warningDiv = document.getElementById('content-validation-warning');
+    const submitButton = document.querySelector('button[name="add_record"]');
+    
+    if (!typeSelect || !contentInput || !warningDiv) return;
+    
+    const type = typeSelect.value;
+    const content = contentInput.value.trim();
+    
+    if (!content) {
+        warningDiv.style.display = 'none';
+        return;
+    }
+    
+    let isValid = true;
+    let message = '';
+    
+    switch (type) {
+        case 'A':
+            // 验证IPv4格式
+            const ipv4Pattern = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+            const match = content.match(ipv4Pattern);
+            
+            if (!match) {
+                isValid = false;
+                message = '无效的IPv4地址格式！';
+            } else {
+                // 检查每个段是否在0-255范围内
+                for (let i = 1; i <= 4; i++) {
+                    const num = parseInt(match[i]);
+                    if (num < 0 || num > 255) {
+                        isValid = false;
+                        message = '无效的IPv4地址格式！';
+                        break;
+                    }
+                }
+                
+                // 检查私有IP
+                if (isValid) {
+                    const parts = content.split('.').map(Number);
+                    const isPrivate = (
+                        (parts[0] === 10) ||
+                        (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+                        (parts[0] === 192 && parts[1] === 168)
+                    );
+                    
+                    const isReserved = (
+                        (parts[0] === 0) ||
+                        (parts[0] === 127) ||
+                        (parts[0] === 169 && parts[1] === 254) ||
+                        (parts[0] >= 224)
+                    );
+                    
+                    if (isPrivate) {
+                        isValid = false;
+                        message = '不能使用私有IP地址（如 10.x.x.x, 172.16-31.x.x, 192.168.x.x）！Cloudflare不支持私有IP地址。';
+                    } else if (isReserved) {
+                        isValid = false;
+                        message = '不能使用保留IP地址（如 0.0.0.0, 127.x.x.x, 169.254.x.x 等）！';
+                    }
+                }
+            }
+            break;
+            
+        case 'AAAA':
+            // 简单的IPv6验证
+            if (!/^[0-9a-fA-F:]+$/.test(content)) {
+                isValid = false;
+                message = '无效的IPv6地址格式！';
+            }
+            break;
+            
+        case 'MX':
+            // MX记录格式验证
+            const mxParts = content.trim().split(/\s+/);
+            if (mxParts.length < 2) {
+                isValid = false;
+                message = 'MX记录格式错误！应为：优先级 邮件服务器（如：10 mail.example.com）';
+            } else if (isNaN(mxParts[0]) || parseInt(mxParts[0]) < 0 || parseInt(mxParts[0]) > 65535) {
+                isValid = false;
+                message = 'MX记录优先级必须是0-65535之间的数字！';
+            }
+            break;
+    }
+    
+    if (!isValid) {
+        warningDiv.innerHTML = `
+            <div class="alert alert-danger alert-sm mt-2">
+                <i class="fas fa-exclamation-circle"></i>
+                <strong>验证错误：</strong>${message}
+            </div>
+        `;
+        warningDiv.style.display = 'block';
+        
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.title = '请修正记录内容格式错误';
+        }
+    } else {
+        warningDiv.style.display = 'none';
+        
+        // 只有在没有冲突的情况下才启用按钮
+        if (submitButton && !document.getElementById('conflict-warning-add')?.querySelector('.alert')) {
+            submitButton.disabled = false;
+            submitButton.title = '';
         }
     }
 }
