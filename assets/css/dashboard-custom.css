@@ -128,6 +128,7 @@
     border-radius: 6px;
     margin: 2px 8px;
     padding: 8px 12px;
+    font-size: 1rem;
 }
 
 .sidebar .nav-link:hover {
@@ -167,7 +168,7 @@
 
 /* 侧边栏标题样式 */
 .sidebar-heading {
-    font-size: 0.75rem;
+    font-size: 0.95rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;

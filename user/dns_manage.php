@@ -1097,12 +1097,12 @@ function showAutoFillNotice() {
     const firstChild = modalBody.firstElementChild.nextElementSibling;
     modalBody.insertBefore(notice, firstChild);
     
-    // 5秒后自动移除
-    setTimeout(function() {
-        if (notice.parentNode) {
-            notice.remove();
-        }
-    }, 5000);
+    // 不自动移除，保持一直显示（用户可以手动关闭）
+    // setTimeout(function() {
+    //     if (notice.parentNode) {
+    //         notice.remove();
+    //     }
+    // }, 5000);
 }
 
 // 页面加载时检查是否需要自动打开模态框

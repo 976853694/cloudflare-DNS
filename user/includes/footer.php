@@ -3,9 +3,9 @@
     
     <!-- 自定义JS -->
     <script>
-        // 自动隐藏提示消息
+        // 自动隐藏提示消息（仅关闭带有 alert-dismissible 类的提示）
         setTimeout(function() {
-            var alerts = document.querySelectorAll('.alert');
+            var alerts = document.querySelectorAll('.alert.alert-dismissible');
             alerts.forEach(function(alert) {
                 var bsAlert = new bootstrap.Alert(alert);
                 bsAlert.close();

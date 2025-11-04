@@ -212,7 +212,7 @@ while ($domain = $domains_query->fetchArray(SQLITE3_ASSOC)) {
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="user/records.php">
+                            <a class="nav-link" href="/user/dns_manage.php">
                                 <i class="fas fa-list me-1"></i>我的记录
                             </a>
                         </li>

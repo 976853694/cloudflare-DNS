@@ -99,7 +99,7 @@ if (!function_exists('getSetting')) {
         .sidebar .nav-link {
             font-weight: 500;
             color: #333;
-            padding: 0.75rem 1rem;
+            padding: 1rem 1rem;
             border-radius: 0.25rem;
             margin: 0.125rem 0.5rem;
             transition: all 0.2s ease;
@@ -113,7 +113,7 @@ if (!function_exists('getSetting')) {
         .sidebar .nav-link.active {
             color: #0d6efd;
             background-color: #e7f1ff;
-            font-weight: 600;
+            font-weight: 800;
         }
         
         .sidebar .nav-link i {
@@ -122,10 +122,10 @@ if (!function_exists('getSetting')) {
         
         /* 侧边栏标题样式 */
         .sidebar-heading {
-            font-size: 0.75rem;
+            font-size: 1.1rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            font-weight: 600;
+            font-weight: 800;
             color: #6c757d;
             padding: 0.75rem 1rem 0.25rem;
             cursor: pointer;

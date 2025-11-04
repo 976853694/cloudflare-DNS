@@ -2,125 +2,31 @@
 session_start();
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once 'includes/dashboard_functions.php';
 
 checkAdminLogin();
 
 $db = Database::getInstance()->getConnection();
 
-// 获取基础统计数据
-$stats = [
-    'total_users' => $db->querySingle("SELECT COUNT(*) FROM users"),
-    'total_domains' => $db->querySingle("SELECT COUNT(*) FROM domains"),
-    'total_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records"),
-    'active_users' => $db->querySingle("SELECT COUNT(*) FROM users WHERE status = 1"),
-    'inactive_users' => $db->querySingle("SELECT COUNT(*) FROM users WHERE status = 0"),
-    'today_records' => $db->querySingle("SELECT COUNT(*) FROM dns_records WHERE date(created_at) = date('now')"),
-    'this_week_users' => $db->querySingle("SELECT COUNT(*) FROM users WHERE created_at >= date('now', '-7 days')"),
-    'total_points' => $db->querySingle("SELECT SUM(points) FROM users") ?: 0
-];
+// 获取所有统计数据 - 使用优化后的函数
+$stats = getDashboardStats($db);
+$invitationStats = getInvitationStats($db);
+$cardKeyStats = getCardKeyStats($db);
+$stats = array_merge($stats, $invitationStats, $cardKeyStats);
 
-// 获取邀请统计（如果启用）
-if (getSetting('invitation_enabled', '1')) {
-    // 检查invitations表是否存在以及字段结构
-    $invitations_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='invitations'");
-    if ($invitations_exists) {
-        $stats['total_invitations'] = $db->querySingle("SELECT COUNT(*) FROM invitations");
-        
-        // 检查used_by字段是否存在
-        $columns = [];
-        $result = $db->query("PRAGMA table_info(invitations)");
-        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-            $columns[] = $row['name'];
-        }
-        
-        if (in_array('used_by', $columns)) {
-            $stats['used_invitations'] = $db->querySingle("SELECT COUNT(*) FROM invitations WHERE used_by IS NOT NULL");
-        } else {
-            // 如果没有used_by字段，可能使用其他字段来判断是否已使用
-            $stats['used_invitations'] = $db->querySingle("SELECT COUNT(*) FROM invitations WHERE last_used_at IS NOT NULL");
-        }
-        
-        if (in_array('is_active', $columns)) {
-            $stats['active_invitations'] = $db->querySingle("SELECT COUNT(*) FROM invitations WHERE is_active = 1");
-        } else {
-            $stats['active_invitations'] = $stats['total_invitations'] - $stats['used_invitations'];
-        }
-    } else {
-        $stats['total_invitations'] = 0;
-        $stats['used_invitations'] = 0;
-        $stats['active_invitations'] = 0;
-    }
-} else {
-    $stats['total_invitations'] = 0;
-    $stats['used_invitations'] = 0;
-    $stats['active_invitations'] = 0;
-}
+// 获取趋势数据
+$weeklyData = getWeeklyRegistrations($db);
+$weekly_registrations = $weeklyData['data'];
+$max_count = $weeklyData['max_count'];
 
-// 获取卡密统计
-$card_keys_exists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='card_keys'");
-if ($card_keys_exists) {
-    $stats['total_card_keys'] = $db->querySingle("SELECT COUNT(*) FROM card_keys");
-    
-    // 检查used_by字段是否存在
-    $card_columns = [];
-    $result = $db->query("PRAGMA table_info(card_keys)");
-    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-        $card_columns[] = $row['name'];
-    }
-    
-    if (in_array('used_by', $card_columns)) {
-        $stats['used_card_keys'] = $db->querySingle("SELECT COUNT(*) FROM card_keys WHERE used_by IS NOT NULL");
-    } elseif (in_array('used_count', $card_columns)) {
-        $stats['used_card_keys'] = $db->querySingle("SELECT COUNT(*) FROM card_keys WHERE used_count > 0");
-    } elseif (in_array('status', $card_columns)) {
-        $stats['used_card_keys'] = $db->querySingle("SELECT COUNT(*) FROM card_keys WHERE status = 'used'");
-    } else {
-        $stats['used_card_keys'] = 0;
-    }
-} else {
-    $stats['total_card_keys'] = 0;
-    $stats['used_card_keys'] = 0;
-}
+// 获取最近的数据
+$recent_users = getRecentUsers($db, 5);
+$recent_records = getRecentDNSRecords($db, 10);
 
-// 获取域名利用率统计
-if ($stats['total_domains'] > 0) {
-    $stats['domain_utilization'] = $db->querySingle("SELECT COUNT(DISTINCT domain_id) FROM dns_records") / $stats['total_domains'] * 100;
-} else {
-    $stats['domain_utilization'] = 0;
-}
-
-// 获取最近7天的用户注册趋势
-$weekly_registrations = [];
-$max_count = 0;
-for ($i = 6; $i >= 0; $i--) {
-    $date = date('Y-m-d', strtotime("-$i days"));
-    $count = $db->querySingle("SELECT COUNT(*) FROM users WHERE date(created_at) = '$date'");
-    $weekly_registrations[] = ['date' => $date, 'count' => $count];
-    if ($count > $max_count) {
-        $max_count = $count;
-    }
-}
-
-// 获取最近的用户
-$recent_users = [];
-$result = $db->query("SELECT * FROM users ORDER BY created_at DESC LIMIT 5");
-while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-    $recent_users[] = $row;
-}
-
-// 获取最近的DNS记录
-$recent_records = [];
-$result = $db->query("
-    SELECT dr.*, u.username, d.domain_name 
-    FROM dns_records dr 
-    JOIN users u ON dr.user_id = u.id 
-    JOIN domains d ON dr.domain_id = d.id 
-    ORDER BY dr.created_at DESC 
-    LIMIT 10
-");
-while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-    $recent_records[] = $row;
-}
+// 检查系统状态
+$missing_features = checkMissingFeatures($db);
+$needs_migration = checkInvitationMigration($db);
+$outdated_invitations = checkInvitationRewardUpdate($db);
 
 include 'includes/header.php';
 ?>
@@ -194,14 +100,6 @@ include 'includes/header.php';
             
             <?php 
             // 检查数据完整性并显示提示
-            $missing_features = [];
-            if (!$db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='invitations'")) {
-                $missing_features[] = '邀请系统';
-            }
-            if (!$db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='card_keys'")) {
-                $missing_features[] = '卡密系统';
-            }
-            
             if (!empty($missing_features)): 
             ?>
             <div class="alert alert-info alert-dismissible fade show">
@@ -214,12 +112,6 @@ include 'includes/header.php';
             
             <?php 
             // 检查是否需要迁移邀请系统
-            $columns = [];
-            $result = $db->query("PRAGMA table_info(invitations)");
-            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-                $columns[] = $row['name'];
-            }
-            $needs_migration = !in_array('is_active', $columns);
             if ($needs_migration): 
             ?>
             <div class="alert alert-warning alert-dismissible fade show">
@@ -239,10 +131,7 @@ include 'includes/header.php';
             
             <?php 
             // 检查邀请奖励积分是否需要更新
-            if (getSetting('invitation_enabled', '1') && in_array('is_active', $columns)) {
-                $current_reward_points = (int)getSetting('invitation_reward_points', '10');
-                $outdated_invitations = $db->querySingle("SELECT COUNT(*) FROM invitations WHERE is_active = 1 AND reward_points != $current_reward_points");
-                if ($outdated_invitations > 0): 
+            if ($outdated_invitations > 0): 
             ?>
             <div class="alert alert-info alert-dismissible fade show">
                 <i class="fas fa-info-circle me-2"></i>
@@ -260,7 +149,7 @@ include 'includes/header.php';
                     </button>
                 </div>
             </div>
-            <?php endif; } ?>
+            <?php endif; ?>
             
             <!-- 核心统计概览 -->
             <div class="row mb-4">
@@ -383,13 +272,14 @@ include 'includes/header.php';
                             </div>
                             <div class="progress mt-3" style="height: 6px;">
                                 <?php 
-                                $total_inv = isset($stats['total_invitations']) ? $stats['total_invitations'] : 0;
-                                $used_inv = isset($stats['used_invitations']) ? $stats['used_invitations'] : 0;
-                                $usage_rate = $total_inv > 0 ? ($used_inv / $total_inv * 100) : 0;
+                                $inv_usage_rate = calculateUsageRate(
+                                    $stats['used_invitations'] ?? 0, 
+                                    $stats['total_invitations'] ?? 0
+                                );
                                 ?>
-                                <div class="progress-bar bg-success" style="width: <?php echo $usage_rate; ?>%"></div>
+                                <div class="progress-bar bg-success" style="width: <?php echo $inv_usage_rate; ?>%"></div>
                             </div>
-                            <small class="text-muted">使用率: <?php echo number_format($usage_rate, 1); ?>%</small>
+                            <small class="text-muted">使用率: <?php echo number_format($inv_usage_rate, 1); ?>%</small>
                         </div>
                     </div>
                 </div>
@@ -415,9 +305,10 @@ include 'includes/header.php';
                             </div>
                             <div class="progress mt-3" style="height: 6px;">
                                 <?php 
-                                $total_cards = isset($stats['total_card_keys']) ? $stats['total_card_keys'] : 0;
-                                $used_cards = isset($stats['used_card_keys']) ? $stats['used_card_keys'] : 0;
-                                $card_usage_rate = $total_cards > 0 ? ($used_cards / $total_cards * 100) : 0;
+                                $card_usage_rate = calculateUsageRate(
+                                    $stats['used_card_keys'] ?? 0, 
+                                    $stats['total_card_keys'] ?? 0
+                                );
                                 ?>
                                 <div class="progress-bar bg-success" style="width: <?php echo $card_usage_rate; ?>%"></div>
                             </div>
@@ -445,9 +336,15 @@ include 'includes/header.php';
                                 </div>
                             </div>
                             <div class="progress mt-3" style="height: 6px;">
-                                <div class="progress-bar bg-success" style="width: <?php echo $stats['total_users'] > 0 ? ($stats['active_users'] / $stats['total_users'] * 100) : 0; ?>%"></div>
+                                <?php 
+                                $active_rate = calculateUsageRate(
+                                    $stats['active_users'] ?? 0, 
+                                    $stats['total_users'] ?? 0
+                                );
+                                ?>
+                                <div class="progress-bar bg-success" style="width: <?php echo $active_rate; ?>%"></div>
                             </div>
-                            <small class="text-muted">活跃率: <?php echo $stats['total_users'] > 0 ? number_format($stats['active_users'] / $stats['total_users'] * 100, 1) : 0; ?>%</small>
+                            <small class="text-muted">活跃率: <?php echo number_format($active_rate, 1); ?>%</small>
                         </div>
                     </div>
                 </div>

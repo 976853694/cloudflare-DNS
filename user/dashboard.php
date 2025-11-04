@@ -145,17 +145,20 @@ include 'includes/header.php';
                 <?php if (!empty($user_announcements)): ?>
                     <?php foreach ($user_announcements as $announcement): ?>
                         <?php if (empty($announcement['auto_close_seconds']) || $announcement['auto_close_seconds'] == 0): ?>
-                        <div class="alert alert-<?php echo $announcement['type']; ?> alert-dismissible fade show">
-                            <h5 class="alert-heading">
-                                <i class="fas fa-bullhorn me-2"></i><?php echo htmlspecialchars($announcement['title']); ?>
-                            </h5>
-                            <p class="mb-0"><?php echo nl2br(htmlspecialchars($announcement['content'])); ?></p>
-                            <small class="text-muted">
-                                发布时间: <?php echo formatTime($announcement['created_at']); ?>
-                            </small>
-                            <button type="button" class="btn-close" 
-                                    data-bs-dismiss="alert" 
-                                    onclick="markAnnouncementAsViewed(<?php echo $announcement['id']; ?>)"></button>
+                        <div class="alert alert-<?php echo $announcement['type']; ?>">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h5 class="alert-heading">
+                                        <i class="fas fa-bullhorn me-2"></i><?php echo htmlspecialchars($announcement['title']); ?>
+                                    </h5>
+                                    <p class="mb-0"><?php echo nl2br(htmlspecialchars($announcement['content'])); ?></p>
+                                    <small class="text-muted">
+                                        发布时间: <?php echo formatTime($announcement['created_at']); ?>
+                                    </small>
+                                </div>
+                                <button type="button" class="btn-close" 
+                                        onclick="this.closest('.alert').remove(); markAnnouncementAsViewed(<?php echo $announcement['id']; ?>)"></button>
+                            </div>
                         </div>
                         <?php endif; ?>
                     <?php endforeach; ?>

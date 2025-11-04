@@ -101,7 +101,7 @@ class Captcha {
      * 生成随机验证码字符串
      */
     private function generateCode() {
-        $chars = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789'; // 排除容易混淆的字符
+        $chars = '123456789'; // 排除容易混淆的字符
         $code = '';
         for ($i = 0; $i < $this->length; $i++) {
             $code .= $chars[rand(0, strlen($chars) - 1)];
