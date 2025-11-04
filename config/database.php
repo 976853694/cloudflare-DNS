@@ -229,6 +229,8 @@ class Database {
             is_active INTEGER DEFAULT 1,
             show_frequency TEXT DEFAULT 'once',
             interval_hours INTEGER DEFAULT 24,
+            target_user_ids TEXT DEFAULT NULL,
+            auto_close_seconds INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");

@@ -307,6 +307,8 @@ class DatabaseUpgrade {
             is_active INTEGER DEFAULT 1,
             show_frequency TEXT DEFAULT 'once',
             interval_hours INTEGER DEFAULT 24,
+            target_user_ids TEXT DEFAULT NULL,
+            auto_close_seconds INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
@@ -394,6 +396,10 @@ class DatabaseUpgrade {
         $this->addColumnIfNotExists('dns_records', 'remark', 'TEXT DEFAULT \'\'');
         $this->addColumnIfNotExists('dns_records', 'ttl', 'INTEGER DEFAULT 1');
         $this->addColumnIfNotExists('dns_records', 'priority', 'INTEGER');
+        
+        // 公告表字段
+        $this->addColumnIfNotExists('announcements', 'target_user_ids', 'TEXT DEFAULT NULL');
+        $this->addColumnIfNotExists('announcements', 'auto_close_seconds', 'INTEGER DEFAULT 0');
     }
     
     /**
@@ -513,7 +519,7 @@ class DatabaseUpgrade {
             'users' => ['github_id', 'points', 'status'],
             'invitations' => ['last_used_at', 'is_active', 'use_count'],
             'card_keys' => ['used_count', 'status'],
-            'announcements' => ['is_active', 'type'],
+            'announcements' => ['is_active', 'type', 'target_user_ids', 'auto_close_seconds'],
             'login_attempts' => ['success', 'user_type']
         ];
         

@@ -8,6 +8,49 @@ checkAdminLogin();
 $db = Database::getInstance()->getConnection();
 $messages = getMessages();
 
+// 自动检查并创建/修复 announcements 表
+try {
+    // 检查表是否存在
+    $tableExists = $db->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name='announcements'");
+    
+    if (!$tableExists) {
+        // 表不存在，创建完整的表
+        $db->exec("CREATE TABLE IF NOT EXISTS announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            type TEXT DEFAULT 'info',
+            is_active INTEGER DEFAULT 1,
+            show_frequency TEXT DEFAULT 'once',
+            interval_hours INTEGER DEFAULT 24,
+            target_user_ids TEXT DEFAULT NULL,
+            auto_close_seconds INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+    } else {
+        // 表存在，检查并添加缺失的字段
+        $columns = [];
+        $result = $db->query("PRAGMA table_info(announcements)");
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $columns[] = $row['name'];
+        }
+        
+        // 检查并添加 target_user_ids 字段
+        if (!in_array('target_user_ids', $columns)) {
+            $db->exec("ALTER TABLE announcements ADD COLUMN target_user_ids TEXT DEFAULT NULL");
+        }
+        
+        // 检查并添加 auto_close_seconds 字段
+        if (!in_array('auto_close_seconds', $columns)) {
+            $db->exec("ALTER TABLE announcements ADD COLUMN auto_close_seconds INTEGER DEFAULT 0");
+        }
+    }
+} catch (Exception $e) {
+    // 如果出错，记录日志但不中断页面
+    error_log("Announcements table check/repair failed: " . $e->getMessage());
+}
+
 // 处理添加公告
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_announcement'])) {
     $title = trim(getPost('title'));

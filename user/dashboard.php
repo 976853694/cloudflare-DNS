@@ -273,13 +273,13 @@ include 'includes/header.php';
                             <div class="card-body">
                                 <div class="row text-center">
                                     <div class="col-md-3 mb-3">
-                                        <a href="records.php" class="btn btn-outline-primary btn-lg w-100">
+                                        <a href="dns_manage.php" class="btn btn-outline-primary btn-lg w-100">
                                             <i class="fas fa-plus fa-2x mb-2"></i>
                                             <div>添加DNS记录</div>
                                         </a>
                                     </div>
                                     <div class="col-md-3 mb-3">
-                                        <a href="records.php" class="btn btn-outline-success btn-lg w-100">
+                                        <a href="dns_manage.php" class="btn btn-outline-success btn-lg w-100">
                                             <i class="fas fa-list fa-2x mb-2"></i>
                                             <div>我的记录</div>
                                         </a>
