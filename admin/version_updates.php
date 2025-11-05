@@ -12,7 +12,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 $db = Database::getInstance()->getConnection();
 
 // 当前系统版本（在代码中维护）
-define('CURRENT_VERSION', '2.3');
+define('CURRENT_VERSION', '2.4');
 
 // 强制每次都重新获取远程信息，禁用缓存
 function forceRefreshRemoteInfo() {
@@ -119,10 +119,10 @@ include 'includes/header.php';
     max-height: 400px;
     overflow-y: auto;
     padding: 15px;
-    background-color: transparent;
+    background-color: #ffffff;
     border-radius: 8px;
     border-left: 4px solid #007bff;
-    color: #ffffff;
+    color: #333333;
 }
 
 .announcement-content h1,
@@ -131,7 +131,7 @@ include 'includes/header.php';
 .announcement-content h4,
 .announcement-content h5,
 .announcement-content h6 {
-    color: #ffffff;
+    color: #000000;
     margin-top: 1rem;
     margin-bottom: 0.5rem;
 }
@@ -139,18 +139,18 @@ include 'includes/header.php';
 .announcement-content p {
     margin-bottom: 1rem;
     line-height: 1.6;
-    color: #ffffff;
+    color: #333333;
 }
 
 .announcement-content ul,
 .announcement-content ol {
     margin-bottom: 1rem;
     padding-left: 2rem;
-    color: #ffffff;
+    color: #333333;
 }
 
 .announcement-content li {
-    color: #ffffff;
+    color: #333333;
 }
 
 .announcement-content blockquote {
@@ -158,20 +158,20 @@ include 'includes/header.php';
     padding-left: 1rem;
     margin: 1rem 0;
     font-style: italic;
-    color: #e0e0e0;
+    color: #555555;
 }
 
 .announcement-content code {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+    background-color: #f8f9fa;
+    color: #333333;
     padding: 0.2rem 0.4rem;
     border-radius: 0.25rem;
     font-size: 0.875em;
 }
 
 .announcement-content pre {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+    background-color: #f8f9fa;
+    color: #333333;
     padding: 1rem;
     border-radius: 0.5rem;
     overflow-x: auto;
@@ -179,46 +179,60 @@ include 'includes/header.php';
 
 /* 公告弹窗模态框样式 */
 .modal-content {
-    background-color: rgba(33, 37, 41, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
 }
 
 .modal-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 1px solid #dee2e6;
+    background-color: #f8f9fa;
 }
 
 .modal-header .modal-title,
 .modal-header .modal-title * {
-    color: #ffffff !important;
+    color: #000000 !important;
 }
 
 .modal-body {
-    color: #ffffff;
+    color: #333333;
+    background-color: #ffffff;
 }
 
 .modal-body small {
-    color: #e0e0e0;
+    color: #6c757d;
 }
 
 .modal-body .fw-bold {
-    color: #ffffff;
+    color: #000000;
 }
 
 .modal-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-top: 1px solid #dee2e6;
+    background-color: #f8f9fa;
 }
 
-/* 强制所有文本元素为白色 */
+/* 强制所有文本元素为黑色 */
 .announcement-content * {
-    color: #ffffff !important;
+    color: #333333 !important;
 }
 
 .announcement-content a {
-    color: #6fb3ff !important;
+    color: #007bff !important;
 }
 
 .announcement-content a:hover {
-    color: #9fd3ff !important;
+    color: #0056b3 !important;
+}
+
+/* 永久显示的警告框样式 */
+.alert-permanent {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.alert-permanent .btn-close {
+    display: none !important;
 }
 </style>
 
@@ -282,7 +296,7 @@ include 'includes/header.php';
                             
                             if ($comparison < 0): 
                             ?>
-                                <div class="alert alert-warning" id="updateAlert" style="display: block !important;">
+                                <div class="alert alert-warning alert-permanent" id="updateAlert" role="alert">
                                     <h6><i class="fas fa-exclamation-triangle me-2"></i>
                                         <?php if ($remoteInfo && $remoteInfo['version'] !== '0.0.0'): ?>
                                             发现新版本！
@@ -426,6 +440,55 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- 新版本通知模态框 -->
+<div class="modal fade" id="updateNotificationModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>发现新版本！
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <i class="fas fa-cloud-download-alt fa-4x text-warning mb-3"></i>
+                    <h4>有新版本可用</h4>
+                </div>
+                <div class="alert alert-info">
+                    <div class="row">
+                        <div class="col-6 text-center">
+                            <small class="text-muted">当前版本</small>
+                            <div class="fs-5 fw-bold text-primary">
+                                <?php echo htmlspecialchars($currentVersion); ?>
+                            </div>
+                        </div>
+                        <div class="col-6 text-center">
+                            <small class="text-muted">最新版本</small>
+                            <div class="fs-5 fw-bold text-success">
+                                <?php echo $remoteInfo ? htmlspecialchars($remoteInfo['version']) : 'N/A'; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-warning mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>建议立即更新</strong>
+                    <p class="mb-0 mt-2">新版本包含重要功能更新和安全修复，建议您及时更新以获得更好的使用体验。</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>稍后提醒
+                </button>
+                <a href="https://github.com/976853694/cloudflare-DNS" 
+                   target="_blank" class="btn btn-warning">
+                    <i class="fas fa-download me-1"></i>立即更新
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 公告详情模态框 -->
 <div class="modal fade" id="announcementDetailModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -535,6 +598,20 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('远程版本: <?php echo $remoteInfo["version"]; ?>');
     console.log('公告数量: <?php echo count($announcements); ?>');
     <?php endif; ?>
+    
+    // 检查是否有新版本，如果有则自动弹出提示框
+    <?php 
+    if ($remoteInfo && $remoteInfo['version'] !== '0.0.0'): 
+        $comparison = compareVersions($currentVersion, $remoteInfo['version']);
+        if ($comparison < 0): 
+    ?>
+    // 自动显示新版本提示模态框
+    var updateModal = new bootstrap.Modal(document.getElementById('updateNotificationModal'));
+    updateModal.show();
+    <?php 
+        endif;
+    endif;
+    ?>
 });
 </script>
 

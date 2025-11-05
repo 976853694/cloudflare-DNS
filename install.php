@@ -267,6 +267,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute();
                 }
                 
+                // 自动导入邮件模板
+                require_once 'includes/functions.php';
+                importEmailTemplates($db);
+                
                 // 创建安装锁定文件
                 file_put_contents('data/install.lock', date('Y-m-d H:i:s'));
                 

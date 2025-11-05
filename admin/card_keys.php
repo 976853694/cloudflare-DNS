@@ -103,18 +103,143 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_status'])) {
     redirect('card_keys.php');
 }
 
+// 处理批量操作
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['batch_action'])) {
+    $action = getPost('batch_action_type');
+    $card_ids = isset($_POST['card_ids']) ? $_POST['card_ids'] : [];
+    
+    if (empty($card_ids)) {
+        showError('请先选择要操作的卡密！');
+    } else {
+        $card_ids = array_map('intval', $card_ids);
+        $ids_string = implode(',', $card_ids);
+        $success_count = 0;
+        
+        try {
+            if ($action === 'enable') {
+                // 批量启用
+                $result = $db->exec("UPDATE card_keys SET status = 1, updated_at = CURRENT_TIMESTAMP WHERE id IN ($ids_string)");
+                $success_count = $db->changes();
+                if ($success_count > 0) {
+                    logAction('admin', $_SESSION['admin_id'], 'batch_enable_cards', "批量启用 $success_count 张卡密");
+                    showSuccess("成功启用 $success_count 张卡密！");
+                }
+            } elseif ($action === 'disable') {
+                // 批量禁用
+                $result = $db->exec("UPDATE card_keys SET status = 0, updated_at = CURRENT_TIMESTAMP WHERE id IN ($ids_string)");
+                $success_count = $db->changes();
+                if ($success_count > 0) {
+                    logAction('admin', $_SESSION['admin_id'], 'batch_disable_cards', "批量禁用 $success_count 张卡密");
+                    showSuccess("成功禁用 $success_count 张卡密！");
+                }
+            } elseif ($action === 'delete') {
+                // 批量删除
+                $result = $db->exec("DELETE FROM card_keys WHERE id IN ($ids_string)");
+                $success_count = $db->changes();
+                if ($success_count > 0) {
+                    logAction('admin', $_SESSION['admin_id'], 'batch_delete_cards', "批量删除 $success_count 张卡密");
+                    showSuccess("成功删除 $success_count 张卡密！");
+                }
+            } else {
+                showError('无效的操作类型！');
+            }
+        } catch (Exception $e) {
+            showError('批量操作失败：' . $e->getMessage());
+        }
+    }
+    redirect('card_keys.php');
+}
+
+// 处理导出卡密
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['export_cards'])) {
+    // 获取筛选条件
+    $filter_status = isset($_POST['filter_status']) ? $_POST['filter_status'] : '';
+    $filter_points_min = isset($_POST['filter_points_min']) ? (int)$_POST['filter_points_min'] : 0;
+    $filter_points_max = isset($_POST['filter_points_max']) ? (int)$_POST['filter_points_max'] : 0;
+    $filter_used = isset($_POST['filter_used']) ? $_POST['filter_used'] : '';
+    
+    // 构建查询条件
+    $where_conditions = [];
+    if ($filter_status !== '') {
+        $where_conditions[] = "status = " . (int)$filter_status;
+    }
+    if ($filter_points_min > 0) {
+        $where_conditions[] = "points >= " . $filter_points_min;
+    }
+    if ($filter_points_max > 0) {
+        $where_conditions[] = "points <= " . $filter_points_max;
+    }
+    if ($filter_used === 'used') {
+        $where_conditions[] = "used_count > 0";
+    } elseif ($filter_used === 'unused') {
+        $where_conditions[] = "used_count = 0";
+    }
+    
+    $where_sql = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
+    
+    // 查询符合条件的卡密
+    $export_query = "SELECT card_key, points FROM card_keys $where_sql ORDER BY points DESC, card_key ASC";
+    $export_result = $db->query($export_query);
+    
+    // 生成TXT内容
+    $txt_content = "";
+    $export_count = 0;
+    while ($row = $export_result->fetchArray(SQLITE3_ASSOC)) {
+        $txt_content .= $row['card_key'] . "-" . $row['points'] . "\n";
+        $export_count++;
+    }
+    
+    if ($export_count > 0) {
+        // 设置下载头
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Content-Disposition: attachment; filename="card_keys_' . date('YmdHis') . '.txt"');
+        header('Content-Length: ' . strlen($txt_content));
+        echo $txt_content;
+        exit;
+    } else {
+        showError('没有符合条件的卡密可导出！');
+        redirect('card_keys.php');
+    }
+}
+
+// 获取筛选参数
+$filter_status = getGet('filter_status', '');
+$filter_points_min = (int)getGet('filter_points_min', 0);
+$filter_points_max = (int)getGet('filter_points_max', 0);
+$filter_used = getGet('filter_used', '');
+
 // 获取卡密列表
 $page = (int)getGet('page', 1);
 $limit = 20;
 $offset = ($page - 1) * $limit;
 
-$total_cards = $db->querySingle("SELECT COUNT(*) FROM card_keys");
+// 构建查询条件
+$where_conditions = [];
+if ($filter_status !== '') {
+    $where_conditions[] = "ck.status = " . (int)$filter_status;
+}
+if ($filter_points_min > 0) {
+    $where_conditions[] = "ck.points >= " . $filter_points_min;
+}
+if ($filter_points_max > 0) {
+    $where_conditions[] = "ck.points <= " . $filter_points_max;
+}
+if ($filter_used === 'used') {
+    $where_conditions[] = "ck.used_count > 0";
+} elseif ($filter_used === 'unused') {
+    $where_conditions[] = "ck.used_count = 0";
+}
+
+$where_sql = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
+
+$total_cards = $db->querySingle("SELECT COUNT(*) FROM card_keys ck $where_sql");
 $total_pages = ceil($total_cards / $limit);
 
 $cards = [];
 $result = $db->query("SELECT ck.*, a.username as created_by_name 
                      FROM card_keys ck 
                      LEFT JOIN admins a ON ck.created_by = a.id 
+                     $where_sql
                      ORDER BY ck.created_at DESC 
                      LIMIT $limit OFFSET $offset");
 while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
@@ -141,6 +266,9 @@ include 'includes/header.php';
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2">卡密管理</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
+                    <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#exportCardModal">
+                        <i class="fas fa-download me-1"></i>导出卡密
+                    </button>
                     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#generateCardModal">
                         <i class="fas fa-plus me-1"></i>生成卡密
                     </button>
@@ -229,16 +357,100 @@ include 'includes/header.php';
                 </div>
             </div>
             
+            <!-- 高级筛选 -->
+            <div class="card shadow mb-4">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-filter me-2"></i>高级筛选
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="card_keys.php" id="filterForm">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="filter_status" class="form-label">状态</label>
+                                <select class="form-select" id="filter_status" name="filter_status">
+                                    <option value="">全部</option>
+                                    <option value="1" <?php echo $filter_status === '1' ? 'selected' : ''; ?>>有效</option>
+                                    <option value="0" <?php echo $filter_status === '0' ? 'selected' : ''; ?>>已禁用</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="filter_points_min" class="form-label">最小积分</label>
+                                <input type="number" class="form-control" id="filter_points_min" name="filter_points_min" 
+                                       value="<?php echo $filter_points_min > 0 ? $filter_points_min : ''; ?>" 
+                                       placeholder="最小积分" min="0">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="filter_points_max" class="form-label">最大积分</label>
+                                <input type="number" class="form-control" id="filter_points_max" name="filter_points_max" 
+                                       value="<?php echo $filter_points_max > 0 ? $filter_points_max : ''; ?>" 
+                                       placeholder="最大积分" min="0">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="filter_used" class="form-label">使用状态</label>
+                                <select class="form-select" id="filter_used" name="filter_used">
+                                    <option value="">全部</option>
+                                    <option value="used" <?php echo $filter_used === 'used' ? 'selected' : ''; ?>>已使用</option>
+                                    <option value="unused" <?php echo $filter_used === 'unused' ? 'selected' : ''; ?>>未使用</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i>筛选
+                                </button>
+                                <a href="card_keys.php" class="btn btn-secondary">
+                                    <i class="fas fa-redo me-1"></i>重置
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
             <!-- 卡密列表 -->
             <div class="card shadow">
                 <div class="card-header">
-                    <h6 class="m-0 font-weight-bold text-primary">卡密列表</h6>
+                    <h6 class="m-0 font-weight-bold text-primary">卡密列表 
+                        <?php if ($total_cards > 0): ?>
+                            <span class="badge bg-secondary"><?php echo $total_cards; ?> 条记录</span>
+                        <?php endif; ?>
+                    </h6>
                 </div>
                 <div class="card-body">
+                    <!-- 批量操作区域 -->
+                    <form method="POST" id="batchForm" onsubmit="return confirmBatchAction()">
+                        <div class="row mb-3">
+                            <div class="col-md-8">
+                                <div class="input-group">
+                                    <select class="form-select" name="batch_action_type" id="batch_action_type" required style="max-width: 200px;">
+                                        <option value="">选择操作</option>
+                                        <option value="enable">批量启用</option>
+                                        <option value="disable">批量禁用</option>
+                                        <option value="delete">批量删除</option>
+                                    </select>
+                                    <button type="submit" name="batch_action" class="btn btn-primary">
+                                        <i class="fas fa-check me-1"></i>执行
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleSelectAll()">
+                                    <i class="fas fa-check-square me-1"></i>全选/取消
+                                </button>
+                                <span class="ms-2 text-muted" id="selectedCount">已选择: 0</span>
+                            </div>
+                        </div>
+                    
                     <div class="table-responsive">
                         <table class="table table-bordered">
                             <thead>
                                 <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" id="selectAll" onclick="toggleSelectAll()">
+                                    </th>
                                     <th>ID</th>
                                     <th>卡密</th>
                                     <th>积分</th>
@@ -253,11 +465,14 @@ include 'includes/header.php';
                             <tbody>
                                 <?php if (empty($cards)): ?>
                                 <tr>
-                                    <td colspan="9" class="text-center">暂无卡密</td>
+                                    <td colspan="10" class="text-center">暂无卡密</td>
                                 </tr>
                                 <?php else: ?>
                                 <?php foreach ($cards as $card): ?>
                                 <tr>
+                                    <td>
+                                        <input type="checkbox" class="card-checkbox" name="card_ids[]" value="<?php echo $card['id']; ?>" onchange="updateSelectedCount()">
+                                    </td>
                                     <td><?php echo $card['id']; ?></td>
                                     <td>
                                         <code><?php echo htmlspecialchars($card['card_key']); ?></code>
@@ -318,17 +533,86 @@ include 'includes/header.php';
                     <?php if ($total_pages > 1): ?>
                     <nav aria-label="Page navigation">
                         <ul class="pagination justify-content-center">
-                            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                            <?php 
+                            // 构建查询参数
+                            $query_params = [];
+                            if ($filter_status !== '') $query_params[] = 'filter_status=' . urlencode($filter_status);
+                            if ($filter_points_min > 0) $query_params[] = 'filter_points_min=' . $filter_points_min;
+                            if ($filter_points_max > 0) $query_params[] = 'filter_points_max=' . $filter_points_max;
+                            if ($filter_used !== '') $query_params[] = 'filter_used=' . urlencode($filter_used);
+                            $query_string = !empty($query_params) ? '&' . implode('&', $query_params) : '';
+                            
+                            for ($i = 1; $i <= $total_pages; $i++): 
+                            ?>
                             <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
-                                <a class="page-link" href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                <a class="page-link" href="?page=<?php echo $i . $query_string; ?>"><?php echo $i; ?></a>
                             </li>
                             <?php endfor; ?>
                         </ul>
                     </nav>
                     <?php endif; ?>
+                    </form>
                 </div>
             </div>
         </main>
+    </div>
+</div>
+
+<!-- 导出卡密模态框 -->
+<div class="modal fade" id="exportCardModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">导出卡密</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        导出格式：卡密-积分（每行一条）
+                    </div>
+                    
+                    <h6 class="mb-3">筛选条件（可选）</h6>
+                    
+                    <div class="mb-3">
+                        <label for="export_filter_status" class="form-label">状态</label>
+                        <select class="form-select" id="export_filter_status" name="filter_status">
+                            <option value="">全部</option>
+                            <option value="1" selected>有效</option>
+                            <option value="0">已禁用</option>
+                        </select>
+                        <div class="form-text">默认只导出有效的卡密</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="export_filter_points_min" class="form-label">最小积分</label>
+                        <input type="number" class="form-control" id="export_filter_points_min" name="filter_points_min" min="0" placeholder="留空表示不限制">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="export_filter_points_max" class="form-label">最大积分</label>
+                        <input type="number" class="form-control" id="export_filter_points_max" name="filter_points_max" min="0" placeholder="留空表示不限制">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="export_filter_used" class="form-label">使用状态</label>
+                        <select class="form-select" id="export_filter_used" name="filter_used">
+                            <option value="">全部</option>
+                            <option value="used">已使用</option>
+                            <option value="unused" selected>未使用</option>
+                        </select>
+                        <div class="form-text">默认只导出未使用的卡密</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" name="export_cards" class="btn btn-success">
+                        <i class="fas fa-download me-1"></i>导出
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -375,6 +659,64 @@ function copyToClipboard(text) {
         console.error('复制失败: ', err);
     });
 }
+
+// 全选/取消全选
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.card-checkbox');
+    
+    checkboxes.forEach(function(checkbox) {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    
+    updateSelectedCount();
+}
+
+// 更新已选择数量
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.card-checkbox:checked');
+    const count = checkboxes.length;
+    document.getElementById('selectedCount').textContent = '已选择: ' + count;
+    
+    // 更新全选复选框状态
+    const allCheckboxes = document.querySelectorAll('.card-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = count > 0 && count === allCheckboxes.length;
+    }
+}
+
+// 确认批量操作
+function confirmBatchAction() {
+    const action = document.getElementById('batch_action_type').value;
+    const checkboxes = document.querySelectorAll('.card-checkbox:checked');
+    
+    if (!action) {
+        alert('请选择要执行的操作！');
+        return false;
+    }
+    
+    if (checkboxes.length === 0) {
+        alert('请至少选择一张卡密！');
+        return false;
+    }
+    
+    let actionText = '';
+    if (action === 'enable') {
+        actionText = '启用';
+    } else if (action === 'disable') {
+        actionText = '禁用';
+    } else if (action === 'delete') {
+        actionText = '删除';
+    }
+    
+    return confirm('确定要' + actionText + ' ' + checkboxes.length + ' 张卡密吗？');
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelectedCount();
+});
 </script>
 
 <style>

@@ -231,7 +231,7 @@ include 'includes/header.php';
                                     <td>
                                         <strong><?php echo htmlspecialchars($announcement['title']); ?></strong>
                                         <br>
-                                        <small class="text-muted">
+                                        <small style="color: #333333 !important;">
                                             <?php echo htmlspecialchars(mb_substr($announcement['content'], 0, 50)) . (mb_strlen($announcement['content']) > 50 ? '...' : ''); ?>
                                         </small>
                                     </td>

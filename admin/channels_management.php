@@ -643,7 +643,7 @@ include 'includes/header.php';
                     <?php else: ?>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle">
-                                <thead class="table-dark">
+                                <thead class="table-light">
                                     <tr>
                                         <th class="border-0">渠道名称</th>
                                         <th class="border-0">类型</th>
@@ -1307,7 +1307,7 @@ function testConnection() {
 }
 
 .table thead th {
-    background-color: #212529 !important;
+    background-color: #f8f9fa !important;
     border-color: #dee2e6 !important;
     color: #212529 !important;
     font-weight: 600;

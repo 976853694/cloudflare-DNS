@@ -1,10 +1,10 @@
 {
-  "version": "2.3",
+  "version": "2.4",
   "announcements": [
     {
       "id": 1,
-      "title": "2.3更新日志",
-      "content": "2.3更新日志<br>修复公告无法创建或者修改<br>修复用户中心仪表盘的我的记录和添加dns无法创建或者修改<br>优化验证码<br>优化侧边栏<br>优化用户端提示",
+      "title": "2.4更新日志",
+      "content": "优化部分细节",
       "date": "2025-10-26",
       "priority": "high"
     }

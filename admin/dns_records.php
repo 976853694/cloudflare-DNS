@@ -67,9 +67,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
     redirect('dns_records.php');
 }
 
+// 获取筛选参数
+$filter_type = isset($_GET['filter_type']) ? $_GET['filter_type'] : '';
+$filter_domain = isset($_GET['filter_domain']) ? (int)$_GET['filter_domain'] : 0;
+$filter_user = isset($_GET['filter_user']) ? (int)$_GET['filter_user'] : 0;
+$filter_proxied = isset($_GET['filter_proxied']) ? $_GET['filter_proxied'] : '';
+$filter_record_source = isset($_GET['filter_record_source']) ? $_GET['filter_record_source'] : '';
+$filter_date_from = isset($_GET['filter_date_from']) ? $_GET['filter_date_from'] : '';
+$filter_date_to = isset($_GET['filter_date_to']) ? $_GET['filter_date_to'] : '';
+
+// 构建WHERE条件
+$where_conditions = [];
+$bind_params = [];
+
+if (!empty($filter_type)) {
+    $where_conditions[] = "dr.type = :type";
+    $bind_params[':type'] = $filter_type;
+}
+
+if ($filter_domain > 0) {
+    $where_conditions[] = "dr.domain_id = :domain_id";
+    $bind_params[':domain_id'] = $filter_domain;
+}
+
+if ($filter_user > 0) {
+    $where_conditions[] = "dr.user_id = :user_id";
+    $bind_params[':user_id'] = $filter_user;
+}
+
+if ($filter_proxied !== '') {
+    $where_conditions[] = "dr.proxied = :proxied";
+    $bind_params[':proxied'] = (int)$filter_proxied;
+}
+
+if ($filter_record_source === 'system') {
+    $where_conditions[] = "(dr.user_id IS NULL OR dr.is_system = 1)";
+} elseif ($filter_record_source === 'user') {
+    $where_conditions[] = "(dr.user_id IS NOT NULL AND (dr.is_system = 0 OR dr.is_system IS NULL))";
+}
+
+if (!empty($filter_date_from)) {
+    $where_conditions[] = "date(dr.created_at) >= :date_from";
+    $bind_params[':date_from'] = $filter_date_from;
+}
+
+if (!empty($filter_date_to)) {
+    $where_conditions[] = "date(dr.created_at) <= :date_to";
+    $bind_params[':date_to'] = $filter_date_to;
+}
+
+$where_sql = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_conditions) : '';
+
 // 获取所有DNS记录（包括系统记录和用户记录）
 $dns_records = [];
-$result = $db->query("
+$sql = "
     SELECT dr.*, 
            CASE 
                WHEN dr.user_id IS NULL OR dr.is_system = 1 THEN '系统所属'
@@ -83,11 +134,36 @@ $result = $db->query("
     FROM dns_records dr 
     LEFT JOIN users u ON dr.user_id = u.id AND dr.user_id IS NOT NULL AND (dr.is_system = 0 OR dr.is_system IS NULL)
     JOIN domains d ON dr.domain_id = d.id 
+    $where_sql
     ORDER BY dr.is_system DESC, dr.created_at DESC
-");
+";
+
+$stmt = $db->prepare($sql);
+foreach ($bind_params as $param => $value) {
+    $stmt->bindValue($param, $value);
+}
+$result = $stmt->execute();
+
 while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
     $dns_records[] = $row;
 }
+
+// 获取域名列表用于筛选
+$domains_list = [];
+$domains_result = $db->query("SELECT id, domain_name FROM domains ORDER BY domain_name");
+while ($domain = $domains_result->fetchArray(SQLITE3_ASSOC)) {
+    $domains_list[] = $domain;
+}
+
+// 获取用户列表用于筛选
+$users_list = [];
+$users_result = $db->query("SELECT id, username FROM users ORDER BY username");
+while ($user = $users_result->fetchArray(SQLITE3_ASSOC)) {
+    $users_list[] = $user;
+}
+
+// 获取所有DNS记录类型（用于筛选）
+$record_types = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SRV', 'PTR', 'CAA'];
 
 $page_title = 'DNS记录管理';
 include 'includes/header.php';
@@ -101,9 +177,148 @@ include 'includes/header.php';
             <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                 <h1 class="h2">DNS记录管理</h1>
                 <div class="btn-toolbar mb-2 mb-md-0">
+                    <button class="btn btn-primary me-2" type="button" data-bs-toggle="collapse" data-bs-target="#advancedFilter">
+                        <i class="fas fa-filter me-1"></i>高级筛选
+                    </button>
                     <div class="input-group">
-                        <input type="text" class="form-control" placeholder="搜索记录..." id="searchInput" onkeyup="searchTable('searchInput', 'recordsTable')">
+                        <input type="text" class="form-control" placeholder="快速搜索..." id="searchInput" onkeyup="searchTable('searchInput', 'recordsTable')">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 高级筛选面板 -->
+            <div class="collapse <?php echo (!empty($filter_type) || $filter_domain > 0 || $filter_user > 0 || $filter_proxied !== '' || $filter_record_source !== '' || !empty($filter_date_from) || !empty($filter_date_to)) ? 'show' : ''; ?>" id="advancedFilter">
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fas fa-sliders-h me-2"></i>高级筛选条件</h6>
+                    </div>
+                    <div class="card-body">
+                        <form method="GET" action="dns_records.php" id="filterForm">
+                            <div class="row g-3">
+                                <!-- 记录类型筛选 -->
+                                <div class="col-md-3">
+                                    <label for="filter_type" class="form-label">记录类型</label>
+                                    <select class="form-select" id="filter_type" name="filter_type">
+                                        <option value="">全部类型</option>
+                                        <?php foreach ($record_types as $type): ?>
+                                            <option value="<?php echo $type; ?>" <?php echo $filter_type === $type ? 'selected' : ''; ?>>
+                                                <?php echo $type; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                
+                                <!-- 域名筛选 -->
+                                <div class="col-md-3">
+                                    <label for="filter_domain" class="form-label">域名</label>
+                                    <select class="form-select" id="filter_domain" name="filter_domain">
+                                        <option value="0">全部域名</option>
+                                        <?php foreach ($domains_list as $domain): ?>
+                                            <option value="<?php echo $domain['id']; ?>" <?php echo $filter_domain == $domain['id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($domain['domain_name']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                
+                                <!-- 用户筛选 -->
+                                <div class="col-md-3">
+                                    <label for="filter_user" class="form-label">用户</label>
+                                    <select class="form-select" id="filter_user" name="filter_user">
+                                        <option value="0">全部用户</option>
+                                        <?php foreach ($users_list as $user): ?>
+                                            <option value="<?php echo $user['id']; ?>" <?php echo $filter_user == $user['id'] ? 'selected' : ''; ?>>
+                                                <?php echo htmlspecialchars($user['username']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                
+                                <!-- 代理状态筛选 -->
+                                <div class="col-md-3">
+                                    <label for="filter_proxied" class="form-label">代理状态</label>
+                                    <select class="form-select" id="filter_proxied" name="filter_proxied">
+                                        <option value="">全部状态</option>
+                                        <option value="1" <?php echo $filter_proxied === '1' ? 'selected' : ''; ?>>已代理</option>
+                                        <option value="0" <?php echo $filter_proxied === '0' ? 'selected' : ''; ?>>仅DNS</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- 记录来源筛选 -->
+                                <div class="col-md-3">
+                                    <label for="filter_record_source" class="form-label">记录来源</label>
+                                    <select class="form-select" id="filter_record_source" name="filter_record_source">
+                                        <option value="">全部来源</option>
+                                        <option value="system" <?php echo $filter_record_source === 'system' ? 'selected' : ''; ?>>系统记录</option>
+                                        <option value="user" <?php echo $filter_record_source === 'user' ? 'selected' : ''; ?>>用户记录</option>
+                                    </select>
+                                </div>
+                                
+                                <!-- 创建日期起始 -->
+                                <div class="col-md-3">
+                                    <label for="filter_date_from" class="form-label">创建日期（起）</label>
+                                    <input type="date" class="form-control" id="filter_date_from" name="filter_date_from" 
+                                           value="<?php echo htmlspecialchars($filter_date_from); ?>">
+                                </div>
+                                
+                                <!-- 创建日期结束 -->
+                                <div class="col-md-3">
+                                    <label for="filter_date_to" class="form-label">创建日期（止）</label>
+                                    <input type="date" class="form-control" id="filter_date_to" name="filter_date_to" 
+                                           value="<?php echo htmlspecialchars($filter_date_to); ?>">
+                                </div>
+                                
+                                <!-- 按钮组 -->
+                                <div class="col-md-3 d-flex align-items-end">
+                                    <button type="submit" class="btn btn-primary me-2">
+                                        <i class="fas fa-search me-1"></i>应用筛选
+                                    </button>
+                                    <a href="dns_records.php" class="btn btn-outline-secondary">
+                                        <i class="fas fa-redo me-1"></i>重置
+                                    </a>
+                                </div>
+                            </div>
+                            
+                            <!-- 当前筛选条件显示 -->
+                            <?php 
+                            $active_filters = [];
+                            if (!empty($filter_type)) $active_filters[] = "类型: $filter_type";
+                            if ($filter_domain > 0) {
+                                foreach ($domains_list as $d) {
+                                    if ($d['id'] == $filter_domain) {
+                                        $active_filters[] = "域名: " . htmlspecialchars($d['domain_name']);
+                                        break;
+                                    }
+                                }
+                            }
+                            if ($filter_user > 0) {
+                                foreach ($users_list as $u) {
+                                    if ($u['id'] == $filter_user) {
+                                        $active_filters[] = "用户: " . htmlspecialchars($u['username']);
+                                        break;
+                                    }
+                                }
+                            }
+                            if ($filter_proxied !== '') $active_filters[] = "代理: " . ($filter_proxied == '1' ? '已代理' : '仅DNS');
+                            if ($filter_record_source === 'system') $active_filters[] = "来源: 系统记录";
+                            if ($filter_record_source === 'user') $active_filters[] = "来源: 用户记录";
+                            if (!empty($filter_date_from)) $active_filters[] = "起始: $filter_date_from";
+                            if (!empty($filter_date_to)) $active_filters[] = "截止: $filter_date_to";
+                            ?>
+                            
+                            <?php if (!empty($active_filters)): ?>
+                            <div class="mt-3 pt-3 border-top">
+                                <div class="d-flex align-items-center flex-wrap">
+                                    <span class="text-muted me-2"><i class="fas fa-info-circle"></i> 当前筛选:</span>
+                                    <?php foreach ($active_filters as $filter): ?>
+                                        <span class="badge bg-primary me-2 mb-1"><?php echo $filter; ?></span>
+                                    <?php endforeach; ?>
+                                    <span class="text-muted ms-2">（共 <?php echo count($dns_records); ?> 条记录）</span>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -293,6 +508,125 @@ include 'includes/header.php';
     .domain-link code {
         font-size: 0.8em;
         word-break: break-all;
+    }
+}
+
+/* 高级筛选面板样式 */
+#advancedFilter {
+    transition: all 0.3s ease;
+}
+
+#advancedFilter .card {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+#advancedFilter .card-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    padding: 12px 20px;
+}
+
+#advancedFilter .form-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+#advancedFilter .form-select,
+#advancedFilter .form-control {
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    transition: all 0.2s ease;
+}
+
+#advancedFilter .form-select:focus,
+#advancedFilter .form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+#advancedFilter .badge {
+    font-weight: 500;
+    padding: 0.5em 0.8em;
+    font-size: 0.85rem;
+}
+
+#advancedFilter .btn-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    border: none;
+    transition: all 0.3s ease;
+}
+
+#advancedFilter .btn-primary:hover {
+    background: linear-gradient(135deg, #0a58ca 0%, #084298 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+}
+
+#advancedFilter .btn-outline-secondary {
+    transition: all 0.3s ease;
+}
+
+#advancedFilter .btn-outline-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(108, 117, 125, 0.2);
+}
+
+/* 筛选按钮动画 */
+.btn[data-bs-toggle="collapse"] {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn[data-bs-toggle="collapse"]::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn[data-bs-toggle="collapse"]:active::after {
+    width: 300px;
+    height: 300px;
+}
+
+/* 当前筛选条件标签动画 */
+#advancedFilter .badge {
+    animation: fadeInScale 0.3s ease;
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+    #advancedFilter .col-md-3 {
+        margin-bottom: 1rem;
+    }
+    
+    #advancedFilter .btn-toolbar {
+        flex-direction: column;
+    }
+    
+    #advancedFilter .btn-toolbar .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
     }
 }
 </style>

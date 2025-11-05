@@ -12,6 +12,22 @@ checkAdminLogin();
 $db = Database::getInstance()->getConnection();
 $messages = getMessages();
 
+// 自动检查并导入邮件模板和标题（如果不存在）
+try {
+    $template_check = $db->querySingle("SELECT COUNT(*) FROM settings WHERE setting_key LIKE 'email_template_%'");
+    $subject_check = $db->querySingle("SELECT COUNT(*) FROM settings WHERE setting_key LIKE 'email_subject_%'");
+    
+    if ($template_check == 0 || $subject_check == 0) {
+        // 邮件模板或标题不存在，自动导入
+        $result = importEmailTemplates($db);
+        if ($result['imported'] > 0) {
+            showSuccess("已自动导入 {$result['imported']} 个邮件配置项（模板和标题）");
+        }
+    }
+} catch (Exception $e) {
+    // 静默失败，不影响页面加载
+}
+
 // 处理设置更新
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_smtp'])) {
     $smtp_settings = [
@@ -294,9 +310,6 @@ include 'includes/header.php';
                         <!-- <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#testEmailModal">
                             <i class="fas fa-paper-plane me-1"></i>发送测试邮件
                         </button> -->
-                        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#templateModal">
-                        <a href="../config/migrate_email_templates.php">导入数据库</a>
-                        </button>
                         
                         <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#templateModal">
                             <i class="fas fa-edit me-1"></i>邮件模板

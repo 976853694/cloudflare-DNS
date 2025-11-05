@@ -16,6 +16,39 @@ $db = Database::getInstance()->getConnection();
 $action = getGet('action', 'list');
 $messages = getMessages();
 
+/**
+ * 自动绑定域名到默认用户组
+ * @param object $db 数据库连接
+ * @param int $domain_id 域名ID
+ * @return bool 是否绑定成功
+ */
+function bindDomainToDefaultGroup($db, $domain_id) {
+    try {
+        // 获取默认用户组（group_name = 'default'）
+        $default_group = $db->querySingle("SELECT id FROM user_groups WHERE group_name = 'default' AND is_active = 1", true);
+        
+        if ($default_group) {
+            $group_id = $default_group['id'];
+            
+            // 检查是否已经绑定
+            $exists = $db->querySingle("SELECT COUNT(*) FROM user_group_domains WHERE group_id = $group_id AND domain_id = $domain_id");
+            
+            if (!$exists) {
+                // 绑定域名到默认用户组
+                $stmt = $db->prepare("INSERT INTO user_group_domains (group_id, domain_id) VALUES (?, ?)");
+                $stmt->bindValue(1, $group_id, SQLITE3_INTEGER);
+                $stmt->bindValue(2, $domain_id, SQLITE3_INTEGER);
+                return $stmt->execute() !== false;
+            }
+            return true; // 已经绑定，返回成功
+        }
+        return false; // 没有找到默认用户组
+    } catch (Exception $e) {
+        error_log("绑定域名到默认用户组失败: " . $e->getMessage());
+        return false;
+    }
+}
+
 // 确保Cloudflare账户表存在
 $db->exec("CREATE TABLE IF NOT EXISTS cloudflare_accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,6 +147,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_rainbow_domain'])
                 $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                 
                 if ($stmt->execute()) {
+                    // 获取新添加的域名ID
+                    $domain_id = $db->lastInsertRowID();
+                    // 自动绑定到默认用户组
+                    bindDomainToDefaultGroup($db, $domain_id);
+                    
                     logAction('admin', $_SESSION['admin_id'], 'add_rainbow_domain', "添加彩虹DNS域名: $domain_name");
                     showSuccess('彩虹DNS域名添加成功！');
                 } else {
@@ -294,6 +332,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_rainbow_
                     $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
+                        // 获取新添加的域名ID
+                        $domain_id = $db->lastInsertRowID();
+                        // 自动绑定到默认用户组
+                        bindDomainToDefaultGroup($db, $domain_id);
+                        
                         $added_count++;
                     }
                 }
@@ -354,6 +397,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_dnspod_d
                     $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
+                        // 获取新添加的域名ID
+                        $domain_id = $db->lastInsertRowID();
+                        // 自动绑定到默认用户组
+                        bindDomainToDefaultGroup($db, $domain_id);
+                        
                         $added_count++;
                     }
                 }
@@ -414,6 +462,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_powerdns
                     $stmt->bindValue(9, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
+                        // 获取新添加的域名ID
+                        $domain_id = $db->lastInsertRowID();
+                        // 自动绑定到默认用户组
+                        bindDomainToDefaultGroup($db, $domain_id);
+                        
                         $added_count++;
                     }
                 }
@@ -459,6 +512,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_domain'])) {
             $stmt->bindValue(6, $expiration_time, SQLITE3_TEXT);
             
             if ($stmt->execute()) {
+                // 获取新添加的域名ID
+                $domain_id = $db->lastInsertRowID();
+                // 自动绑定到默认用户组
+                bindDomainToDefaultGroup($db, $domain_id);
+                
                 logAction('admin', $_SESSION['admin_id'], 'add_domain', "添加域名: $domain_name");
                 showSuccess('域名添加成功！');
             } else {
@@ -537,6 +595,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_selected_domains'
                     $stmt->bindValue(6, $expiration_time, SQLITE3_TEXT);
                     
                     if ($stmt->execute()) {
+                        // 获取新添加的域名ID
+                        $domain_id = $db->lastInsertRowID();
+                        // 自动绑定到默认用户组
+                        bindDomainToDefaultGroup($db, $domain_id);
+                        
                         $added_count++;
                     }
                 }
