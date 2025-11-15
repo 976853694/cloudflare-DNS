@@ -490,7 +490,15 @@ while ($domain = $domains_query->fetchArray(SQLITE3_ASSOC)) {
     <!-- 页脚 -->
     <footer class="bg-white border-top mt-5 py-4">
         <div class="container text-center text-muted">
-            <p class="mb-0">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($site_name); ?>. All rights reserved.</p>
+            <p class="mb-2">&copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($site_name); ?>. All rights reserved.</p>
+            <p class="mb-1">
+                <small>cloudflare-DNS 现代化开源二级域名分发系统</small>
+            </p>
+            <p class="mb-0">
+                <a href="https://github.com/976853694/cloudflare-DNS" target="_blank" class="text-decoration-none text-muted">
+                    <i class="fab fa-github me-1"></i>GitHub
+                </a>
+            </p>
         </div>
     </footer>
 

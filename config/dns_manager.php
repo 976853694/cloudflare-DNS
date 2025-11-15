@@ -11,6 +11,7 @@ require_once __DIR__ . '/dns_providers.php';
 class DNSManager {
     private $provider_type;
     private $api_instance;
+    private $domain_config;
     
     const PROVIDER_CLOUDFLARE = 'cloudflare';
     const PROVIDER_RAINBOW = 'rainbow';
@@ -18,6 +19,7 @@ class DNSManager {
     const PROVIDER_POWERDNS = 'powerdns';
     
     public function __construct($domain_config) {
+        $this->domain_config = $domain_config;
         $this->provider_type = $domain_config['provider_type'] ?? self::PROVIDER_CLOUDFLARE;
         
         switch ($this->provider_type) {
@@ -83,6 +85,34 @@ class DNSManager {
      */
     public function createDNSRecord($zone_id, $type, $name, $content, $options = []) {
         return $this->addDNSRecord($zone_id, $type, $name, $content, $options);
+    }
+    
+    /**
+     * 添加记录（简化方法，自动从domain_config获取zone_id）
+     */
+    public function addRecord($subdomain, $type, $content, $proxied = false) {
+        // 从构造函数传入的domain_config中获取zone_id
+        if (!isset($this->domain_config['zone_id'])) {
+            throw new Exception('域名配置中缺少zone_id');
+        }
+        
+        $zone_id = $this->domain_config['zone_id'];
+        $domain_name = $this->domain_config['domain_name'] ?? '';
+        
+        // 构建完整域名
+        $full_name = $subdomain === '@' ? $domain_name : $subdomain . '.' . $domain_name;
+        
+        // 调用addDNSRecord方法
+        $options = ['proxied' => $proxied];
+        $result = $this->addDNSRecord($zone_id, $type, $full_name, $content, $options);
+        
+        // 返回统一格式
+        return [
+            'success' => true,
+            'remote_id' => $result['id'] ?? $result['RecordId'] ?? '',
+            'ttl' => $result['ttl'] ?? 1,
+            'message' => '记录添加成功'
+        ];
     }
     
     /**

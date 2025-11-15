@@ -634,6 +634,33 @@ if ($action === 'get_dns_count' && getGet('domain_id')) {
     exit;
 }
 
+// 处理手动修改域名到期时间
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_expiration_manual'])) {
+    $domain_id = getPost('domain_id');
+    $expiration_time = getPost('expiration_time');
+    
+    if ($domain_id && $expiration_time) {
+        $domain = $db->querySingle("SELECT * FROM domains WHERE id = $domain_id", true);
+        if ($domain) {
+            $stmt = $db->prepare("UPDATE domains SET expiration_time = ? WHERE id = ?");
+            $stmt->bindValue(1, $expiration_time, SQLITE3_TEXT);
+            $stmt->bindValue(2, $domain_id, SQLITE3_INTEGER);
+            
+            if ($stmt->execute()) {
+                logAction('admin', $_SESSION['admin_id'], 'update_domain_expiration', "手动修改域名 {$domain['domain_name']} 的到期时间为: $expiration_time");
+                showSuccess('域名到期时间修改成功！');
+            } else {
+                showError('修改失败，请重试！');
+            }
+        } else {
+            showError('域名不存在！');
+        }
+    } else {
+        showError('请填写完整信息！');
+    }
+    redirect('domains.php');
+}
+
 // 处理更新域名到期时间
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_expiration'])) {
     $domain_id = getPost('domain_id');
@@ -1149,6 +1176,12 @@ include 'includes/header.php';
                                                 title="获取到期时间">
                                             <i class="fas fa-sync-alt"></i>
                                         </button>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-warning ms-1" 
+                                                onclick="editExpiration(<?php echo $domain['id']; ?>, '<?php echo htmlspecialchars($domain['expiration_time']); ?>')"
+                                                title="手动修改到期时间">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
                                     </td>
                                     <td><?php echo formatTime($domain['created_at']); ?></td>
                                     <td>
@@ -1348,6 +1381,36 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- 手动修改到期时间模态框 -->
+<div class="modal fade" id="editExpirationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">手动修改域名到期时间</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" id="edit_domain_id" name="domain_id">
+                    <div class="mb-3">
+                        <label for="edit_expiration_time" class="form-label">到期时间</label>
+                        <input type="date" class="form-control" id="edit_expiration_time" name="expiration_time" required>
+                        <div class="form-text">格式：YYYY-MM-DD（例如：2025-12-31）</div>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        注意：此操作只会修改系统中记录的到期时间，不会影响实际的域名注册到期时间。
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" name="update_expiration_manual" class="btn btn-warning">确认修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- 获取PowerDNS域名列表模态框 -->
 <div class="modal fade" id="fetchPowerdnsDomainsModal" tabindex="-1">
     <div class="modal-dialog">
@@ -1498,6 +1561,24 @@ function confirmDomainDelete(domainName, domainId) {
 }
 
 // 获取域名到期时间
+function editExpiration(domainId, currentExpiration) {
+    // 设置域名ID
+    document.getElementById('edit_domain_id').value = domainId;
+    
+    // 设置当前到期时间（如果有）
+    if (currentExpiration && currentExpiration !== '') {
+        // 将日期格式转换为 YYYY-MM-DD
+        document.getElementById('edit_expiration_time').value = currentExpiration;
+    } else {
+        // 如果没有到期时间，设置为空
+        document.getElementById('edit_expiration_time').value = '';
+    }
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('editExpirationModal'));
+    modal.show();
+}
+
 function fetchExpiration(domainId) {
     const btn = document.getElementById('fetch-btn-' + domainId);
     const expirationSpan = document.getElementById('expiration-' + domainId);

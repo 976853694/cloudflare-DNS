@@ -23,4 +23,22 @@ if (!defined('PRODUCTION')) {
 if (!ini_get('date.timezone')) {
     date_default_timezone_set('Asia/Shanghai');
 }
+
+// 自动验证和迁移数据库（仅在需要时执行）
+if (!defined('SKIP_DB_VALIDATION')) {
+    require_once __DIR__ . '/database_validator.php';
+    
+    // 使用静态变量确保只执行一次
+    static $db_validated = false;
+    if (!$db_validated) {
+        try {
+            $validator = new DatabaseValidator();
+            $validator->validateAndMigrate();
+            $db_validated = true;
+        } catch (Exception $e) {
+            error_log("数据库验证失败: " . $e->getMessage());
+            // 不中断执行，让系统继续运行
+        }
+    }
+}
 ?>

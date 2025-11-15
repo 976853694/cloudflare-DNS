@@ -245,10 +245,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
     
     $record = $db->querySingle("SELECT * FROM dns_records WHERE id = $record_id AND user_id = {$_SESSION['user_id']}", true);
     if ($record && $current_domain) {
+        // 检查DNS记录类型是否被启用（如果类型发生了变化）
+        if ($type !== $record['type'] && !isDNSTypeEnabled($type)) {
+            showError("DNS记录类型 \"{$type}\" 未启用或不允许使用！");
+            redirect('dashboard.php');
+        }
+        
         // 检查新的前缀是否被拦截（如果前缀发生了变化）
         if ($subdomain !== $record['subdomain'] && isSubdomainBlocked($subdomain)) {
             showError("前缀 \"$subdomain\" 已被系统拦截，无法修改为此子域名！");
             redirect('dashboard.php');
+        }
+        
+        // 验证DNS记录内容格式（如果内容或类型发生了变化）
+        if ($content !== $record['content'] || $type !== $record['type']) {
+            $contentValidation = validateDNSRecordContent($type, $content);
+            if (!$contentValidation['valid']) {
+                showError($contentValidation['message']);
+                redirect('dashboard.php');
+            }
         }
         
         try {

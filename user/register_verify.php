@@ -7,11 +7,23 @@ require_once '../config/database.php';
 require_once '../config/smtp.php';
 require_once '../includes/functions.php';
 
+// 检查注册是否开放
+if (!getSetting('allow_registration', 1)) {
+    header('Location: login.php');
+    exit;
+}
+
 $messages = [];
 $step = isset($_GET['step']) ? $_GET['step'] : 'email';
 
 // 处理发送验证码
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_code'])) {
+    // 再次检查注册是否开放（防止通过POST绕过）
+    if (!getSetting('allow_registration', 1)) {
+        http_response_code(403);
+        die(json_encode(['error' => '系统暂时关闭注册功能']));
+    }
+    
     $email = trim($_POST['email']);
     $username = trim($_POST['username']);
     
@@ -55,6 +67,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_code'])) {
 
 // 处理验证码验证
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_code'])) {
+    // 再次检查注册是否开放（防止通过POST绕过）
+    if (!getSetting('allow_registration', 1)) {
+        http_response_code(403);
+        die(json_encode(['error' => '系统暂时关闭注册功能']));
+    }
+    
     $code = trim($_POST['code']);
     $password = trim($_POST['password']);
     $confirm_password = trim($_POST['confirm_password']);

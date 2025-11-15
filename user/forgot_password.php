@@ -276,7 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
                             <small class="text-muted">
                                 <?php if ($step !== 'success'): ?>
                                 记起密码了？ <a href="login.php" class="text-decoration-none fw-bold">立即登录</a>
-                                <?php if ($step === 'email'): ?>
+                                <?php if ($step === 'email' && getSetting('allow_registration', 1)): ?>
                                  | <a href="register_verify.php" class="text-decoration-none fw-bold">注册账户</a>
                                 <?php endif; ?>
                                 <?php endif; ?>

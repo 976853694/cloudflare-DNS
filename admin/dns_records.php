@@ -56,11 +56,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
     $record_id = (int)getPost('record_id');
     
-    $record = $db->querySingle("SELECT * FROM dns_records WHERE id = $record_id", true);
+    // 查询记录详情（需要关联域名信息以获取API密钥）
+    $record = $db->querySingle("
+        SELECT dr.*, d.zone_id, d.api_key, d.email, d.domain_name 
+        FROM dns_records dr 
+        JOIN domains d ON dr.domain_id = d.id 
+        WHERE dr.id = $record_id
+    ", true);
+    
     if ($record) {
-        $db->exec("DELETE FROM dns_records WHERE id = $record_id");
-        logAction('admin', $_SESSION['admin_id'], 'delete_dns_record', "删除DNS记录ID: $record_id");
-        showSuccess('DNS记录删除成功！');
+        try {
+            // 如果有cloudflare_id，尝试从Cloudflare删除
+            if (!empty($record['cloudflare_id'])) {
+                require_once '../config/cloudflare.php';
+                $cf = new CloudflareAPI($record['api_key'], $record['email']);
+                
+                try {
+                    $cf->deleteDNSRecord($record['zone_id'], $record['cloudflare_id']);
+                } catch (Exception $e) {
+                    // 如果是404错误（记录已不存在），继续删除本地记录
+                    if (strpos($e->getMessage(), '404') === false && strpos($e->getMessage(), 'not found') === false) {
+                        throw $e; // 其他错误则抛出
+                    }
+                }
+            }
+            
+            // 删除本地数据库记录
+            $db->exec("DELETE FROM dns_records WHERE id = $record_id");
+            
+            logAction('admin', $_SESSION['admin_id'], 'delete_dns_record', "删除DNS记录: {$record['subdomain']}.{$record['domain_name']} (ID: $record_id)");
+            showSuccess('DNS记录删除成功！');
+        } catch (Exception $e) {
+            showError('删除失败: ' . $e->getMessage());
+        }
     } else {
         showError('记录不存在！');
     }
@@ -70,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
 // 获取筛选参数
 $filter_type = isset($_GET['filter_type']) ? $_GET['filter_type'] : '';
 $filter_domain = isset($_GET['filter_domain']) ? (int)$_GET['filter_domain'] : 0;
-$filter_user = isset($_GET['filter_user']) ? (int)$_GET['filter_user'] : 0;
+$filter_user_search = isset($_GET['filter_user_search']) ? trim($_GET['filter_user_search']) : '';
 $filter_proxied = isset($_GET['filter_proxied']) ? $_GET['filter_proxied'] : '';
 $filter_record_source = isset($_GET['filter_record_source']) ? $_GET['filter_record_source'] : '';
 $filter_date_from = isset($_GET['filter_date_from']) ? $_GET['filter_date_from'] : '';
@@ -90,9 +118,17 @@ if ($filter_domain > 0) {
     $bind_params[':domain_id'] = $filter_domain;
 }
 
-if ($filter_user > 0) {
-    $where_conditions[] = "dr.user_id = :user_id";
-    $bind_params[':user_id'] = $filter_user;
+if (!empty($filter_user_search)) {
+    // 支持按用户名、用户ID或邮箱搜索
+    if (is_numeric($filter_user_search)) {
+        // 如果是数字，按用户ID搜索
+        $where_conditions[] = "dr.user_id = :user_id";
+        $bind_params[':user_id'] = (int)$filter_user_search;
+    } else {
+        // 如果不是数字，按用户名或邮箱搜索（模糊匹配）
+        $where_conditions[] = "(u.username LIKE :user_search OR u.email LIKE :user_search)";
+        $bind_params[':user_search'] = '%' . $filter_user_search . '%';
+    }
 }
 
 if ($filter_proxied !== '') {
@@ -126,6 +162,7 @@ $sql = "
                WHEN dr.user_id IS NULL OR dr.is_system = 1 THEN '系统所属'
                ELSE COALESCE(u.username, '未知用户')
            END as username,
+           u.email as user_email,
            d.domain_name,
            CASE 
                WHEN dr.user_id IS NULL OR dr.is_system = 1 THEN 1
@@ -155,13 +192,6 @@ while ($domain = $domains_result->fetchArray(SQLITE3_ASSOC)) {
     $domains_list[] = $domain;
 }
 
-// 获取用户列表用于筛选
-$users_list = [];
-$users_result = $db->query("SELECT id, username FROM users ORDER BY username");
-while ($user = $users_result->fetchArray(SQLITE3_ASSOC)) {
-    $users_list[] = $user;
-}
-
 // 获取所有DNS记录类型（用于筛选）
 $record_types = ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SRV', 'PTR', 'CAA'];
 
@@ -188,7 +218,7 @@ include 'includes/header.php';
             </div>
             
             <!-- 高级筛选面板 -->
-            <div class="collapse <?php echo (!empty($filter_type) || $filter_domain > 0 || $filter_user > 0 || $filter_proxied !== '' || $filter_record_source !== '' || !empty($filter_date_from) || !empty($filter_date_to)) ? 'show' : ''; ?>" id="advancedFilter">
+            <div class="collapse <?php echo (!empty($filter_type) || $filter_domain > 0 || !empty($filter_user_search) || $filter_proxied !== '' || $filter_record_source !== '' || !empty($filter_date_from) || !empty($filter_date_to)) ? 'show' : ''; ?>" id="advancedFilter">
                 <div class="card shadow-sm mb-3">
                     <div class="card-header bg-light">
                         <h6 class="mb-0"><i class="fas fa-sliders-h me-2"></i>高级筛选条件</h6>
@@ -224,15 +254,13 @@ include 'includes/header.php';
                                 
                                 <!-- 用户筛选 -->
                                 <div class="col-md-3">
-                                    <label for="filter_user" class="form-label">用户</label>
-                                    <select class="form-select" id="filter_user" name="filter_user">
-                                        <option value="0">全部用户</option>
-                                        <?php foreach ($users_list as $user): ?>
-                                            <option value="<?php echo $user['id']; ?>" <?php echo $filter_user == $user['id'] ? 'selected' : ''; ?>>
-                                                <?php echo htmlspecialchars($user['username']); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                                    <label for="filter_user_search" class="form-label">
+                                        <i class="fas fa-user me-1"></i>用户搜索
+                                    </label>
+                                    <input type="text" class="form-control" id="filter_user_search" name="filter_user_search" 
+                                           placeholder="用户名/用户ID/邮箱" 
+                                           value="<?php echo htmlspecialchars($filter_user_search); ?>">
+                                    <small class="form-text text-muted">支持用户名、用户ID或邮箱搜索</small>
                                 </div>
                                 
                                 <!-- 代理状态筛选 -->
@@ -292,13 +320,8 @@ include 'includes/header.php';
                                     }
                                 }
                             }
-                            if ($filter_user > 0) {
-                                foreach ($users_list as $u) {
-                                    if ($u['id'] == $filter_user) {
-                                        $active_filters[] = "用户: " . htmlspecialchars($u['username']);
-                                        break;
-                                    }
-                                }
+                            if (!empty($filter_user_search)) {
+                                $active_filters[] = "用户: " . htmlspecialchars($filter_user_search);
                             }
                             if ($filter_proxied !== '') $active_filters[] = "代理: " . ($filter_proxied == '1' ? '已代理' : '仅DNS');
                             if ($filter_record_source === 'system') $active_filters[] = "来源: 系统记录";
@@ -367,6 +390,7 @@ include 'includes/header.php';
                                 <tr>
                                     <th>ID</th>
                                     <th>用户</th>
+                                    <th>用户邮箱</th>
                                     <th>完整域名</th>
                                     <th>类型</th>
                                     <th>内容</th>
@@ -396,6 +420,17 @@ include 'includes/header.php';
                                             <span class="badge bg-success">
                                                 <i class="fas fa-user me-1"></i><?php echo htmlspecialchars($record['username']); ?>
                                             </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($record['is_system_record']): ?>
+                                            <span class="text-muted">-</span>
+                                        <?php else: ?>
+                                            <?php if (!empty($record['user_email'])): ?>
+                                                <code><?php echo htmlspecialchars($record['user_email']); ?></code>
+                                            <?php else: ?>
+                                                <span class="text-muted">无邮箱</span>
+                                            <?php endif; ?>
                                         <?php endif; ?>
                                     </td>
                                     <td>

@@ -792,6 +792,90 @@ function showGroupModal(userId, username, currentGroupId) {
     document.getElementById('group_id').value = currentGroupId;
     new bootstrap.Modal(document.getElementById('groupModal')).show();
 }
+
+function showUserRecords(userId, username) {
+    // 设置用户名
+    document.getElementById('records_username').textContent = username;
+    
+    // 显示加载状态
+    document.getElementById('records_loading').style.display = 'block';
+    document.getElementById('records_content').style.display = 'none';
+    
+    // 显示模态框
+    const modal = new bootstrap.Modal(document.getElementById('userRecordsModal'));
+    modal.show();
+    
+    // 加载DNS记录
+    fetch('api/user_dns_records.php?user_id=' + userId)
+        .then(response => response.json())
+        .then(data => {
+            // 隐藏加载状态
+            document.getElementById('records_loading').style.display = 'none';
+            document.getElementById('records_content').style.display = 'block';
+            
+            if (data.success) {
+                const tbody = document.getElementById('records_table_body');
+                tbody.innerHTML = '';
+                
+                if (data.records.length === 0) {
+                    // 显示空状态
+                    document.querySelector('#records_content .table-responsive').style.display = 'none';
+                    document.getElementById('records_empty').style.display = 'block';
+                } else {
+                    // 显示表格
+                    document.querySelector('#records_content .table-responsive').style.display = 'block';
+                    document.getElementById('records_empty').style.display = 'none';
+                    
+                    // 填充数据
+                    data.records.forEach(record => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${record.id}</td>
+                            <td><code>${escapeHtml(record.domain_name)}</code></td>
+                            <td><code>${escapeHtml(record.subdomain)}</code></td>
+                            <td><code>${escapeHtml(record.full_domain)}</code></td>
+                            <td><span class="badge bg-primary">${escapeHtml(record.type)}</span></td>
+                            <td><code class="text-break">${escapeHtml(record.content)}</code></td>
+                            <td>
+                                ${record.proxied == 1 
+                                    ? '<span class="badge bg-success"><i class="fas fa-check"></i> 是</span>' 
+                                    : '<span class="badge bg-secondary"><i class="fas fa-times"></i> 否</span>'}
+                            </td>
+                            <td>${record.remark ? escapeHtml(record.remark) : '<span class="text-muted">无</span>'}</td>
+                            <td>${formatDateTime(record.created_at)}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                }
+            } else {
+                alert('加载失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('加载DNS记录失败:', error);
+            document.getElementById('records_loading').style.display = 'none';
+            alert('加载DNS记录失败，请重试');
+        });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDateTime(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
 </script>
 
 <?php include 'includes/footer.php'; ?>

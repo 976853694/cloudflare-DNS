@@ -5,6 +5,7 @@ require_once '../config/cloudflare.php';
 require_once '../config/dns_manager.php';
 require_once '../includes/functions.php';
 require_once '../includes/user_groups.php';
+require_once '../includes/security.php';
 
 checkUserLogin();
 
@@ -32,6 +33,20 @@ while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
 
 // 处理添加DNS记录
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
+    // CSRF令牌验证
+    $csrf_token = getPost('csrf_token', '');
+    if (!Security::validateCSRFToken($csrf_token)) {
+        showError('安全验证失败，请刷新页面后重试！');
+        redirect('records.php');
+    }
+    
+    // 操作频率限制检查（60秒内最多添加10条记录）
+    $rateLimit = Security::checkOperationRateLimit($_SESSION['user_id'], 'add_dns_record', 10, 60);
+    if (!$rateLimit['allowed']) {
+        showError($rateLimit['message']);
+        redirect('records.php');
+    }
+    
     $domain_id = (int)getPost('domain_id');
     $subdomain = getPost('subdomain');
     $type = getPost('type');
@@ -84,7 +99,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $dns_manager = new DNSManager($selected_domain);
             $full_name = $subdomain === '@' ? $selected_domain['domain_name'] : $subdomain . '.' . $selected_domain['domain_name'];
             
-            // 优先检查本地数据库中是否已存在该记录
+            // 检查子域名是否已被当前域名下的其他用户注册（同域名检查）
+            $stmt = $db->prepare("
+                SELECT dr.*, d.domain_name, dr.user_id as record_user_id
+                FROM dns_records dr
+                JOIN domains d ON dr.domain_id = d.id
+                WHERE dr.subdomain = ? AND dr.domain_id = ? AND dr.status = 1
+            ");
+            $stmt->bindValue(1, $subdomain, SQLITE3_TEXT);
+            $stmt->bindValue(2, $selected_domain['id'], SQLITE3_INTEGER);
+            $result = $stmt->execute();
+            
+            $existing_records_in_domain = [];
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                $existing_records_in_domain[] = $row;
+            }
+            
+            // 检查前缀占用情况
+            foreach ($existing_records_in_domain as $existing_record) {
+                // 如果是NS记录
+                if (strtoupper($type) === 'NS') {
+                    // NS记录：只检查是否被其他用户占用
+                    if ($existing_record['record_user_id'] != $_SESSION['user_id']) {
+                        showError("子域名 \"{$subdomain}.{$selected_domain['domain_name']}\" 已被其他用户注册，无法添加NS记录！");
+                        redirect('records.php');
+                    }
+                    // NS记录允许同一用户添加多条
+                } else {
+                    // 其他记录类型：该前缀已被占用（无论是自己还是别人）
+                    // 只有当现有记录也是NS记录时才允许
+                    if (strtoupper($existing_record['type']) !== 'NS') {
+                        if ($existing_record['record_user_id'] == $_SESSION['user_id']) {
+                            showError("子域名 \"{$subdomain}.{$selected_domain['domain_name']}\" 已被您占用，每个前缀只能创建一条非NS记录！");
+                        } else {
+                            showError("子域名 \"{$subdomain}.{$selected_domain['domain_name']}\" 已被其他用户注册，无法创建此记录！");
+                        }
+                        redirect('records.php');
+                    }
+                }
+            }
+            
+            // 获取当前域名下的记录用于冲突检测
             $stmt = $db->prepare("
                 SELECT * FROM dns_records 
                 WHERE domain_id = ? AND subdomain = ? AND status = 1
@@ -131,6 +186,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
                             $db->exec("UPDATE users SET points = points - {$required_points} WHERE id = {$_SESSION['user_id']}");
                             $_SESSION['user_points'] -= $required_points;
                         }
+                        
+                        // 记录操作日志（用于频率限制追踪）
+                        Security::logOperation($_SESSION['user_id'], 'add_dns_record');
                         
                         logAction('user', $_SESSION['user_id'], 'add_dns_record', "添加DNS记录: {$full_name} ({$type})");
                         showSuccess("DNS记录添加成功！完整域名：{$full_name}");
@@ -383,6 +441,7 @@ include 'includes/header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo Security::generateCSRFToken(); ?>">
                 <div class="modal-body">
                     <?php if ($user_group): ?>
                     <div class="alert alert-info mb-3" role="alert" style="border-left: 4px solid #0dcaf0;">

@@ -5,6 +5,7 @@ require_once '../config/cloudflare.php';
 require_once '../config/dns_manager.php';
 require_once '../includes/functions.php';
 require_once '../includes/user_groups.php';
+require_once '../includes/security.php';
 
 checkUserLogin();
 
@@ -60,6 +61,20 @@ foreach ($domains as $domain) {
 
 // 处理添加DNS记录
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
+    // CSRF令牌验证
+    $csrf_token = getPost('csrf_token', '');
+    if (!Security::validateCSRFToken($csrf_token)) {
+        showError('安全验证失败，请刷新页面后重试！');
+        redirect('dns_manage.php');
+    }
+    
+    // 操作频率限制检查（60秒内最多添加10条记录）
+    $rateLimit = Security::checkOperationRateLimit($_SESSION['user_id'], 'add_dns_record', 10, 60);
+    if (!$rateLimit['allowed']) {
+        showError($rateLimit['message']);
+        redirect('dns_manage.php');
+    }
+    
     $subdomain = getPost('subdomain');
     $type = getPost('type');
     $content = getPost('content');
@@ -112,7 +127,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
             $dns_manager = new DNSManager($add_domain);
             $full_name = $subdomain === '@' ? $add_domain['domain_name'] : $subdomain . '.' . $add_domain['domain_name'];
             
-            // 优先检查本地数据库中是否已存在该记录
+            // 检查子域名是否已被当前域名下的其他用户注册（同域名检查）
+            $stmt = $db->prepare("
+                SELECT dr.*, d.domain_name, dr.user_id as record_user_id
+                FROM dns_records dr
+                JOIN domains d ON dr.domain_id = d.id
+                WHERE dr.subdomain = ? AND dr.domain_id = ? AND dr.status = 1
+            ");
+            $stmt->bindValue(1, $subdomain, SQLITE3_TEXT);
+            $stmt->bindValue(2, $add_domain['id'], SQLITE3_INTEGER);
+            $result = $stmt->execute();
+            
+            $existing_records_in_domain = [];
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                $existing_records_in_domain[] = $row;
+            }
+            
+            // 检查前缀占用情况
+            foreach ($existing_records_in_domain as $existing_record) {
+                // 如果是NS记录
+                if (strtoupper($type) === 'NS') {
+                    // NS记录：只检查是否被其他用户占用
+                    if ($existing_record['record_user_id'] != $_SESSION['user_id']) {
+                        showError("子域名 \"{$subdomain}.{$add_domain['domain_name']}\" 已被其他用户注册，无法添加NS记录！");
+                        redirect('dns_manage.php');
+                    }
+                    // NS记录允许同一用户添加多条
+                } else {
+                    // 其他记录类型：该前缀已被占用（无论是自己还是别人）
+                    // 只有当现有记录也是NS记录时才允许
+                    if (strtoupper($existing_record['type']) !== 'NS') {
+                        if ($existing_record['record_user_id'] == $_SESSION['user_id']) {
+                            showError("子域名 \"{$subdomain}.{$add_domain['domain_name']}\" 已被您占用，每个前缀只能创建一条非NS记录！");
+                        } else {
+                            showError("子域名 \"{$subdomain}.{$add_domain['domain_name']}\" 已被其他用户注册，无法创建此记录！");
+                        }
+                        redirect('dns_manage.php');
+                    }
+                }
+            }
+            
+            // 获取当前域名下的记录用于冲突检测
             $stmt = $db->prepare("
                 SELECT * FROM dns_records 
                 WHERE domain_id = ? AND subdomain = ? AND status = 1
@@ -303,6 +358,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
                     $_SESSION['user_points'] -= $points_cost;
                 }
                 
+                // 记录操作日志（用于频率限制追踪）
+                Security::logOperation($_SESSION['user_id'], 'add_dns_record');
+                
                 logAction('user', $_SESSION['user_id'], 'add_dns_record', "添加DNS记录: $full_name ($type)");
                 showSuccess('DNS记录添加成功！');
             } else {
@@ -317,6 +375,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_record'])) {
 
 // 处理修改DNS记录
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
+    // CSRF令牌验证
+    $csrf_token = getPost('csrf_token', '');
+    if (!Security::validateCSRFToken($csrf_token)) {
+        showError('安全验证失败，请刷新页面后重试！');
+        redirect('dns_manage.php');
+    }
+    
+    // 操作频率限制检查（60秒内最多修改20条记录）
+    $rateLimit = Security::checkOperationRateLimit($_SESSION['user_id'], 'edit_dns_record', 20, 60);
+    if (!$rateLimit['allowed']) {
+        showError($rateLimit['message']);
+        redirect('dns_manage.php');
+    }
+    
     $record_id = (int)getPost('record_id');
     $subdomain = trim(getPost('subdomain'));
     $type = getPost('type');
@@ -326,6 +398,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
     
     $record = $db->querySingle("SELECT * FROM dns_records WHERE id = $record_id AND user_id = {$_SESSION['user_id']}", true);
     if ($record && $current_domain) {
+        // 检查DNS记录类型是否被启用（如果类型发生了变化）
+        if ($type !== $record['type'] && !isDNSTypeEnabled($type)) {
+            showError("DNS记录类型 \"{$type}\" 未启用或不允许使用！");
+            redirect('dns_manage.php');
+        }
+        
         // 检查新的前缀是否被拦截（如果前缀发生了变化）
         if ($subdomain !== $record['subdomain'] && isSubdomainBlocked($subdomain)) {
             showError("前缀 \"$subdomain\" 已被系统拦截，无法修改为此子域名！");
@@ -339,6 +417,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
             if (!$prefixCheck['allowed']) {
                 showError($prefixCheck['message']);
                 redirect('dns_manage.php');
+            }
+            
+            // 检查新子域名是否已被当前域名下的其他用户注册（同域名检查）
+            $stmt = $db->prepare("
+                SELECT dr.*, d.domain_name, dr.user_id as record_user_id
+                FROM dns_records dr
+                JOIN domains d ON dr.domain_id = d.id
+                WHERE dr.subdomain = ? AND dr.domain_id = ? AND dr.status = 1 AND dr.id != ?
+            ");
+            $stmt->bindValue(1, $subdomain, SQLITE3_TEXT);
+            $stmt->bindValue(2, $current_domain['id'], SQLITE3_INTEGER);
+            $stmt->bindValue(3, $record_id, SQLITE3_INTEGER);
+            $result = $stmt->execute();
+            
+            $existing_records_in_domain = [];
+            while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+                $existing_records_in_domain[] = $row;
+            }
+            
+            // 检查前缀占用情况
+            foreach ($existing_records_in_domain as $existing_record) {
+                // 如果是NS记录
+                if (strtoupper($type) === 'NS') {
+                    // NS记录：只检查是否被其他用户占用
+                    if ($existing_record['record_user_id'] != $_SESSION['user_id']) {
+                        showError("子域名 \"{$subdomain}.{$current_domain['domain_name']}\" 已被其他用户注册，无法修改为NS记录！");
+                        redirect('dns_manage.php');
+                    }
+                    // NS记录允许同一用户添加多条
+                } else {
+                    // 其他记录类型：该前缀已被占用（无论是自己还是别人）
+                    // 只有当现有记录也是NS记录时才允许
+                    if (strtoupper($existing_record['type']) !== 'NS') {
+                        if ($existing_record['record_user_id'] == $_SESSION['user_id']) {
+                            showError("子域名 \"{$subdomain}.{$current_domain['domain_name']}\" 已被您占用，每个前缀只能创建一条非NS记录！");
+                        } else {
+                            showError("子域名 \"{$subdomain}.{$current_domain['domain_name']}\" 已被其他用户注册，无法修改为此子域名！");
+                        }
+                        redirect('dns_manage.php');
+                    }
+                }
             }
         }
         
@@ -472,6 +591,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
                 $stmt->bindValue(7, $record_id, SQLITE3_INTEGER);
                 $stmt->execute();
                 
+                // 记录操作日志（用于频率限制追踪）
+                Security::logOperation($_SESSION['user_id'], 'edit_dns_record');
+                
                 logAction('user', $_SESSION['user_id'], 'edit_dns_record', "修改DNS记录: {$subdomain}.{$current_domain['domain_name']}");
                 showSuccess('DNS记录修改成功！');
             }
@@ -486,6 +608,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_record'])) {
 
 // 处理删除DNS记录
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
+    // CSRF令牌验证
+    $csrf_token = getPost('csrf_token', '');
+    if (!Security::validateCSRFToken($csrf_token)) {
+        showError('安全验证失败，请刷新页面后重试！');
+        redirect('dns_manage.php');
+    }
+    
+    // 操作频率限制检查（60秒内最多删除20条记录）
+    $rateLimit = Security::checkOperationRateLimit($_SESSION['user_id'], 'delete_dns_record', 20, 60);
+    if (!$rateLimit['allowed']) {
+        showError($rateLimit['message']);
+        redirect('dns_manage.php');
+    }
+    
     $record_id = (int)getPost('record_id');
     
     $record = $db->querySingle("SELECT * FROM dns_records WHERE id = $record_id AND user_id = {$_SESSION['user_id']}", true);
@@ -516,6 +652,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_record'])) {
             
             if ($delete_success) {
                 $db->exec("DELETE FROM dns_records WHERE id = $record_id");
+                
+                // 记录操作日志（用于频率限制追踪）
+                Security::logOperation($_SESSION['user_id'], 'delete_dns_record');
                 
                 logAction('user', $_SESSION['user_id'], 'delete_dns_record', "删除DNS记录: {$record['subdomain']}.{$current_domain['domain_name']}");
                 showSuccess('DNS记录删除成功！');
@@ -752,6 +891,7 @@ include 'includes/header.php';
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             <form method="POST" style="display: inline;">
+                                                <input type="hidden" name="csrf_token" value="<?php echo Security::generateCSRFToken(); ?>">
                                                 <input type="hidden" name="record_id" value="<?php echo $record['id']; ?>">
                                                 <button type="submit" name="delete_record" class="btn btn-sm btn-danger" 
                                                         onclick="return confirmDelete('确定要删除这条DNS记录吗？')"
@@ -799,6 +939,7 @@ include 'includes/header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo Security::generateCSRFToken(); ?>">
                 <div class="modal-body">
                     <?php if ($user_group): ?>
                     <div class="alert alert-info mb-3" role="alert" style="border-left: 4px solid #0dcaf0;">
@@ -941,6 +1082,7 @@ include 'includes/header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo Security::generateCSRFToken(); ?>">
                 <div class="modal-body">
                     <input type="hidden" id="edit_record_id" name="record_id">
                     <div class="mb-3">
