@@ -39,82 +39,86 @@
 | 邮件 | SMTP (SSL/TLS) |
 
 ---
-
-## 第一步：配置数据库
-
-将程序上传到服务器后，在程序目录下创建 `.env` 配置文件：
-
-```bash
-nano .env
-```
-
-填入以下内容（根据实际情况修改）：
-
-```ini
-# 数据库配置
-# 数据库地址
-DB_HOST=localhost
-# 端口
-DB_PORT=3306
-# 数据库名称
-DB_NAME=dns
-# 数据库用户名
-DB_USER=dns
-# 数据库密码
-DB_PASSWORD=dns
-```
-
-保存并退出（Ctrl+X，然后按 Y 确认）。
-
----
-
-## 第二步：启动程序
-
-在终端执行以下命令，后台运行程序：
+## 部署说明
+- 目前使用docker-compose部署
+- docker-compose有2种
+- 在服务器创建docker-compose.yml
+- 第一种内置数据库
 
 ```bash
-./dns > app.log 2>&1 &
+# DNS 分发系统 Docker 部署配置
+# 使用方法: docker-compose up -d
+# 停止服务: docker-compose down
+# 查看日志: docker-compose logs -f
+
+version: "3.8"
+
+services:
+  # MySQL 数据库
+  db:
+    image: mysql:8.0
+    container_name: dns-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123       # root 密码
+      MYSQL_DATABASE: dns                # 自动创建数据库
+      MYSQL_USER: dns                    # 创建用户
+      MYSQL_PASSWORD: dns                # 用户密码
+    volumes:
+      - mysql_data:/var/lib/mysql        # 数据持久化
+    #ports:
+    #  - "3306:3306"                       # 可选：暴露端口供外部访问
+    command: --default-authentication-plugin=mysql_native_password
+
+  # DNS 应用
+  app:
+    image: 167729539/dns:latest
+    container_name: dns-app
+    restart: unless-stopped
+    depends_on:
+      - db                               # 等待数据库启动
+    ports:
+      - "5000:5000"                       # Web 服务端口
+    environment:
+      # Flask 配置
+      FLASK_ENV: production
+      SECRET_KEY: change-me-in-production      # 生产环境请修改
+      JWT_SECRET_KEY: change-me-in-production  # 生产环境请修改
+      # 数据库配置 (连接 Docker MySQL)
+      DB_HOST: db                        # Docker 服务名
+      DB_PORT: "3306"                    # MySQL 端口
+      DB_NAME: dns                       # 数据库名称
+      DB_USER: dns                       # 数据库用户名
+      DB_PASSWORD: dns                   # 数据库密码
+
+volumes:
+  mysql_data:                            # 数据卷，防止数据丢失
+
 ```
-
-### 命令说明
-
-| 部分 | 说明 |
-|------|------|
-| `./dns` | 运行程序 |
-| `> app.log` | 将输出重定向到 app.log 文件 |
-| `2>&1` | 将错误输出也写入日志 |
-| `&` | 后台运行 |
-
----
-
-## 常用命令
-
-### 查看日志
-
+- 第二种使用外置数据库
 ```bash
-tail -f app.log
+version: "3.8"
+
+services:
+  app:
+    image: 167729539/dns:latest
+    container_name: dns-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: production
+      SECRET_KEY: change-me-in-production       # 生产环境请修改
+      JWT_SECRET_KEY: change-me-in-production   # 生产环境请修改
+      DB_HOST: host.docker.internal      # MySQL ip     按需修改
+      DB_PORT: "3306"                    # MySQL 端口
+      DB_NAME: dns                       # 数据库名称    按需修改
+      DB_USER: dns                       # 数据库用户名  按需修改
+      DB_PASSWORD: dns                   # 数据库密码    按需修改
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 ```
-
-### 查看进程
-
-```bash
-ps aux | grep ./dns
-```
-
-### 停止程序
-
-```bash
-pkill -f ./dns
-```
-
-### 重启程序
-
-```bash
-pkill -f ./dns
-./dns > app.log 2>&1 &
-```
-
----
 
 ## 访问系统
 
