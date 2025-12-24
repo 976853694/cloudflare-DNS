@@ -3,7 +3,7 @@
 基于 Cloudflare API 的二级域名分发系统，支持用户自助注册、域名申请、DNS解析管理等功能。
 
 **GitHub**: https://github.com/976853694/cloudflare-DNS
-
+**QQ交流群**: https://qm.qq.com/q/nMNgw1CB7q
 ---
 
 ## 项目介绍
