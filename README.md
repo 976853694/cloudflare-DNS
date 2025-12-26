@@ -120,6 +120,11 @@ services:
       - "host.docker.internal:host-gateway"
 
 ```
+# 更新命令
+```
+docker compose pull && docker compose down && docker compose up -d
+```
+
 
 ## 访问系统
 
