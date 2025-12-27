@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  # MySQL 数据库
+  db:
+    image: mysql:8.0
+    container_name: dns-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123       # root 密码，请修改
+      MYSQL_DATABASE: dns                # 数据库名
+      MYSQL_USER: dns                    # 数据库用户
+      MYSQL_PASSWORD: dns123             # 数据库密码，请修改
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+  # DNS 应用
+  app:
+    image: 167729539/dns:latest
+    container_name: dns-app
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: production
+      SECRET_KEY: your-secret-key-change-me        # 请修改为随机字符串
+      JWT_SECRET_KEY: your-jwt-secret-change-me    # 请修改为随机字符串
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: dns
+      DB_USER: dns
+      DB_PASSWORD: dns123                          # 与上面保持一致
+
+volumes:
+  mysql_data:
