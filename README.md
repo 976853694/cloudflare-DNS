@@ -42,9 +42,8 @@
 ---
 ## 部署说明
 - 目前使用docker-compose部署
-- docker-compose有2种
 - 在服务器创建docker-compose.yml
-- 第一种内置数据库
+
 
 ```bash
 # DNS 分发系统 Docker 部署配置
