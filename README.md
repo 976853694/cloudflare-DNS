@@ -71,6 +71,17 @@ services:
     #  - "3306:3306"                       # 可选：暴露端口供外部访问
     command: --default-authentication-plugin=mysql_native_password
 
+  # Redis 缓存（用于验证码存储，解决多进程问题）
+  redis:
+    image: redis:7-alpine
+    container_name: dns-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data                 # 数据持久化
+    #ports:
+    #  - "6379:6379"                       # 可选：暴露端口供外部访问
+
   # DNS 应用
   app:
     image: 167729539/dns:latest
@@ -78,8 +89,15 @@ services:
     restart: unless-stopped
     depends_on:
       - db                               # 等待数据库启动
+      - redis                            # 等待 Redis 启动
     ports:
       - "5000:5000"                       # Web 服务端口
+    deploy:
+      resources:
+        limits:
+          memory: 512M                   # 内存限制
+        reservations:
+          memory: 256M                   # 最小保留内存
     environment:
       # Flask 配置
       FLASK_ENV: production
@@ -91,35 +109,15 @@ services:
       DB_NAME: dns                       # 数据库名称
       DB_USER: dns                       # 数据库用户名
       DB_PASSWORD: dns                   # 数据库密码
+      # Redis 配置（验证码存储）
+      REDIS_URL: redis://redis:6379/0    # Redis 连接地址
 
 volumes:
   mysql_data:                            # 数据卷，防止数据丢失
+  redis_data:                            # Redis 数据卷
 
 ```
-- 第二种使用外置数据库
-```bash
-version: "3.8"
 
-services:
-  app:
-    image: 167729539/dns:latest
-    container_name: dns-app
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    environment:
-      FLASK_ENV: production
-      SECRET_KEY: change-me-in-production       # 生产环境请修改
-      JWT_SECRET_KEY: change-me-in-production   # 生产环境请修改
-      DB_HOST: host.docker.internal      # MySQL ip     按需修改
-      DB_PORT: "3306"                    # MySQL 端口
-      DB_NAME: dns                       # 数据库名称    按需修改
-      DB_USER: dns                       # 数据库用户名  按需修改
-      DB_PASSWORD: dns                   # 数据库密码    按需修改
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-```
 # 更新命令
 ```
 docker compose pull && docker compose down && docker compose up -d
