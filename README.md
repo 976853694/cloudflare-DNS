@@ -54,67 +54,68 @@
 version: "3.8"
 
 services:
-  # MySQL 数据库
-  db:
-    image: mysql:8.0
-    container_name: dns-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: root123       # root 密码
-      MYSQL_DATABASE: dns                # 自动创建数据库
-      MYSQL_USER: dns                    # 创建用户
-      MYSQL_PASSWORD: dns                # 用户密码
-    volumes:
-      - mysql_data:/var/lib/mysql        # 数据持久化
-    #ports:
-    #  - "3306:3306"                       # 可选：暴露端口供外部访问
-    command: --default-authentication-plugin=mysql_native_password
-
-  # Redis 缓存（用于验证码存储，解决多进程问题）
-  redis:
-    image: redis:7-alpine
-    container_name: dns-redis
-    restart: unless-stopped
-    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data                 # 数据持久化
-    #ports:
-    #  - "6379:6379"                       # 可选：暴露端口供外部访问
-
-  # DNS 应用
   app:
     image: 167729539/dns:latest
     container_name: dns-app
     restart: unless-stopped
-    depends_on:
-      - db                               # 等待数据库启动
-      - redis                            # 等待 Redis 启动
     ports:
       - "5000:5000"                       # Web 服务端口
+    
+    # 资源限制
     deploy:
       resources:
         limits:
-          memory: 512M                   # 内存限制
+          memory: 512M                    # 最大内存
+          cpus: '1.0'                     # CPU 限制
         reservations:
-          memory: 256M                   # 最小保留内存
+          memory: 256M                    # 最小保留内存
+    
+    # 环境变量配置
     environment:
-      # Flask 配置
+      # Flask 应用配置
       FLASK_ENV: production
-      SECRET_KEY: change-me-in-production      # 生产环境请修改
-      JWT_SECRET_KEY: change-me-in-production  # 生产环境请修改
-      # 数据库配置 (连接 Docker MySQL)
-      DB_HOST: db                        # Docker 服务名
-      DB_PORT: "3306"                    # MySQL 端口
-      DB_NAME: dns                       # 数据库名称
-      DB_USER: dns                       # 数据库用户名
-      DB_PASSWORD: dns                   # 数据库密码
-      # Redis 配置（验证码存储）
-      REDIS_URL: redis://redis:6379/0    # Redis 连接地址
+      SECRET_KEY: change-me-in-production      # ⚠️ 生产环境必须修改
+      JWT_SECRET_KEY: change-me-in-production  # ⚠️ 生产环境必须修改
+      TZ: Asia/Shanghai                        # 时区设置
+      
+      # 数据库连接配置（连接宿主机或远程 MySQL）
+      DB_HOST: host.docker.internal            # 宿主机 MySQL
+      DB_PORT: "3306"
+      DB_NAME: dns
+      DB_USER: dns
+      DB_PASSWORD: dns
+      
+      # 后台任务配置
+      BACKGROUND_TASK_WORKERS: "2"             # 后台任务工作线程数
+      BACKGROUND_TASK_MAX_QUEUE: "100"         # 任务队列最大长度
+    
+    # 宿主机网络映射
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
+    # 健康检查
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # 日志配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"                        # 单个日志文件最大 10MB
+        max-file: "3"                          # 保留最近 3 个日志文件
+    
+    # 网络配置
+    networks:
+      - dns-network
 
-volumes:
-  mysql_data:                            # 数据卷，防止数据丢失
-  redis_data:                            # Redis 数据卷
-
+# 网络定义
+networks:
+  dns-network:
+    driver: bridge
 ```
 
 # 更新命令
