@@ -1,0 +1,992 @@
+{% extends "base.html" %}
+
+{% block title %}安全设置 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="securitySettingsPage()" x-init="init()">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.locale === 'zh' ? '安全设置' : 'Security Settings'"></h1>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <!-- 加载状态 -->
+        <div x-show="loading" class="p-10 text-center">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        
+        <!-- 演示用户禁止访问提示 -->
+        <div x-show="!loading && forbidden" class="p-10 text-center">
+            <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <p class="text-gray-500 dark:text-gray-400 text-lg" x-text="$store.i18n.locale === 'zh' ? '演示用户无权查看安全设置' : 'Demo users cannot view security settings'"></p>
+            <p class="text-gray-400 dark:text-gray-500 text-sm mt-2" x-text="$store.i18n.locale === 'zh' ? '如需体验完整功能，请联系管理员' : 'Contact admin for full access'"></p>
+        </div>
+        
+        <!-- 设置表单 -->
+        <div x-show="!loading && !forbidden" class="p-4 sm:p-6 space-y-6">
+            
+            <!-- 邮箱账户管理模块 -->
+            <div>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('emailAccounts.title')"></h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('emailAccounts.description')"></p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="showBatchAddModal()" type="button" class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <span x-text="$store.i18n.t('emailAccounts.batchAdd')"></span>
+                        </button>
+                        <button @click="showEmailAccountModal()" type="button" class="px-3 py-2 text-sm bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500">
+                            <span x-text="$store.i18n.t('emailAccounts.addAccount')"></span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 账户列表 -->
+                <div class="space-y-3">
+                    <template x-if="emailAccounts.length === 0">
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <svg class="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                            </svg>
+                            <p x-text="$store.i18n.t('emailAccounts.noAccounts')"></p>
+                            <p class="text-sm mt-1" x-text="$store.i18n.t('emailAccounts.noAccountsHint')"></p>
+                        </div>
+                    </template>
+                    
+                    <template x-for="account in emailAccounts" :key="account.id">
+                        <div class="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-600 rounded-xl">
+                            <div class="flex items-center gap-4">
+                                <div class="flex items-center justify-center w-10 h-10 rounded-full" :class="account.enabled ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'">
+                                    <svg class="w-5 h-5" :class="account.enabled ? 'text-green-600 dark:text-green-400' : 'text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium text-gray-900 dark:text-white" x-text="account.name"></span>
+                                        <span class="px-2 py-0.5 text-xs rounded" :class="account.type === 'smtp' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'" x-text="account.type === 'smtp' ? 'SMTP' : 'Aliyun'"></span>
+                                        <span class="px-2 py-0.5 text-xs rounded" :class="account.enabled ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'" x-text="account.enabled ? ($store.i18n.locale === 'zh' ? '启用' : 'Enabled') : ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled')"></span>
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                        <span x-text="$store.i18n.t('emailAccounts.priority') + ': ' + account.priority"></span>
+                                        <span class="mx-2">|</span>
+                                        <span x-text="$store.i18n.t('emailAccounts.usage') + ': ' + account.daily_sent + '/' + (account.daily_limit > 0 ? account.daily_limit : $store.i18n.t('emailAccounts.unlimited'))"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button @click="testEmailAccount(account.id)" type="button" class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" :title="$store.i18n.t('emailAccounts.testAccount')">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </button>
+                                <button @click="sendTestViaAccount(account.id)" type="button" class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" :title="$store.i18n.t('emailAccounts.sendTestEmail')">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                    </svg>
+                                </button>
+                                <button @click="showEmailAccountModal(account)" type="button" class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" :title="$store.i18n.t('common.edit')">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </button>
+                                <button @click="deleteEmailAccount(account.id)" type="button" class="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" :title="$store.i18n.t('common.delete')">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- 邮箱后缀限制模块 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '邮箱后缀限制' : 'Email Suffix Restriction'"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '限制用户注册时可使用的邮箱后缀，支持白名单和黑名单两种模式' : 'Restrict email suffixes for registration, supports whitelist and blacklist modes'"></p>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '启用限制' : 'Enable Restriction'"></label>
+                        <select x-model="form.email_suffix_enabled" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '限制模式' : 'Restriction Mode'"></label>
+                        <select x-model="form.email_suffix_mode" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="whitelist" x-text="$store.i18n.locale === 'zh' ? '白名单（只允许列表中的后缀）' : 'Whitelist (only allow listed suffixes)'"></option>
+                            <option value="blacklist" x-text="$store.i18n.locale === 'zh' ? '黑名单（禁止列表中的后缀）' : 'Blacklist (block listed suffixes)'"></option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '邮箱后缀列表' : 'Email Suffix List'"></label>
+                    <textarea x-model="form.email_suffix_list" rows="4" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm" placeholder="qq.com&#10;163.com&#10;gmail.com"></textarea>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-2" x-text="$store.i18n.locale === 'zh' ? '每行填写一个邮箱后缀（不含@符号），例如：qq.com、gmail.com' : 'One suffix per line (without @), e.g. qq.com, gmail.com'"></p>
+                </div>
+            </div>
+            
+            <!-- 验证码设置模块 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '验证码设置' : 'Captcha Settings'"></h3>
+                
+                <!-- 验证码场景开关 -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="$store.i18n.locale === 'zh' ? '验证码场景' : 'Captcha Scenarios'"></label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" x-text="$store.i18n.locale === 'zh' ? '选择需要验证码的场景，关闭后该场景将不需要验证码' : 'Select scenarios requiring captcha'"></p>
+                    <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        <label class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="checkbox" :checked="form.captcha_login === '1'" @change="form.captcha_login = $event.target.checked ? '1' : '0'" class="w-4 h-4 text-gray-900 border-gray-300 dark:border-gray-600 rounded focus:ring-gray-500">
+                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '登录' : 'Login'"></span>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="checkbox" :checked="form.captcha_register === '1'" @change="form.captcha_register = $event.target.checked ? '1' : '0'" class="w-4 h-4 text-gray-900 border-gray-300 dark:border-gray-600 rounded focus:ring-gray-500">
+                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '注册' : 'Register'"></span>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="checkbox" :checked="form.captcha_forgot_password === '1'" @change="form.captcha_forgot_password = $event.target.checked ? '1' : '0'" class="w-4 h-4 text-gray-900 border-gray-300 dark:border-gray-600 rounded focus:ring-gray-500">
+                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '找回密码' : 'Forgot Password'"></span>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="checkbox" :checked="form.captcha_change_password === '1'" @change="form.captcha_change_password = $event.target.checked ? '1' : '0'" class="w-4 h-4 text-gray-900 border-gray-300 dark:border-gray-600 rounded focus:ring-gray-500">
+                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '修改密码' : 'Change Password'"></span>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="checkbox" :checked="form.captcha_change_email === '1'" @change="form.captcha_change_email = $event.target.checked ? '1' : '0'" class="w-4 h-4 text-gray-900 border-gray-300 dark:border-gray-600 rounded focus:ring-gray-500">
+                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '修改邮箱' : 'Change Email'"></span>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="checkbox" :checked="form.captcha_signin === '1'" @change="form.captcha_signin = $event.target.checked ? '1' : '0'" class="w-4 h-4 text-gray-900 border-gray-300 dark:border-gray-600 rounded focus:ring-gray-500">
+                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '签到' : 'Sign In'"></span>
+                        </label>
+                        <label class="flex items-center p-3 border border-gray-200 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <input type="checkbox" :checked="form.captcha_magic_link === '1'" @change="form.captcha_magic_link = $event.target.checked ? '1' : '0'" class="w-4 h-4 text-gray-900 border-gray-300 dark:border-gray-600 rounded focus:ring-gray-500">
+                            <span class="ml-3 text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '邮箱链接登录' : 'Magic Link Login'"></span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- 验证码类型选择 -->
+                <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <h4 class="text-base font-medium text-gray-800 dark:text-gray-200 mb-3" x-text="$store.i18n.locale === 'zh' ? '验证码类型' : 'Captcha Type'"></h4>
+                    <div class="grid md:grid-cols-3 gap-3 mb-4">
+                        <label class="relative flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all" 
+                            :class="form.captcha_type === 'image' ? 'border-gray-900 dark:border-gray-300 bg-gray-50 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'">
+                            <input type="radio" name="captcha_type" value="image" x-model="form.captcha_type" class="sr-only">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '图形验证码' : 'Image Captcha'"></span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '传统图片验证码，输入图中字符' : 'Traditional image captcha'"></p>
+                            </div>
+                            <div x-show="form.captcha_type === 'image'" class="absolute top-2 right-2">
+                                <svg class="w-5 h-5 text-gray-900 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                            </div>
+                        </label>
+                        <label class="relative flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all" 
+                            :class="form.captcha_type === 'slider' ? 'border-gray-900 dark:border-gray-300 bg-gray-50 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'">
+                            <input type="radio" name="captcha_type" value="slider" x-model="form.captcha_type" class="sr-only">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path>
+                                    </svg>
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '滑块验证码' : 'Slider Captcha'"></span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '拖动滑块完成拼图验证' : 'Drag slider to complete puzzle'"></p>
+                            </div>
+                            <div x-show="form.captcha_type === 'slider'" class="absolute top-2 right-2">
+                                <svg class="w-5 h-5 text-gray-900 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                            </div>
+                        </label>
+                        <label class="relative flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all" 
+                            :class="form.captcha_type === 'turnstile' ? 'border-gray-900 dark:border-gray-300 bg-gray-50 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'">
+                            <input type="radio" name="captcha_type" value="turnstile" x-model="form.captcha_type" class="sr-only">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <svg class="w-5 h-5 text-orange-500" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                                    </svg>
+                                    <span class="font-medium text-gray-900 dark:text-white">Turnstile</span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? 'Cloudflare 人机验证服务' : 'Cloudflare verification service'"></p>
+                            </div>
+                            <div x-show="form.captcha_type === 'turnstile'" class="absolute top-2 right-2">
+                                <svg class="w-5 h-5 text-gray-900 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <!-- Turnstile 配置（仅当选择 Turnstile 时显示） -->
+                    <div x-show="form.captcha_type === 'turnstile'" x-cloak class="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4"><span x-text="$store.i18n.locale === 'zh' ? 'Turnstile 是 Cloudflare 提供的免费人机验证服务。' : 'Turnstile is a free CAPTCHA alternative by Cloudflare.'"></span> <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" class="text-blue-600 dark:text-blue-400 hover:underline" x-text="$store.i18n.locale === 'zh' ? '前往获取密钥' : 'Get keys'"></a></p>
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Site Key</label>
+                                <input type="text" x-model="form.turnstile_site_key" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="0x4AAAAAAA...">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Secret Key</label>
+                                <input type="password" x-model="form.turnstile_secret_key" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="0x4AAAAAAA...">
+                            </div>
+                        </div>
+                        <p class="text-xs text-amber-600 dark:text-amber-400 mt-3" x-show="!form.turnstile_site_key || !form.turnstile_secret_key" x-text="$store.i18n.locale === 'zh' ? '⚠️ 请配置 Turnstile 密钥，否则将自动回退到滑块验证码' : '⚠️ Please configure Turnstile keys, otherwise will fallback to slider captcha'"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 邮箱链接登录配置模块 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '邮箱链接登录 (Magic Link)' : 'Magic Link Login'"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '允许用户通过邮箱接收一次性登录链接，无需密码即可登录' : 'Allow users to login via email link without password'"></p>
+                
+                <div class="grid md:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '启用邮箱链接登录' : 'Enable Magic Link'"></label>
+                        <select x-model="form.magic_link_enabled" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '链接有效期（分钟）' : 'Link Expiry (minutes)'"></label>
+                        <input type="number" x-model="form.magic_link_expire_minutes" min="5" max="60" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="15">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '发送冷却时间（秒）' : 'Cooldown (seconds)'"></label>
+                        <input type="number" x-model="form.magic_link_cooldown_seconds" min="30" max="300" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="60">
+                    </div>
+                </div>
+                
+                <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl transition-colors">
+                    <p class="text-sm text-blue-700 dark:text-blue-300" x-text="$store.i18n.locale === 'zh' ? '💡 邮箱链接登录需要配置 SMTP 邮件服务才能正常使用。用户点击邮件中的链接即可自动登录，链接仅可使用一次。' : '💡 Magic Link requires SMTP configuration. Users can login by clicking the link in email. Each link can only be used once.'"></p>
+                </div>
+            </div>
+
+            <!-- 短信服务配置模块 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '短信服务配置' : 'SMS Service Configuration'"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '配置阿里云短信服务，用于手机验证码登录、绑定手机等功能' : 'Configure Aliyun SMS service for phone verification, login, etc.'"></p>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '启用短信服务' : 'Enable SMS Service'"></label>
+                        <select x-model="form.sms_enabled" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                        </select>
+                    </div>
+                    <div></div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AccessKey ID</label>
+                        <input type="text" x-model="form.aliyun_sms_access_key_id" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="LTAI5t...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AccessKey Secret</label>
+                        <input type="password" x-model="form.aliyun_sms_access_key_secret" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="••••••••">
+                    </div>
+                </div>
+                
+                <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-2" x-text="$store.i18n.locale === 'zh' ? '固定配置（无需修改）：' : 'Fixed Configuration (no modification needed):'"></p>
+                    <ul class="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                        <li x-text="$store.i18n.locale === 'zh' ? '• 签名：速通互联验证码' : '• Sign Name: 速通互联验证码'"></li>
+                        <li x-text="$store.i18n.locale === 'zh' ? '• 模板：登录/注册、修改手机号、重置密码、绑定手机、验证手机' : '• Templates: Login/Register, Change Phone, Reset Password, Bind Phone, Verify Phone'"></li>
+                        <li x-text="$store.i18n.locale === 'zh' ? '• 验证码有效期：5分钟' : '• Code Expiry: 5 minutes'"></li>
+                    </ul>
+                </div>
+                
+                <div class="mt-4 flex items-center gap-3">
+                    <input type="text" x-model="smsTestPhone" class="w-48 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" :placeholder="$store.i18n.locale === 'zh' ? '输入测试手机号' : 'Test phone number'">
+                    <button @click="testSms" :disabled="testingSms || form.sms_enabled !== '1'" type="button" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!testingSms" x-text="$store.i18n.locale === 'zh' ? '测试短信发送' : 'Test SMS'"></span>
+                        <span x-show="testingSms" x-text="$store.i18n.locale === 'zh' ? '发送中...' : 'Sending...'"></span>
+                    </button>
+                    <span x-show="smsTestResult" class="text-sm" :class="smsTestSuccess ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'" x-text="smsTestResult"></span>
+                </div>
+                
+                <!-- 强制绑定手机号 -->
+                <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-base font-medium text-gray-800 dark:text-gray-200" x-text="$store.i18n.locale === 'zh' ? '强制绑定手机号' : 'Require Phone Binding'"></h4>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '启用后，用户必须绑定手机号才能购买域名' : 'When enabled, users must bind phone number before purchasing'"></p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" :checked="form.require_phone_binding === '1'" @change="form.require_phone_binding = $event.target.checked ? '1' : '0'" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 transition-colors"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 保存按钮 -->
+            <div class="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700">
+                <button @click="save" :disabled="saving" class="px-6 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存设置' : 'Save Settings'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 邮箱账户编辑模态框 -->
+    <div x-show="showAccountModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="closeEmailAccountModal()"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="editingAccount ? $store.i18n.t('emailAccounts.editAccount') : $store.i18n.t('emailAccounts.addAccount')"></h3>
+                
+                <div class="space-y-4">
+                    <!-- 账户名称 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.name')"></label>
+                        <input type="text" x-model="accountForm.name" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.t('emailAccounts.namePlaceholder')">
+                    </div>
+                    
+                    <!-- 账户类型 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.type')"></label>
+                        <select x-model="accountForm.type" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="smtp" x-text="$store.i18n.t('emailAccounts.typeSMTP')"></option>
+                            <option value="aliyun" x-text="$store.i18n.t('emailAccounts.typeAliyun')"></option>
+                        </select>
+                    </div>
+                    
+                    <!-- SMTP 配置 -->
+                    <template x-if="accountForm.type === 'smtp'">
+                        <div class="space-y-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.smtpHost')"></label>
+                                    <input type="text" x-model="accountForm.config.host" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="smtp.example.com">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.smtpPort')"></label>
+                                    <input type="number" x-model="accountForm.config.port" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="465">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.smtpUser')"></label>
+                                <input type="text" x-model="accountForm.config.user" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="noreply@example.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.smtpPassword')"></label>
+                                <input type="password" x-model="accountForm.config.password" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="••••••••">
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.smtpFromName')"></label>
+                                    <input type="text" x-model="accountForm.config.from_name" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="System">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.smtpSSL')"></label>
+                                    <select x-model="accountForm.config.ssl" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '是' : 'Yes'"></option>
+                                        <option value="0" x-text="$store.i18n.locale === 'zh' ? '否' : 'No'"></option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <!-- 阿里云配置 -->
+                    <template x-if="accountForm.type === 'aliyun'">
+                        <div class="space-y-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                            <div>
+                                <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.aliyunAccessKeyId')"></label>
+                                <input type="text" x-model="accountForm.config.access_key_id" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="LTAI5t...">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.aliyunAccessKeySecret')"></label>
+                                <input type="password" x-model="accountForm.config.access_key_secret" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="••••••••">
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.aliyunAccount')"></label>
+                                    <input type="text" x-model="accountForm.config.account" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="noreply@mail.example.com">
+                                </div>
+                                <div>
+                                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.aliyunFromName')"></label>
+                                    <input type="text" x-model="accountForm.config.from_name" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" placeholder="System">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.t('emailAccounts.aliyunRegion')"></label>
+                                <select x-model="accountForm.config.region" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                                    <option value="cn-hangzhou" x-text="$store.i18n.locale === 'zh' ? '华东1（杭州）' : 'China East 1 (Hangzhou)'"></option>
+                                    <option value="ap-southeast-1" x-text="$store.i18n.locale === 'zh' ? '新加坡' : 'Singapore'"></option>
+                                    <option value="ap-southeast-2" x-text="$store.i18n.locale === 'zh' ? '澳大利亚（悉尼）' : 'Australia (Sydney)'"></option>
+                                </select>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <!-- 通用配置 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.priority')"></label>
+                            <input type="number" x-model="accountForm.priority" min="0" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <p class="text-xs text-gray-500 mt-1" x-text="$store.i18n.t('emailAccounts.priorityHint')"></p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.dailyQuota')"></label>
+                            <input type="number" x-model="accountForm.daily_limit" min="0" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <p class="text-xs text-gray-500 mt-1" x-text="$store.i18n.t('emailAccounts.dailyQuotaHint')"></p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.enabled')"></label>
+                            <select x-model="accountForm.enabled" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                <option :value="true" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                                <option :value="false" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6">
+                    <button @click="closeEmailAccountModal()" type="button" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button @click="saveEmailAccount()" type="button" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.t('common.save')"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 批量添加邮箱账户模态框 -->
+    <div x-show="showBatchModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="closeBatchAddModal()"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full p-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('emailAccounts.batchAdd')"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.t('emailAccounts.batchAddDesc')"></p>
+                
+                <div class="space-y-4">
+                    <!-- 账户类型选择 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.type')"></label>
+                        <select x-model="batchForm.type" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="smtp" x-text="$store.i18n.t('emailAccounts.typeSMTP')"></option>
+                            <option value="aliyun" x-text="$store.i18n.t('emailAccounts.typeAliyun')"></option>
+                        </select>
+                    </div>
+                    
+                    <!-- 批量输入区域 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.batchInput')"></label>
+                        <textarea x-model="batchForm.content" rows="10" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm" :placeholder="batchForm.type === 'smtp' ? $store.i18n.t('emailAccounts.batchSmtpPlaceholder') : $store.i18n.t('emailAccounts.batchAliyunPlaceholder')"></textarea>
+                    </div>
+                    
+                    <!-- 格式说明 -->
+                    <div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('emailAccounts.batchFormatTitle')"></p>
+                        <template x-if="batchForm.type === 'smtp'">
+                            <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                <p x-text="$store.i18n.t('emailAccounts.batchSmtpFormat')"></p>
+                                <p class="font-mono bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded">smtp.qq.com:465:user@qq.com:password:发件人名称</p>
+                            </div>
+                        </template>
+                        <template x-if="batchForm.type === 'aliyun'">
+                            <div class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                <p x-text="$store.i18n.t('emailAccounts.batchAliyunFormat')"></p>
+                                <p class="font-mono bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded">AccessKeyId:AccessKeySecret:发信地址:发件人名称:区域</p>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- 通用配置 -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.dailyQuota')"></label>
+                            <input type="number" x-model="batchForm.daily_limit" min="0" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('emailAccounts.enabled')"></label>
+                            <select x-model="batchForm.enabled" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                <option :value="true" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                                <option :value="false" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6">
+                    <button @click="closeBatchAddModal()" type="button" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button @click="submitBatchAdd()" :disabled="batchAdding" type="button" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                        <span x-show="!batchAdding" x-text="$store.i18n.t('emailAccounts.batchSubmit')"></span>
+                        <span x-show="batchAdding" x-text="$store.i18n.t('common.processing')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function securitySettingsPage() {
+    return {
+        form: {},
+        loading: true,
+        saving: false,
+        forbidden: false,
+        testingEmail: false,
+        emailTestResult: '',
+        emailTestSuccess: false,
+        testingSms: false,
+        smsTestResult: '',
+        smsTestSuccess: false,
+        smsTestPhone: '',
+        testingConnection: false,
+        connectionTestResult: '',
+        connectionTestSuccess: false,
+        testingSendEmail: false,
+        sendTestResult: '',
+        sendTestSuccess: false,
+        testEmailAddress: '',
+        // 邮箱账户管理
+        emailAccounts: [],
+        showAccountModal: false,
+        editingAccount: null,
+        accountForm: {
+            name: '',
+            type: 'smtp',
+            priority: 0,
+            enabled: true,
+            daily_limit: 0,
+            config: {}
+        },
+        // 批量添加
+        showBatchModal: false,
+        batchAdding: false,
+        batchForm: {
+            type: 'smtp',
+            content: '',
+            daily_limit: 0,
+            enabled: true
+        },
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await this.load();
+            await this.loadEmailAccounts();
+        },
+        
+        async load() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.form = data.data.settings;
+                    // 设置默认值
+                    if (!this.form.email_provider) this.form.email_provider = 'smtp';
+                    if (!this.form.aliyun_dm_region) this.form.aliyun_dm_region = 'cn-hangzhou';
+                    if (!this.form.sms_enabled) this.form.sms_enabled = '0';
+                    if (!this.form.require_phone_binding) this.form.require_phone_binding = '0';
+                    if (!this.form.email_suffix_enabled) this.form.email_suffix_enabled = '0';
+                    if (!this.form.email_suffix_mode) this.form.email_suffix_mode = 'whitelist';
+                    if (!this.form.turnstile_enabled) this.form.turnstile_enabled = '0';
+                    if (!this.form.captcha_type) this.form.captcha_type = 'slider';
+                    if (!this.form.magic_link_enabled) this.form.magic_link_enabled = '1';
+                    if (!this.form.magic_link_expire_minutes) this.form.magic_link_expire_minutes = '15';
+                    if (!this.form.magic_link_cooldown_seconds) this.form.magic_link_cooldown_seconds = '60';
+                    if (!this.form.captcha_magic_link) this.form.captcha_magic_link = '1';
+                } else if (data.code === 403) {
+                    this.forbidden = true;
+                }
+            } catch (e) {
+                console.error('Load settings failed:', e);
+            }
+            this.loading = false;
+        },
+        
+        async save() {
+            this.saving = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.form)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '设置保存成功' : 'Settings saved successfully');
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.saving = false;
+        },
+        
+        async testEmail() {
+            this.testingEmail = true;
+            this.emailTestResult = '';
+            // 先保存设置
+            await fetch('/api/admin/settings', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + this.token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(this.form)
+            });
+            // 测试发送
+            try {
+                const res = await fetch('/api/admin/settings/test-email', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                this.emailTestSuccess = data.code === 200;
+                this.emailTestResult = data.message;
+            } catch (e) {
+                this.emailTestSuccess = false;
+                this.emailTestResult = this.locale === 'zh' ? '网络错误' : 'Network error';
+            }
+            this.testingEmail = false;
+        },
+        
+        async testSms() {
+            if (!this.smsTestPhone) {
+                alert(this.locale === 'zh' ? '请输入测试手机号' : 'Please enter test phone number');
+                return;
+            }
+            this.testingSms = true;
+            this.smsTestResult = '';
+            // 先保存设置
+            await fetch('/api/admin/settings', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + this.token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(this.form)
+            });
+            // 测试发送
+            try {
+                const res = await fetch('/api/admin/settings/test-sms', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phone: this.smsTestPhone })
+                });
+                const data = await res.json();
+                this.smsTestSuccess = data.code === 200;
+                this.smsTestResult = data.message;
+            } catch (e) {
+                this.smsTestSuccess = false;
+                this.smsTestResult = this.locale === 'zh' ? '网络错误' : 'Network error';
+            }
+            this.testingSms = false;
+        },
+        
+        async testConnection() {
+            this.testingConnection = true;
+            this.connectionTestResult = '';
+            // 先保存设置
+            await fetch('/api/admin/settings', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + this.token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(this.form)
+            });
+            // 测试连接
+            try {
+                const res = await fetch('/api/admin/email/test-connection', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                this.connectionTestSuccess = data.success;
+                this.connectionTestResult = data.message;
+            } catch (e) {
+                this.connectionTestSuccess = false;
+                this.connectionTestResult = this.locale === 'zh' ? '网络错误' : 'Network error';
+            }
+            this.testingConnection = false;
+        },
+        
+        async sendTestEmail() {
+            if (!this.testEmailAddress) {
+                alert(this.locale === 'zh' ? '请输入测试邮箱地址' : 'Please enter test email address');
+                return;
+            }
+            this.testingSendEmail = true;
+            this.sendTestResult = '';
+            // 先保存设置
+            await fetch('/api/admin/settings', {
+                method: 'PUT',
+                headers: {
+                    'Authorization': 'Bearer ' + this.token,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(this.form)
+            });
+            // 发送测试邮件
+            try {
+                const res = await fetch('/api/admin/email/send-test', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ to_email: this.testEmailAddress })
+                });
+                const data = await res.json();
+                this.sendTestSuccess = data.success;
+                this.sendTestResult = data.message;
+            } catch (e) {
+                this.sendTestSuccess = false;
+                this.sendTestResult = this.locale === 'zh' ? '网络错误' : 'Network error';
+            }
+            this.testingSendEmail = false;
+        },
+        
+        // 邮箱账户管理方法
+        async loadEmailAccounts() {
+            try {
+                const res = await fetch('/api/admin/email-accounts', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.emailAccounts = data.data?.accounts || [];
+                }
+            } catch (e) {
+                console.error('Load email accounts failed:', e);
+            }
+        },
+        
+        showEmailAccountModal(account = null) {
+            this.editingAccount = account;
+            if (account) {
+                this.accountForm = {
+                    name: account.name,
+                    type: account.type,
+                    priority: account.priority,
+                    enabled: account.enabled,
+                    daily_limit: account.daily_limit,
+                    config: account.config || {}
+                };
+            } else {
+                this.accountForm = {
+                    name: '',
+                    type: 'smtp',
+                    priority: this.emailAccounts.length,
+                    enabled: true,
+                    daily_limit: 0,
+                    config: {}
+                };
+            }
+            this.showAccountModal = true;
+        },
+        
+        closeEmailAccountModal() {
+            this.showAccountModal = false;
+            this.editingAccount = null;
+        },
+        
+        async saveEmailAccount() {
+            const payload = {
+                name: this.accountForm.name,
+                type: this.accountForm.type,
+                priority: parseInt(this.accountForm.priority) || 0,
+                enabled: this.accountForm.enabled,
+                daily_limit: parseInt(this.accountForm.daily_limit) || 0,
+                config: this.accountForm.config
+            };
+            
+            try {
+                let res;
+                if (this.editingAccount) {
+                    res = await fetch(`/api/admin/email-accounts/${this.editingAccount.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': 'Bearer ' + this.token,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                } else {
+                    res = await fetch('/api/admin/email-accounts', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + this.token,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                }
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '保存成功' : 'Save successful');
+                    this.closeEmailAccountModal();
+                    await this.loadEmailAccounts();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误' : 'Network error');
+            }
+        },
+        
+        async deleteEmailAccount(id) {
+            if (!confirm(this.locale === 'zh' ? '确定要删除此邮箱账户吗？' : 'Are you sure to delete this email account?')) {
+                return;
+            }
+            try {
+                const res = await fetch(`/api/admin/email-accounts/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '删除成功' : 'Delete successful');
+                    await this.loadEmailAccounts();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '删除失败' : 'Delete failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误' : 'Network error');
+            }
+        },
+        
+        async testEmailAccount(id) {
+            try {
+                const res = await fetch(`/api/admin/email-accounts/${id}/test`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                alert(data.message || (data.code === 200 ? (this.locale === 'zh' ? '测试成功' : 'Test successful') : (this.locale === 'zh' ? '测试失败' : 'Test failed')));
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误' : 'Network error');
+            }
+        },
+        
+        async sendTestViaAccount(id) {
+            const email = prompt(this.locale === 'zh' ? '请输入测试邮箱地址：' : 'Enter test email address:');
+            if (!email) return;
+            
+            try {
+                const res = await fetch(`/api/admin/email-accounts/${id}/send-test`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email: email })
+                });
+                const data = await res.json();
+                alert(data.message || (data.code === 200 ? (this.locale === 'zh' ? '发送成功' : 'Send successful') : (this.locale === 'zh' ? '发送失败' : 'Send failed')));
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误' : 'Network error');
+            }
+        },
+        
+        async importLegacyEmailConfig() {
+            if (!confirm(this.locale === 'zh' ? '确定要导入当前邮件配置为邮箱账户吗？' : 'Import current email config as email account?')) {
+                return;
+            }
+            try {
+                const res = await fetch('/api/admin/email-accounts/import-legacy', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '导入成功' : 'Import successful');
+                    await this.loadEmailAccounts();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '导入失败' : 'Import failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误' : 'Network error');
+            }
+        },
+        
+        // 批量添加方法
+        showBatchAddModal() {
+            this.batchForm = {
+                type: 'smtp',
+                content: '',
+                daily_limit: 0,
+                enabled: true
+            };
+            this.showBatchModal = true;
+        },
+        
+        closeBatchAddModal() {
+            this.showBatchModal = false;
+        },
+        
+        async submitBatchAdd() {
+            if (!this.batchForm.content.trim()) {
+                alert(this.locale === 'zh' ? '请输入账户信息' : 'Please enter account information');
+                return;
+            }
+            
+            this.batchAdding = true;
+            try {
+                const res = await fetch('/api/admin/email-accounts/batch', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: this.batchForm.type,
+                        content: this.batchForm.content,
+                        daily_limit: parseInt(this.batchForm.daily_limit) || 0,
+                        enabled: this.batchForm.enabled
+                    })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    const msg = this.locale === 'zh' 
+                        ? `批量添加完成！成功: ${data.data.success}，失败: ${data.data.failed}` 
+                        : `Batch add completed! Success: ${data.data.success}, Failed: ${data.data.failed}`;
+                    alert(msg);
+                    this.closeBatchAddModal();
+                    await this.loadEmailAccounts();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '批量添加失败' : 'Batch add failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误' : 'Network error');
+            }
+            this.batchAdding = false;
+        }
+    }
+}
+</script>
+{% endblock %}

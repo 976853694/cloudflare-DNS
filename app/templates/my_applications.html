@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}我的申请 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="myApplicationsPage()" x-init="init()">
+    <!-- 页面标题 -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '我的申请' : 'My Applications'"></h1>
+        
+        <!-- 筛选器 -->
+        <select x-model="statusFilter" @change="loadApplications()" 
+                class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            <option value="" x-text="$store.i18n.locale === 'zh' ? '全部状态' : 'All Status'"></option>
+            <option value="pending" x-text="$store.i18n.locale === 'zh' ? '待审核' : 'Pending'"></option>
+            <option value="approved" x-text="$store.i18n.locale === 'zh' ? '已通过' : 'Approved'"></option>
+            <option value="rejected" x-text="$store.i18n.locale === 'zh' ? '已拒绝' : 'Rejected'"></option>
+            <option value="used" x-text="$store.i18n.locale === 'zh' ? '已使用' : 'Used'"></option>
+        </select>
+    </div>
+
+    <!-- 加载中 -->
+    <div x-show="loading" class="flex justify-center py-20">
+        <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+    </div>
+
+    <!-- 申请列表 -->
+    <div x-show="!loading" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <!-- 桌面端表格 -->
+        <table class="w-full hidden lg:table">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '套餐名称' : 'Plan'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '申请时间' : 'Applied At'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '审核时间' : 'Reviewed At'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="app in applications" :key="app.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-4 py-4 font-medium text-gray-900 dark:text-white" x-text="app.plan?.name"></td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="formatDate(app.created_at)"></td>
+                        <td class="px-4 py-4">
+                            <span :class="getStatusClass(app.status)" class="px-2 py-1 rounded text-xs" x-text="app.status_text"></span>
+                        </td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="app.reviewed_at ? formatDate(app.reviewed_at) : '-'"></td>
+                        <td class="px-4 py-4">
+                            <div class="flex items-center gap-2">
+                                <button @click="viewDetail(app)" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '查看' : 'View'"></button>
+                                <button x-show="app.status === 'pending'" @click="confirmCancel(app)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="applications.length === 0">
+                    <td colspan="5" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无申请记录' : 'No applications'"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 移动端卡片 -->
+        <div class="lg:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="app in applications" :key="app.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <h3 class="font-medium text-gray-900 dark:text-white" x-text="app.plan?.name"></h3>
+                        <span :class="getStatusClass(app.status)" class="px-2 py-1 rounded text-xs" x-text="app.status_text"></span>
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 space-y-1 mb-3">
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '申请时间：' : 'Applied: '"></span><span x-text="formatDate(app.created_at)"></span></p>
+                        <p x-show="app.reviewed_at"><span x-text="$store.i18n.locale === 'zh' ? '审核时间：' : 'Reviewed: '"></span><span x-text="formatDate(app.reviewed_at)"></span></p>
+                    </div>
+                    <div class="flex items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <button @click="viewDetail(app)" class="text-blue-500 dark:text-blue-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '查看详情' : 'View Details'"></button>
+                        <button x-show="app.status === 'pending'" @click="confirmCancel(app)" class="text-red-500 dark:text-red-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消申请' : 'Cancel'"></button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="applications.length === 0" class="p-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无申请记录' : 'No applications'"></div>
+        </div>
+    </div>
+
+    <!-- 详情模态框 -->
+    <div x-show="showDetailModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showDetailModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '申请详情' : 'Application Details'"></h3>
+                    <button @click="showDetailModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div x-show="selectedApp" class="space-y-4">
+                    <!-- 状态 -->
+                    <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '申请状态' : 'Status'"></p>
+                        <span :class="getStatusClass(selectedApp?.status)" class="inline-block px-3 py-1 rounded text-sm" x-text="selectedApp?.status_text"></span>
+                    </div>
+
+                    <!-- 套餐信息 -->
+                    <div>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '申请套餐' : 'Plan'"></p>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="selectedApp?.plan?.name"></p>
+                    </div>
+
+                    <!-- 申请理由 -->
+                    <div>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '申请理由' : 'Reason'"></p>
+                        <p class="text-gray-900 dark:text-white whitespace-pre-wrap" x-text="selectedApp?.apply_reason"></p>
+                    </div>
+
+                    <!-- 拒绝原因 -->
+                    <div x-show="selectedApp?.rejection_reason">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '拒绝原因' : 'Rejection Reason'"></p>
+                        <p class="text-red-600 dark:text-red-400" x-text="selectedApp?.rejection_reason"></p>
+                    </div>
+
+                    <!-- 时间信息 -->
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <p class="text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '申请时间' : 'Applied At'"></p>
+                            <p class="text-gray-900 dark:text-white" x-text="formatDate(selectedApp?.created_at)"></p>
+                        </div>
+                        <div x-show="selectedApp?.reviewed_at">
+                            <p class="text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '审核时间' : 'Reviewed At'"></p>
+                            <p class="text-gray-900 dark:text-white" x-text="formatDate(selectedApp?.reviewed_at)"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <button @click="showDetailModal = false" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Close'"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function myApplicationsPage() {
+    return {
+        applications: [],
+        loading: true,
+        statusFilter: '',
+        showDetailModal: false,
+        selectedApp: null,
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await this.loadApplications();
+        },
+        
+        async loadApplications() {
+            this.loading = true;
+            try {
+                let url = '/api/free-plan-applications';
+                if (this.statusFilter) {
+                    url += '?status=' + this.statusFilter;
+                }
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.applications = data.data.applications;
+                }
+            } catch (e) {
+                console.error('加载失败:', e);
+            }
+            this.loading = false;
+        },
+        
+        viewDetail(app) {
+            this.selectedApp = app;
+            this.showDetailModal = true;
+        },
+        
+        confirmCancel(app) {
+            if (confirm(this.locale === 'zh' ? '确定要取消这个申请吗？' : 'Are you sure to cancel this application?')) {
+                this.cancelApplication(app.id);
+            }
+        },
+        
+        async cancelApplication(appId) {
+            try {
+                const res = await fetch(`/api/free-plan-applications/${appId}/cancel`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '申请已取消' : 'Application cancelled');
+                    await this.loadApplications();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '操作失败' : 'Operation failed');
+            }
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString(this.locale === 'zh' ? 'zh-CN' : 'en-US');
+        },
+        
+        getStatusClass(status) {
+            const classes = {
+                'pending': 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                'approved': 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                'rejected': 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                'cancelled': 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+                'used': 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+            };
+            return classes[status] || '';
+        }
+    }
+}
+</script>
+{% endblock %}

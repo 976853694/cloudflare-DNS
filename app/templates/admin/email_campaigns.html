@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+
+{% block title %}群发邮件 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="emailCampaignsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('emailCampaign.title')"></h1>
+        <button @click="openCreate()" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 text-sm" x-text="$store.i18n.t('emailCampaign.createCampaign')"></button>
+    </div>
+
+    <!-- 任务列表 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div class="hidden lg:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('emailCampaign.campaignName')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('emailCampaign.subject')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('emailCampaign.status')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('emailCampaign.progress')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('emailCampaign.createdAt')"></th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('common.actions')"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="item in list" :key="item.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white" x-text="item.name"></td>
+                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300" x-text="item.subject"></td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs" :class="{
+                                    'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400': item.status === 'draft',
+                                    'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': item.status === 'sending',
+                                    'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': item.status === 'completed'
+                                } transition-colors" x-text="getStatusText(item.status)"></span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                                <div x-show="item.recipient_count > 0">
+                                    <div class="flex items-center gap-2">
+                                        <span x-text="(item.sent_count || 0) + '/' + (item.recipient_count || 0)"></span>
+                                        <span x-show="item.status === 'sending'" class="text-blue-600 dark:text-blue-400" x-text="'(' + (item.progress_percent || 0) + '%)'"></span>
+                                    </div>
+                                    <!-- 进度条 -->
+                                    <div x-show="item.status === 'sending'" class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1">
+                                        <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-300 transition-colors" :style="'width: ' + (item.progress_percent || 0) + '%'"></div>
+                                    </div>
+                                </div>
+                                <span x-show="!item.recipient_count || item.recipient_count === 0">-</span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400" x-text="item.created_at ? item.created_at.slice(0,16).replace('T', ' ') : ''"></td>
+                            <td class="px-4 py-3 text-right space-x-2">
+                                <button x-show="item.status === 'draft'" @click="sendCampaign(item)" class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm" x-text="$store.i18n.t('emailCampaign.send')"></button>
+                                <button @click="viewLogs(item)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.t('emailCampaign.viewLogs')"></button>
+                                <button x-show="item.status === 'draft'" @click="openEdit(item)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.t('common.edit')"></button>
+                                <button x-show="item.status !== 'sending'" @click="remove(item)" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.t('common.delete')"></button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="list.length === 0">
+                        <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.noData')"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 创建/编辑弹窗 -->
+    <div x-show="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="closeModal()">
+        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <div class="p-6">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editingItem ? $store.i18n.t('emailCampaign.editCampaign') : $store.i18n.t('emailCampaign.createCampaign')"></h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('emailCampaign.campaignName')"></label>
+                        <input type="text" x-model="form.name" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('emailCampaign.subject')"></label>
+                        <input type="text" x-model="form.subject" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('emailCampaign.content')"></label>
+                        <textarea x-model="form.content" rows="10" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></textarea>
+                        
+                        <!-- 变量说明 -->
+                        <div class="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl transition-colors">
+                            <p class="text-xs font-medium text-blue-800 dark:text-blue-300 mb-2" x-text="$store.i18n.t('emailCampaign.availableVariables')"></p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-blue-700 dark:text-blue-400">
+                                <div><code class="bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded transition-colors">{username}</code> - <span x-text="$store.i18n.t('emailCampaign.varUsername')"></span></div>
+                                <div><code class="bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded transition-colors">{email}</code> - <span x-text="$store.i18n.t('emailCampaign.varEmail')"></span></div>
+                                <div><code class="bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded transition-colors">{balance}</code> - <span x-text="$store.i18n.t('emailCampaign.varBalance')"></span></div>
+                                <div><code class="bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded transition-colors">{site_name}</code> - <span x-text="$store.i18n.t('emailCampaign.varSiteName')"></span></div>
+                                <div><code class="bg-blue-100 dark:bg-blue-900/40 px-1.5 py-0.5 rounded transition-colors">{site_url}</code> - <span x-text="$store.i18n.t('emailCampaign.varSiteUrl')"></span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('emailCampaign.recipientFilter')"></label>
+                        <div class="space-y-2">
+                            <select x-model="form.recipient_filter.role" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                <option value="" x-text="$store.i18n.t('emailCampaign.allUsers')"></option>
+                                <option value="admin" x-text="$store.i18n.t('emailCampaign.adminOnly')"></option>
+                                <option value="user" x-text="$store.i18n.t('emailCampaign.regularUsers')"></option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6">
+                    <button @click="closeModal()" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button @click="save()" :disabled="saving" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                        <span x-show="!saving" x-text="$store.i18n.t('common.save')"></span>
+                        <span x-show="saving" x-text="$store.i18n.t('common.saving')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志查看弹窗 -->
+    <div x-show="showLogsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="closeLogsModal()">
+        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <div class="p-6">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('emailCampaign.viewLogs')"></h2>
+                    <button @click="closeLogsModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="hidden lg:block overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('common.email')"></th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('common.status')"></th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('emailCampaign.sentTime')"></th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('emailCampaign.errorMessage')"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <template x-for="log in logs" :key="log.id">
+                                <tr>
+                                    <td class="px-4 py-3 text-sm text-gray-900 dark:text-white" x-text="log.to_email"></td>
+                                    <td class="px-4 py-3">
+                                        <span class="px-2 py-1 rounded text-xs" :class="{
+                                            'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': log.status === 'sent',
+                                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': log.status === 'failed',
+                                            'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400': log.status === 'pending'
+                                        }" x-text="log.status === 'sent' ? ($store.i18n.locale === 'zh' ? '成功' : 'Success') : (log.status === 'failed' ? ($store.i18n.locale === 'zh' ? '失败' : 'Failed') : ($store.i18n.locale === 'zh' ? '待发送' : 'Pending'))"></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400" x-text="log.sent_at ? log.sent_at.slice(0,19).replace('T', ' ') : '-'"></td>
+                                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400" x-text="log.error_message || '-'"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="logs.length === 0">
+                                <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.noData')"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function emailCampaignsPage() {
+    return {
+        list: [],
+        logs: [],
+        showModal: false,
+        showLogsModal: false,
+        editingItem: null,
+        saving: false,
+        progressInterval: null,  // 进度轮询定时器
+        form: {
+            name: '',
+            subject: '',
+            content: '',
+            recipient_filter: {}
+        },
+        
+        get token() { return localStorage.getItem('token'); },
+        
+        async init() {
+            await this.load();
+            // 启动进度轮询
+            this.startProgressPolling();
+        },
+        
+        startProgressPolling() {
+            // 每3秒检查一次发送中的任务
+            this.progressInterval = setInterval(async () => {
+                const sendingCampaigns = this.list.filter(item => item.status === 'sending');
+                for (const campaign of sendingCampaigns) {
+                    await this.updateProgress(campaign.id);
+                }
+            }, 3000);
+        },
+        
+        async updateProgress(campaignId) {
+            try {
+                const res = await fetch(`/api/admin/email-campaigns/${campaignId}/progress`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    // 更新列表中的任务状态
+                    const index = this.list.findIndex(item => item.id === campaignId);
+                    if (index !== -1) {
+                        this.list[index] = { ...this.list[index], ...data.data };
+                    }
+                }
+            } catch (e) {
+                console.error('Update progress failed:', e);
+            }
+        },
+        
+        async load() {
+            try {
+                const res = await fetch('/api/admin/email-campaigns', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.list = data.data.campaigns;
+                }
+            } catch (e) {
+                console.error('Load failed:', e);
+            }
+        },
+        
+        openCreate() {
+            this.editingItem = null;
+            this.form = {
+                name: '',
+                subject: '',
+                content: '',
+                recipient_filter: {}
+            };
+            this.showModal = true;
+        },
+        
+        openEdit(item) {
+            this.editingItem = item;
+            this.form = {
+                name: item.name,
+                subject: item.subject,
+                content: item.content,
+                recipient_filter: typeof item.recipient_filter === 'string' ? JSON.parse(item.recipient_filter) : item.recipient_filter
+            };
+            this.showModal = true;
+        },
+        
+        closeModal() {
+            this.showModal = false;
+        },
+        
+        closeLogsModal() {
+            this.showLogsModal = false;
+            this.logs = [];
+        },
+        
+        async save() {
+            if (!this.form.name || !this.form.subject || !this.form.content) {
+                alert(this.$store.i18n.locale === 'zh' ? '请填写完整信息' : 'Please fill in all fields');
+                return;
+            }
+            
+            this.saving = true;
+            try {
+                const url = this.editingItem ? `/api/admin/email-campaigns/${this.editingItem.id}` : '/api/admin/email-campaigns';
+                const method = this.editingItem ? 'PUT' : 'POST';
+                
+                const res = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.form)
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    alert(data.message);
+                    this.closeModal();
+                    await this.load();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert(this.$store.i18n.locale === 'zh' ? '操作失败' : 'Operation failed');
+            }
+            this.saving = false;
+        },
+        
+        async sendCampaign(item) {
+            if (!confirm(this.$store.i18n.locale === 'zh' ? '确定要发送此邮件任务吗?' : 'Send this campaign?')) return;
+            
+            try {
+                const res = await fetch(`/api/admin/email-campaigns/${item.id}/send`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    alert(data.message);
+                    // 立即更新状态为发送中
+                    item.status = 'sending';
+                    // 开始轮询进度
+                    this.updateProgress(item.id);
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert(this.$store.i18n.locale === 'zh' ? '发送失败' : 'Send failed');
+            }
+        },
+        
+        async remove(item) {
+            if (!confirm(this.$store.i18n.locale === 'zh' ? '确定要删除此任务吗?' : 'Delete this campaign?')) return;
+            
+            try {
+                const res = await fetch(`/api/admin/email-campaigns/${item.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                alert(data.message);
+                await this.load();
+            } catch (e) {
+                alert(this.$store.i18n.locale === 'zh' ? '删除失败' : 'Delete failed');
+            }
+        },
+        
+        async viewLogs(item) {
+            try {
+                const res = await fetch(`/api/admin/email-campaigns/${item.id}/logs`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.logs = data.data.logs;
+                    this.showLogsModal = true;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert(this.$store.i18n.locale === 'zh' ? '加载日志失败' : 'Load logs failed');
+            }
+        },
+        
+        getStatusText(status) {
+            const texts = {
+                'draft': this.$store.i18n.locale === 'zh' ? '草稿' : 'Draft',
+                'sending': this.$store.i18n.locale === 'zh' ? '发送中' : 'Sending',
+                'completed': this.$store.i18n.locale === 'zh' ? '已完成' : 'Completed'
+            };
+            return texts[status] || status;
+        }
+    }
+}
+</script>
+{% endblock %}

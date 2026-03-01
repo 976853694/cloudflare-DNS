@@ -1,0 +1,566 @@
+{% extends "base.html" %}
+
+{% block title %}域名管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="domainDetail()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+        <div>
+            <a href="/user/domains" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-sm">&larr; <span x-text="$store.i18n.locale === 'zh' ? '返回列表' : 'Back to List'"></span></a>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mt-2" x-text="subdomain ? subdomain.name + '.' + subdomain.domain.name : ($store.i18n.locale === 'zh' ? '加载中...' : 'Loading...')"></h1>
+            <!-- 到期时间显示 -->
+            <div x-show="subdomain" class="mt-2 flex flex-wrap items-center gap-2">
+                <template x-if="subdomain?.expires_at">
+                    <span class="text-sm" :class="subdomain.is_expired ? 'text-red-600' : (subdomain.days_remaining <= 7 ? 'text-orange-600' : 'text-gray-500 dark:text-gray-400')">
+                        <span x-show="subdomain.is_expired" x-text="$store.i18n.locale === 'zh' ? '已过期' : 'Expired'"></span>
+                        <span x-show="!subdomain.is_expired"><span x-text="$store.i18n.locale === 'zh' ? '到期:' : 'Expires:'"></span> <span x-text="new Date(subdomain.expires_at).toLocaleDateString()"></span> (<span x-text="subdomain.days_remaining"></span><span x-text="$store.i18n.locale === 'zh' ? '天' : ' days'"></span>)</span>
+                    </span>
+                </template>
+                <template x-if="!subdomain?.expires_at">
+                    <span class="text-sm text-purple-600" x-text="$store.i18n.locale === 'zh' ? '永久有效' : 'Permanent'"></span>
+                </template>
+                <!-- 自动续费开关 -->
+                <template x-if="subdomain?.expires_at">
+                    <label class="inline-flex items-center gap-2 ml-4 cursor-pointer">
+                        <span class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '自动续费' : 'Auto Renew'"></span>
+                        <button @click="toggleAutoRenew" :disabled="togglingAutoRenew" 
+                            class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+                            :class="subdomain?.auto_renew ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'">
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                                :class="subdomain?.auto_renew ? 'translate-x-4' : 'translate-x-0.5'"></span>
+                        </button>
+                    </label>
+                </template>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button x-show="subdomain?.expires_at" @click="showRenewModal = true; loadRenewPlans()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 transition" x-text="$store.i18n.locale === 'zh' ? '续费' : 'Renew'"></button>
+            <a :href="'/user/domain/' + subdomainId + '/transfer'" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-purple-700 transition" x-text="$store.i18n.locale === 'zh' ? '转移' : 'Transfer'"></a>
+            <button x-show="subdomain?.ns_mode === 0" @click="showAddRecord = true" class="bg-gray-900 dark:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-600 transition" x-text="$store.i18n.locale === 'zh' ? '添加记录' : 'Add Record'"></button>
+            <button x-show="subdomain?.ns_mode === 0" @click="showNsModal = true" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-orange-600 transition" x-text="$store.i18n.locale === 'zh' ? '修改NS' : 'Change NS'"></button>
+            <button x-show="subdomain?.ns_mode === 1" @click="resetNs()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition" x-text="$store.i18n.locale === 'zh' ? '恢复Cloudflare NS' : 'Reset to Cloudflare NS'"></button>
+        </div>
+    </div>
+
+    <!-- NS状态提示 -->
+    <div x-show="subdomain?.ns_mode === 1" class="mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-orange-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            <div>
+                <h3 class="font-medium text-orange-800 dark:text-orange-300" x-text="$store.i18n.locale === 'zh' ? '已转移NS' : 'NS Transferred'"></h3>
+                <p class="text-sm text-orange-700 dark:text-orange-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '该域名已设置自定义NS服务器，DNS记录功能已禁用。' : 'Custom NS servers are set. DNS record management is disabled.'"></p>
+                <div class="mt-2 text-sm text-orange-600 dark:text-orange-400">
+                    <span class="font-medium" x-text="$store.i18n.locale === 'zh' ? 'NS服务器: ' : 'NS Servers: '"></span>
+                    <span x-text="subdomain?.ns_servers?.join(', ') || '-'"></span>
+                </div>
+                <p class="text-xs text-orange-500 mt-1" x-show="subdomain?.ns_changed_at">
+                    <span x-text="$store.i18n.locale === 'zh' ? '修改时间: ' : 'Changed at: '"></span><span x-text="subdomain?.ns_changed_at ? new Date(subdomain.ns_changed_at).toLocaleString() : ''"></span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? 'DNS记录' : 'DNS Records'"></h2>
+        </div>
+        <div x-show="loading" class="p-10 text-center">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <div x-show="!loading && subdomain?.ns_mode === 1" class="p-10 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? 'NS已转移，DNS记录功能已禁用' : 'NS transferred, DNS record management disabled'">
+        </div>
+        <div x-show="!loading && subdomain?.ns_mode === 0 && records.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无DNS记录，点击上方按钮添加' : 'No DNS records yet. Click the button above to add.'">
+        </div>
+        <!-- 桌面端表格 -->
+        <div x-show="!loading && records.length > 0" class="hidden sm:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '名称' : 'Name'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '类型' : 'Type'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '内容' : 'Content'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">TTL</th>
+                        <th x-show="capabilities.supports_proxy" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '代理' : 'Proxy'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="record in records" :key="record.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white" x-text="record.name"></td>
+                            <td class="px-6 py-4"><span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs" x-text="record.type"></span></td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300 text-sm font-mono max-w-xs truncate" x-text="record.content"></td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300" x-text="record.ttl === 1 ? ($store.i18n.locale === 'zh' ? '自动' : 'Auto') : record.ttl"></td>
+                            <td x-show="capabilities.supports_proxy" class="px-6 py-4">
+                                <span :class="record.proxied ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'" class="px-2 py-1 rounded text-xs" x-text="record.proxied ? ($store.i18n.locale === 'zh' ? '开启' : 'On') : ($store.i18n.locale === 'zh' ? '关闭' : 'Off')"></span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <button @click="editRecord(record)" class="text-blue-500 hover:text-blue-700 text-sm mr-2" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                <button @click="deleteRecord(record)" class="text-red-500 hover:text-red-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 移动端卡片视图 -->
+        <div x-show="!loading && records.length > 0" class="sm:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="record in records" :key="record.id">
+                <div class="p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-gray-900 dark:text-white truncate" x-text="record.name"></p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 font-mono truncate mt-1" x-text="record.content"></p>
+                        </div>
+                        <span class="ml-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs flex-shrink-0" x-text="record.type"></span>
+                    </div>
+                    <div class="flex items-center justify-between mt-3">
+                        <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                            <span>TTL: <span x-text="record.ttl === 1 ? ($store.i18n.locale === 'zh' ? '自动' : 'Auto') : record.ttl"></span></span>
+                            <span x-show="capabilities.supports_proxy" :class="record.proxied ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400'" x-text="($store.i18n.locale === 'zh' ? '代理: ' : 'Proxy: ') + (record.proxied ? ($store.i18n.locale === 'zh' ? '开启' : 'On') : ($store.i18n.locale === 'zh' ? '关闭' : 'Off'))"></span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button @click="editRecord(record)" class="text-blue-500 hover:text-blue-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                            <button @click="deleteRecord(record)" class="text-red-500 hover:text-red-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Add Record Modal -->
+    <div x-show="showAddRecord" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showAddRecord = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '添加DNS记录' : 'Add DNS Record'"></h3>
+            <div x-show="recordError" class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="recordError"></div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '记录类型' : 'Record Type'"></label>
+                <select x-model="recordForm.type" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="A">A</option>
+                    <option value="AAAA">AAAA</option>
+                    <option value="CNAME">CNAME</option>
+                    <option value="TXT">TXT</option>
+                    <option value="MX">MX</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '名称' : 'Name'"></label>
+                <div class="flex">
+                    <input type="text" x-model="recordForm.name" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-l-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '@ 或 www' : '@ or www'">
+                    <span class="px-3 py-3 bg-gray-100 dark:bg-gray-600 border border-l-0 border-gray-200 dark:border-gray-600 rounded-r-lg text-gray-600 dark:text-gray-300 text-sm" x-text="'.' + (subdomain?.name || '') + '.' + (subdomain?.domain?.name || '')"></span>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '内容' : 'Content'"></label>
+                <input type="text" x-model="recordForm.content" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '记录内容' : 'Record content'">
+            </div>
+            <div class="mb-4 grid gap-4" :class="capabilities.supports_proxy ? 'grid-cols-2' : 'grid-cols-1'">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">TTL</label>
+                    <select x-model="recordForm.ttl" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '自动' : 'Auto'"></option>
+                        <option value="300" x-text="$store.i18n.locale === 'zh' ? '5分钟' : '5 minutes'"></option>
+                        <option value="600" x-text="$store.i18n.locale === 'zh' ? '10分钟' : '10 minutes'"></option>
+                        <option value="3600" x-text="$store.i18n.locale === 'zh' ? '1小时' : '1 hour'"></option>
+                        <option value="86400" x-text="$store.i18n.locale === 'zh' ? '1天' : '1 day'"></option>
+                    </select>
+                </div>
+                <div x-show="capabilities.supports_proxy">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '代理' : 'Proxy'"></label>
+                    <select x-model="recordForm.proxied" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option :value="false" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Off'"></option>
+                        <option :value="true" x-text="$store.i18n.locale === 'zh' ? '开启' : 'On'"></option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showAddRecord = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="addRecord" :disabled="addingRecord" class="flex-1 px-4 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!addingRecord" x-text="$store.i18n.locale === 'zh' ? '添加' : 'Add'"></span>
+                    <span x-show="addingRecord" x-text="$store.i18n.locale === 'zh' ? '添加中...' : 'Adding...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Record Modal -->
+    <div x-show="showEditRecord" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showEditRecord = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '编辑DNS记录' : 'Edit DNS Record'"></h3>
+            <div x-show="editError" class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="editError"></div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '记录类型' : 'Record Type'"></label>
+                <input type="text" :value="editForm.type" disabled class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '名称' : 'Name'"></label>
+                <input type="text" :value="editForm.name" disabled class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '内容' : 'Content'"></label>
+                <input type="text" x-model="editForm.content" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '记录内容' : 'Record content'">
+            </div>
+            <div class="mb-4 grid gap-4" :class="capabilities.supports_proxy ? 'grid-cols-2' : 'grid-cols-1'">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">TTL</label>
+                    <select x-model="editForm.ttl" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '自动' : 'Auto'"></option>
+                        <option value="300" x-text="$store.i18n.locale === 'zh' ? '5分钟' : '5 minutes'"></option>
+                        <option value="600" x-text="$store.i18n.locale === 'zh' ? '10分钟' : '10 minutes'"></option>
+                        <option value="3600" x-text="$store.i18n.locale === 'zh' ? '1小时' : '1 hour'"></option>
+                        <option value="86400" x-text="$store.i18n.locale === 'zh' ? '1天' : '1 day'"></option>
+                    </select>
+                </div>
+                <div x-show="capabilities.supports_proxy">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '代理' : 'Proxy'"></label>
+                    <select x-model="editForm.proxied" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option :value="false" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Off'"></option>
+                        <option :value="true" x-text="$store.i18n.locale === 'zh' ? '开启' : 'On'"></option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showEditRecord = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="updateRecord" :disabled="updatingRecord" class="flex-1 px-4 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!updatingRecord" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="updatingRecord" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NS修改弹窗 -->
+    <div x-show="showNsModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showNsModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '修改NS服务器' : 'Change NS Servers'"></h3>
+            <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p class="text-sm text-red-700 dark:text-red-400 font-medium">⚠️ <span x-text="$store.i18n.locale === 'zh' ? '警告' : 'Warning'"></span></p>
+                <p class="text-sm text-red-600 dark:text-red-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '修改NS将会删除该域名下的所有DNS记录！此操作不可撤销。' : 'Changing NS will delete all DNS records for this domain! This action cannot be undone.'"></p>
+            </div>
+            <div x-show="nsError" class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="nsError"></div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? 'NS服务器 (每行一个)' : 'NS Servers (one per line)'"></label>
+                <textarea x-model="nsServersText" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white h-32 font-mono text-sm" placeholder="ns1.example.com&#10;ns2.example.com"></textarea>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showNsModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="updateNs" :disabled="updatingNs" class="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50">
+                    <span x-show="!updatingNs" x-text="$store.i18n.locale === 'zh' ? '确认修改' : 'Confirm'"></span>
+                    <span x-show="updatingNs" x-text="$store.i18n.locale === 'zh' ? '处理中...' : 'Processing...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 续费弹窗 -->
+    <div x-show="showRenewModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showRenewModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '域名续费' : 'Domain Renewal'"></h3>
+            <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p class="text-sm text-gray-600 dark:text-gray-300"><span x-text="$store.i18n.locale === 'zh' ? '当前域名: ' : 'Current domain: '"></span><span class="font-medium text-gray-900 dark:text-white" x-text="subdomain?.full_name"></span></p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-1"><span x-text="$store.i18n.locale === 'zh' ? '当前到期: ' : 'Current expiry: '"></span><span class="font-medium" :class="subdomain?.is_expired ? 'text-red-600' : 'text-gray-900 dark:text-white'" x-text="subdomain?.expires_at ? new Date(subdomain.expires_at).toLocaleDateString() : ($store.i18n.locale === 'zh' ? '永久' : 'Permanent')"></span></p>
+            </div>
+            <div x-show="renewPlansLoading" class="py-6 text-center">
+                <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+            </div>
+            <div x-show="!renewPlansLoading && renewPlans.length === 0" class="py-6 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无可用套餐' : 'No plans available'"></div>
+            <div x-show="!renewPlansLoading && renewPlans.length > 0" class="space-y-2 max-h-60 overflow-y-auto">
+                <template x-for="plan in renewPlans" :key="plan.id">
+                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700" :class="selectedRenewPlan == plan.id ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-600'">
+                        <input type="radio" :value="plan.id" x-model="selectedRenewPlan" class="mr-3">
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-900 dark:text-white">
+                                <span x-text="plan.name"></span>
+                                <span x-show="plan.is_free || plan.price == 0" class="ml-2 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs" x-text="$store.i18n.locale === 'zh' ? '免费' : 'Free'"></span>
+                            </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400"><span x-text="plan.duration_text"></span></p>
+                        </div>
+                        <span class="font-bold" :class="(plan.is_free || plan.price == 0) ? 'text-blue-600' : 'text-green-600'" x-text="(plan.is_free || plan.price == 0) ? ($store.i18n.locale === 'zh' ? '¥0' : '¥0') : ('¥' + plan.price)"></span>
+                    </label>
+                </template>
+            </div>
+            <div class="flex space-x-3 mt-4">
+                <button @click="showRenewModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doRenew" :disabled="renewing || !selectedRenewPlan" class="flex-1 px-4 py-3 text-white rounded-lg disabled:opacity-50" :class="getSelectedPlanIsFree() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'">
+                    <span x-show="!renewing" x-text="getSelectedPlanIsFree() ? ($store.i18n.locale === 'zh' ? '免费续费' : 'Free Renewal') : ($store.i18n.locale === 'zh' ? '确认续费' : 'Confirm Renewal')"></span>
+                    <span x-show="renewing" x-text="$store.i18n.locale === 'zh' ? '续费中...' : 'Renewing...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function domainDetail() {
+    const subdomainId = window.location.pathname.split('/').pop();
+    return {
+        subdomainId,
+        subdomain: null,
+        records: [],
+        loading: true,
+        showAddRecord: false,
+        recordForm: { type: 'A', name: '@', content: '', ttl: '600', proxied: false },
+        recordError: '',
+        addingRecord: false,
+        // DNS 服务商能力
+        capabilities: {
+            supports_proxy: false,
+            supports_line: false,
+            supports_weight: false,
+            supported_types: ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']
+        },
+        lines: [],
+        // 编辑相关
+        showEditRecord: false,
+        editForm: { id: null, type: '', name: '', content: '', ttl: '600', proxied: false },
+        editError: '',
+        updatingRecord: false,
+        // NS相关
+        showNsModal: false,
+        nsServersText: '',
+        nsError: '',
+        updatingNs: false,
+        // 续费相关
+        showRenewModal: false,
+        renewPlans: [],
+        renewPlansLoading: false,
+        selectedRenewPlan: null,
+        renewing: false,
+        togglingAutoRenew: false,
+        get token() { return localStorage.getItem('token'); },
+        
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.load();
+            await this.loadCapabilities();
+        },
+        
+        async load() {
+            this.loading = true;
+            // Get subdomain info
+            const subRes = await fetch('/api/subdomains', {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const subData = await subRes.json();
+            if (subData.code === 200) {
+                this.subdomain = subData.data.subdomains.find(s => s.id == this.subdomainId);
+            }
+            // Get records
+            const recRes = await fetch(`/api/subdomains/${this.subdomainId}/records`, {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const recData = await recRes.json();
+            if (recData.code === 200) {
+                this.records = recData.data.records;
+            }
+            this.loading = false;
+        },
+        
+        async loadCapabilities() {
+            if (!this.subdomainId) return;
+            try {
+                const res = await fetch(`/api/subdomains/${this.subdomainId}/capabilities`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.capabilities = data.data.capabilities || {};
+                    this.lines = data.data.lines || [];
+                }
+            } catch (e) {
+                console.error('Failed to load capabilities:', e);
+            }
+        },
+        
+        async addRecord() {
+            this.recordError = '';
+            this.addingRecord = true;
+            const res = await fetch(`/api/subdomains/${this.subdomainId}/records`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...this.recordForm,
+                    ttl: parseInt(this.recordForm.ttl)
+                })
+            });
+            const data = await res.json();
+            if (data.code === 201) {
+                this.showAddRecord = false;
+                this.recordForm = { type: 'A', name: '@', content: '', ttl: '600', proxied: false };
+                await this.load();
+            } else {
+                this.recordError = data.message;
+            }
+            this.addingRecord = false;
+        },
+        
+        editRecord(record) {
+            this.editForm = {
+                id: record.id,
+                type: record.type,
+                name: record.name,
+                content: record.content,
+                ttl: String(record.ttl),
+                proxied: record.proxied === 1 || record.proxied === true
+            };
+            this.editError = '';
+            this.showEditRecord = true;
+        },
+        
+        async updateRecord() {
+            this.editError = '';
+            this.updatingRecord = true;
+            const res = await fetch(`/api/records/${this.editForm.id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: this.editForm.content,
+                    ttl: parseInt(this.editForm.ttl),
+                    proxied: this.editForm.proxied
+                })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.showEditRecord = false;
+                await this.load();
+            } else {
+                this.editError = data.message || '更新失败';
+            }
+            this.updatingRecord = false;
+        },
+        
+        async deleteRecord(record) {
+            if (!confirm('确定删除该DNS记录？')) return;
+            const res = await fetch(`/api/records/${record.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                await this.load();
+            } else {
+                alert(data.message || '删除失败');
+            }
+        },
+        
+        // 续费相关方法
+        async loadRenewPlans() {
+            this.renewPlansLoading = true;
+            this.renewPlans = [];
+            this.selectedRenewPlan = null;
+            const res = await fetch(`/api/subdomains/${this.subdomainId}/renew-plans`, {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.renewPlans = data.data.plans;
+                if (this.renewPlans.length > 0) this.selectedRenewPlan = this.renewPlans[0].id;
+            }
+            this.renewPlansLoading = false;
+        },
+        
+        async doRenew() {
+            if (!this.selectedRenewPlan) return;
+            this.renewing = true;
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            const res = await fetch(`/api/subdomains/${this.subdomainId}/renew`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan_id: this.selectedRenewPlan })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                const isFree = data.data?.is_free_renew;
+                alert(isFree ? (isZh ? '免费续费成功！' : 'Free renewal successful!') : (isZh ? '续费成功！' : 'Renewal successful!'));
+                this.showRenewModal = false;
+                await this.load();
+            } else {
+                alert(data.message || (isZh ? '续费失败' : 'Renewal failed'));
+            }
+            this.renewing = false;
+        },
+        
+        getSelectedPlanIsFree() {
+            if (!this.selectedRenewPlan) return false;
+            const plan = this.renewPlans.find(p => p.id == this.selectedRenewPlan);
+            return plan && (plan.is_free || plan.price == 0);
+        },
+        
+        async toggleAutoRenew() {
+            if (this.togglingAutoRenew) return;
+            this.togglingAutoRenew = true;
+            const newValue = this.subdomain.auto_renew ? 0 : 1;
+            const res = await fetch(`/api/subdomains/${this.subdomainId}/auto-renew`, {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ auto_renew: newValue })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.subdomain.auto_renew = newValue;
+            } else {
+                alert(data.message || '操作失败');
+            }
+            this.togglingAutoRenew = false;
+        },
+        
+        // NS相关方法
+        async updateNs() {
+            this.nsError = '';
+            const nsServers = this.nsServersText.split('\n').map(s => s.trim()).filter(s => s);
+            if (nsServers.length === 0) {
+                this.nsError = '请输入至少一个NS服务器';
+                return;
+            }
+            if (!confirm('确定要修改NS吗？这将删除所有现有的DNS记录！')) return;
+            
+            this.updatingNs = true;
+            const res = await fetch(`/api/subdomains/${this.subdomainId}/ns`, {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ns_servers: nsServers })
+            });
+            const data = await res.json();
+            this.updatingNs = false;
+            if (data.code === 200) {
+                alert(data.message || 'NS修改成功');
+                this.showNsModal = false;
+                this.nsServersText = '';
+                await this.load();
+            } else {
+                this.nsError = data.message || 'NS修改失败';
+            }
+        },
+        
+        async resetNs() {
+            if (!confirm('确定要恢复使用Cloudflare NS吗？')) return;
+            const res = await fetch(`/api/subdomains/${this.subdomainId}/ns/reset`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                alert(data.message || 'NS已重置');
+                await this.load();
+            } else {
+                alert(data.message || 'NS重置失败');
+            }
+        }
+    }
+}
+
+// 监听续费弹窗打开
+document.addEventListener('alpine:init', () => {
+    Alpine.effect(() => {
+        const detail = Alpine.store('domainDetail');
+    });
+});
+</script>
+{% endblock %}

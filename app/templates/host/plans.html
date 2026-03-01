@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block title %}套餐管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+<!-- 版本: 2026-01-22-v3 - 免费套餐完整设置(强制刷新) -->
+
+{% block content %}
+<div class="p-4 sm:p-6 max-w-full" x-data="hostPlans()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                <a href="/host" class="hover:text-gray-700 dark:hover:text-gray-300">托管商面板</a>
+                <span>/</span>
+                <span>套餐管理</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">套餐管理</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm">创建和管理销售套餐</p>
+        </div>
+        <button @click="openAddModal()" class="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            添加套餐
+        </button>
+    </div>
+
+    <!-- Plans List -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div x-show="loading" class="p-8 text-center">
+            <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <div x-show="!loading && plans.length === 0" x-cloak class="p-8 text-center">
+            <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            </div>
+            <p class="text-gray-500 dark:text-gray-400 mb-2">暂无套餐</p>
+            <button @click="openAddModal()" class="text-blue-600 hover:underline text-sm">创建第一个套餐 →</button>
+        </div>
+        <div x-show="!loading && plans.length > 0" x-cloak class="divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="plan in plans" :key="plan.id">
+                <div class="flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <p class="font-medium text-gray-900 dark:text-white" x-text="plan.name"></p>
+                            <span x-show="plan.is_free === 1" class="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">免费套餐</span>
+                            <span class="px-2 py-0.5 text-xs rounded-full" 
+                                  :class="plan.status === 1 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'"
+                                  x-text="plan.status === 1 ? '启用' : '禁用'"></span>
+                        </div>
+                        <div class="flex flex-wrap gap-1 mt-1">
+                            <template x-for="name in (plan.domain_names || [])" :key="name">
+                                <span class="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded text-xs" x-text="name"></span>
+                            </template>
+                        </div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            <span class="text-green-600 font-medium" x-text="'¥' + plan.price"></span>
+                            <span class="mx-1">·</span>
+                            <span x-text="plan.duration_days === -1 ? '永久' : (plan.duration_days + '天')"></span>
+                            <span class="mx-1">·</span>
+                            <span x-text="plan.max_records === -1 ? '无限记录' : ('最多' + plan.max_records + '条记录')"></span>
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="editPlan(plan)" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        </button>
+                        <button @click="confirmDelete(plan)" class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+
+    <!-- Add/Edit Modal -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showModal && closeModal()">
+        <div class="absolute inset-0 bg-black/50" @click="closeModal()"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="editingId ? '编辑套餐' : '添加套餐'"></h3>
+            </div>
+            <form @submit.prevent="submitPlan()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">套餐名称 <span class="text-red-500">*</span></label>
+                    <input type="text" x-model="form.name" required class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="例如：基础套餐">
+                </div>
+                
+                <!-- 域名选择 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">关联域名 <span class="text-red-500">*</span></label>
+                    <div class="border border-gray-200 dark:border-gray-600 rounded-xl max-h-40 overflow-y-auto">
+                        <template x-if="domains.length === 0">
+                            <div class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 text-center">
+                                暂无域名，请先<a href="/host/domains" class="text-blue-600 hover:underline">添加域名</a>
+                            </div>
+                        </template>
+                        <template x-for="d in domains" :key="d.id">
+                            <label class="flex items-center px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                <input type="checkbox" :value="d.id" x-model="form.domain_ids" class="mr-3 rounded border-gray-300 dark:border-gray-500 text-blue-600 focus:ring-blue-500">
+                                <span x-text="d.name" class="text-gray-700 dark:text-gray-300"></span>
+                            </label>
+                        </template>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">选择此套餐可用的域名</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">价格 (元) <span class="text-red-500">*</span></label>
+                        <input type="number" x-model="form.price" required min="0" step="0.01" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">有效期 (天)</label>
+                        <input type="number" x-model="form.duration_days" min="-1" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="-1=永久">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">最小字符数</label>
+                        <input type="number" x-model="form.min_length" min="1" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="1">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">最大字符数</label>
+                        <input type="number" x-model="form.max_length" min="1" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="63">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">最大记录数</label>
+                        <input type="number" x-model="form.max_records" min="-1" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="-1=无限">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">排序</label>
+                        <input type="number" x-model="form.sort_order" min="0" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">描述 (可选)</label>
+                    <textarea x-model="form.description" rows="2" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="套餐描述"></textarea>
+                </div>
+                
+                <!-- 免费套餐设置 -->
+                <div class="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">免费套餐设置</h4>
+                    <div class="space-y-4">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="form.is_free" class="mr-3 rounded border-gray-300 dark:border-gray-500">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">标记为免费套餐（需要申请审核）</span>
+                        </label>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">购买次数限制</label>
+                            <input type="number" x-model="form.max_purchase_count" min="0" placeholder="0为不限" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">每用户最多购买次数</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" x-model="form.status" id="plan_status" class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="plan_status" class="text-sm text-gray-700 dark:text-gray-300">启用此套餐</label>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" @click="closeModal()" class="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 font-medium">取消</button>
+                    <button type="submit" :disabled="submitting" class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium disabled:opacity-50">
+                        <span x-show="!submitting" x-text="editingId ? '保存' : '添加'"></span>
+                        <span x-show="submitting">处理中...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Delete Confirm Modal -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="showDeleteModal = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm" @click.stop>
+            <div class="p-6 text-center">
+                <div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">确认删除</h3>
+                <p class="text-gray-500 dark:text-gray-400 mb-6">确定要删除套餐 "<span x-text="deletingPlan?.name"></span>" 吗？</p>
+                <div class="flex gap-3">
+                    <button @click="showDeleteModal = false" class="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 font-medium">取消</button>
+                    <button @click="doDelete()" :disabled="deleting" class="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium disabled:opacity-50">
+                        <span x-show="!deleting">删除</span>
+                        <span x-show="deleting">删除中...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+function hostPlans() {
+    return {
+        loading: true,
+        plans: [],
+        domains: [],
+        showModal: false,
+        showDeleteModal: false,
+        submitting: false,
+        deleting: false,
+        editingId: null,
+        deletingPlan: null,
+        form: {
+            name: '',
+            domain_ids: [],
+            price: 0,
+            duration_days: 30,
+            min_length: 1,
+            max_length: 63,
+            max_records: 10,
+            description: '',
+            sort_order: 0,
+            is_free: false,
+            max_purchase_count: 0,
+            renew_before_days: 0,
+            points_per_day: 0,
+            status: true
+        },
+        
+        get token() {
+            return localStorage.getItem('token');
+        },
+        
+        async init() {
+            await Promise.all([this.loadDomains(), this.loadPlans()]);
+            this.loading = false;
+        },
+        
+        async loadDomains() {
+            try {
+                const res = await fetch('/api/host/domains', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.domains = data.data || [];
+                }
+            } catch (e) {
+                console.error('Load domains failed:', e);
+            }
+        },
+        
+        async loadPlans() {
+            try {
+                const res = await fetch('/api/host/plans', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.plans = data.data || [];
+                }
+            } catch (e) {
+                console.error('Load plans failed:', e);
+            }
+        },
+        
+        openAddModal() {
+            this.editingId = null;
+            this.form = {
+                name: '',
+                domain_ids: [],
+                price: 0,
+                duration_days: 30,
+                min_length: 1,
+                max_length: 63,
+                max_records: 10,
+                description: '',
+                sort_order: 0,
+                is_free: false,
+                max_purchase_count: 0,
+                renew_before_days: 0,
+                points_per_day: 0,
+                status: true
+            };
+            this.showModal = true;
+        },
+        
+        editPlan(plan) {
+            this.editingId = plan.id;
+            this.form = {
+                name: plan.name,
+                domain_ids: plan.domain_ids || [],
+                price: plan.price,
+                duration_days: plan.duration_days || 30,
+                min_length: plan.min_length || 1,
+                max_length: plan.max_length || 63,
+                max_records: plan.max_records || 10,
+                description: plan.description || '',
+                sort_order: plan.sort_order || 0,
+                is_free: Boolean(plan.is_free),
+                max_purchase_count: plan.max_purchase_count || 0,
+                renew_before_days: plan.renew_before_days || 0,
+                points_per_day: plan.points_per_day || 0,
+                status: plan.status === 1
+            };
+            this.showModal = true;
+        },
+        
+        async submitPlan() {
+            // 验证
+            if (!this.form.name.trim()) {
+                window.$toast?.error('请输入套餐名称');
+                return;
+            }
+            if (this.form.domain_ids.length === 0) {
+                window.$toast?.error('请选择关联域名');
+                return;
+            }
+            
+            this.submitting = true;
+            try {
+                const url = this.editingId ? `/api/host/plans/${this.editingId}` : '/api/host/plans';
+                const method = this.editingId ? 'PUT' : 'POST';
+                
+                const body = {
+                    name: this.form.name.trim(),
+                    domain_ids: this.form.domain_ids.map(id => parseInt(id)),
+                    price: parseFloat(this.form.price) || 0,
+                    duration_days: parseInt(this.form.duration_days) || 30,
+                    min_length: parseInt(this.form.min_length) || 1,
+                    max_length: parseInt(this.form.max_length) || 63,
+                    max_records: parseInt(this.form.max_records) || 10,
+                    description: this.form.description || '',
+                    sort_order: parseInt(this.form.sort_order) || 0,
+                    is_free: this.form.is_free ? 1 : 0,
+                    max_purchase_count: parseInt(this.form.max_purchase_count) || 0,
+                    renew_before_days: parseInt(this.form.renew_before_days) || 0,
+                    points_per_day: parseInt(this.form.points_per_day) || 0,
+                    status: this.form.status ? 1 : 0
+                };
+                
+                const res = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.closeModal();
+                    await this.loadPlans();
+                    window.$toast?.success(this.editingId ? '套餐已更新' : '套餐已添加');
+                } else {
+                    window.$toast?.error(data.message || '操作失败');
+                }
+            } catch (e) {
+                window.$toast?.error('操作失败');
+            }
+            this.submitting = false;
+        },
+        
+        confirmDelete(plan) {
+            this.deletingPlan = plan;
+            this.showDeleteModal = true;
+        },
+        
+        async doDelete() {
+            if (!this.deletingPlan) return;
+            this.deleting = true;
+            try {
+                const res = await fetch(`/api/host/plans/${this.deletingPlan.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showDeleteModal = false;
+                    this.deletingPlan = null;
+                    await this.loadPlans();
+                    window.$toast?.success('套餐已删除');
+                } else {
+                    window.$toast?.error(data.message || '删除失败');
+                }
+            } catch (e) {
+                window.$toast?.error('删除失败');
+            }
+            this.deleting = false;
+        },
+        
+        closeModal() {
+            this.showModal = false;
+            this.editingId = null;
+        }
+    }
+}
+</script>
+{% endblock %}

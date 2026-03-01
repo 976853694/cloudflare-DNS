@@ -1,0 +1,235 @@
+{% extends "base_public.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="bg-white dark:bg-gray-900 overflow-x-hidden">
+    <!-- Hero Section -->
+    <div class="relative overflow-hidden min-h-[600px] flex items-center">
+        <!-- 背景装饰 - 优化渐变和透明度 -->
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-pink-500/10 dark:from-blue-900/20 dark:via-purple-900/20 dark:to-pink-900/20"></div>
+        <!-- 装饰性圆形 - 移除 animate-pulse，使用静态模糊效果 -->
+        <div class="absolute top-0 left-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-blue-400 dark:bg-blue-500 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-50 dark:opacity-30"></div>
+        <div class="absolute bottom-0 right-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-purple-400 dark:bg-purple-500 rounded-full mix-blend-multiply dark:mix-blend-screen filter blur-3xl opacity-50 dark:opacity-30"></div>
+        
+        <div class="relative max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center w-full">
+            <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 dark:text-white mb-4 sm:mb-6 leading-tight animate-fade-in">
+                {{ site_settings.site_name|default('免费二级域名分发') }}
+            </h1>
+            <p class="text-lg sm:text-xl md:text-2xl text-slate-600 dark:text-slate-300 mb-8 max-w-2xl mx-auto animate-fade-in" style="animation-delay: 0.1s;">
+                {{ site_settings.site_description|default('稳定可靠的二级域名服务，支持多种 DNS 记录类型') }}
+            </p>
+
+            <!-- 域名前缀搜索框 -->
+            <div class="max-w-2xl mx-auto mb-8 animate-fade-in" style="animation-delay: 0.2s;" x-data="{ 
+                domains: [],
+                prefix: '',
+                loading: true,
+                checking: false,
+                results: [],
+                showResults: false,
+                async checkAvailability() {
+                    if (!this.prefix.trim() || this.prefix.length < 2) {
+                        this.results = [];
+                        this.showResults = false;
+                        return;
+                    }
+                    this.checking = true;
+                    this.results = this.domains.map(d => ({
+                        ...d,
+                        fullDomain: this.prefix.trim() + '.' + d.name,
+                        available: null
+                    }));
+                    this.showResults = true;
+                    
+                    for (let i = 0; i < this.results.length; i++) {
+                        try {
+                            const res = await fetch('/api/domains/' + this.results[i].id + '/check?prefix=' + encodeURIComponent(this.prefix.trim()));
+                            const data = await res.json();
+                            this.results[i].available = data.data?.available ?? false;
+                        } catch(e) {
+                            this.results[i].available = false;
+                        }
+                    }
+                    this.checking = false;
+                }
+            }" x-init="
+                fetch('/api/domains')
+                .then(r => r.json())
+                .then(d => { domains = d.data.domains || []; loading = false; })
+                .catch(() => { loading = false; })
+            " @click.away="showResults = false">
+                <div class="input-group-enhanced">
+                    <svg class="input-icon w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    <input type="text" 
+                           x-model="prefix" 
+                           @input="showResults = false"
+                           @keydown.enter="checkAvailability()"
+                           :placeholder="$store.i18n.locale === 'zh' ? '输入想要的前缀，如 blog、www' : 'Enter prefix, e.g. blog, www'" 
+                           class="input-enhanced w-full pr-28 text-slate-900 dark:text-white bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+                    <button @click="checkAvailability()" 
+                            :disabled="checking || !prefix.trim() || prefix.length < 2"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-semibold rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer">
+                        <span x-show="!checking" x-text="$store.i18n.t('common.search')"></span>
+                        <span x-show="checking" class="flex items-center gap-1">
+                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </span>
+                    </button>
+                </div>
+                <!-- 查询结果 -->
+                <div x-show="showResults && results.length > 0" 
+                     x-transition
+                     class="mt-3 bg-white dark:bg-gray-800 rounded-xl shadow-xl border-2 border-slate-200 dark:border-gray-700 overflow-hidden text-left">
+                    <div class="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-gray-700">
+                        <template x-for="item in results" :key="item.id">
+                            <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-slate-900 dark:text-white text-sm" x-text="item.fullDomain"></span>
+                                    <span x-show="!item.is_platform" class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300" x-text="$store.i18n.locale === 'zh' ? '托管' : 'Host'"></span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <template x-if="item.available === null">
+                                        <span class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                            <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            <span x-text="$store.i18n.locale === 'zh' ? '检查中' : 'Checking'"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="item.available === true">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-medium text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/40 px-2.5 py-1 rounded-full" x-text="$store.i18n.t('domain.available')"></span>
+                                            <a :href="'/user/domains/new?domain=' + item.id + '&prefix=' + encodeURIComponent(prefix)" 
+                                               class="text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-blue-600 px-3 py-1 rounded-full hover:from-blue-600 hover:to-blue-700 transition-all cursor-pointer" x-text="$store.i18n.t('common.register')"></a>
+                                        </div>
+                                    </template>
+                                    <template x-if="item.available === false">
+                                        <span class="text-xs font-medium text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-2.5 py-1 rounded-full" x-text="$store.i18n.t('domain.registered')"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 登录/注册按钮 - 优化为渐变按钮 -->
+            <div class="flex flex-col sm:flex-row justify-center gap-4 animate-fade-in" style="animation-delay: 0.3s;" x-data="{ user: null }" x-init="
+                const token = localStorage.getItem('token');
+                if (token && token !== 'null') {
+                    fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+                    .then(r => r.json())
+                    .then(d => { if (d.code === 200) user = d.data; })
+                    .catch(() => {});
+                }
+            ">
+                <template x-if="!user">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <a href="/register" class="px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl transition-all duration-200 inline-flex items-center justify-center cursor-pointer min-h-[56px]" x-text="$store.i18n.locale === 'zh' ? '免费注册' : 'Free Register'"></a>
+                        <a href="/login" class="px-8 py-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm text-slate-900 dark:text-white border-2 border-slate-200 dark:border-gray-600 rounded-xl font-bold text-lg hover:bg-white dark:hover:bg-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200 inline-flex items-center justify-center cursor-pointer min-h-[56px]" x-text="$store.i18n.t('common.login')"></a>
+                    </div>
+                </template>
+                <template x-if="user">
+                    <a href="/user" class="px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-bold text-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl transition-all duration-200 inline-flex items-center justify-center cursor-pointer min-h-[56px]" x-text="$store.i18n.t('nav.dashboard')"></a>
+                </template>
+            </div>
+
+            <!-- 广告按钮 -->
+            {% if site_settings.ad_buttons %}
+            <div class="mt-6 flex flex-wrap justify-center gap-3">
+                {% for line in site_settings.ad_buttons.split('\n') %}
+                {% set parts = line.strip().split(',', 1) %}
+                {% if parts|length == 2 and parts[0].strip() and parts[1].strip() %}
+                <a href="{{ parts[1].strip() }}" target="_blank" rel="noopener" class="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-400 to-pink-500 text-white text-sm font-medium rounded-full hover:from-orange-500 hover:to-pink-600 transition shadow-md">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+                    {{ parts[0].strip() }}
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- 统计数据 - 优化悬停效果避免布局偏移 -->
+            <div class="mt-16 flex justify-center gap-8 sm:gap-16 text-center animate-fade-in" style="animation-delay: 0.4s;" x-data="{ stats: { users: 0, domains: 0, records: 0 } }" x-init="
+                fetch('/api/stats/public').then(r => r.json()).then(d => { if(d.code === 200) stats = d.data; }).catch(() => {});
+            ">
+                <div class="stat-item cursor-pointer">
+                    <div class="text-3xl sm:text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent mb-2" x-text="stats.users || '1000+'"></div>
+                    <div class="text-sm sm:text-base text-slate-600 dark:text-slate-400 font-medium" x-text="$store.i18n.locale === 'zh' ? '注册用户' : 'Users'"></div>
+                </div>
+                <div class="stat-item cursor-pointer">
+                    <div class="text-3xl sm:text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-green-500 to-blue-600 bg-clip-text text-transparent mb-2" x-text="stats.domains || '500+'"></div>
+                    <div class="text-sm sm:text-base text-slate-600 dark:text-slate-400 font-medium" x-text="$store.i18n.locale === 'zh' ? '域名数量' : 'Domains'"></div>
+                </div>
+                <div class="stat-item cursor-pointer">
+                    <div class="text-3xl sm:text-4xl md:text-5xl font-extrabold bg-gradient-to-r from-purple-500 to-pink-600 bg-clip-text text-transparent mb-2" x-text="stats.records || '10000+'"></div>
+                    <div class="text-sm sm:text-base text-slate-600 dark:text-slate-400 font-medium" x-text="$store.i18n.locale === 'zh' ? '解析记录' : 'Records'"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 特性展示区域 -->
+    <div class="py-16 sm:py-24 bg-slate-50 dark:bg-gray-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6">
+            <div class="text-center mb-12 animate-fade-in">
+                <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '核心特性' : 'Core Features'"></h2>
+                <p class="text-lg text-slate-600 dark:text-slate-300" x-text="$store.i18n.locale === 'zh' ? '为您提供专业、稳定、高效的域名解析服务' : 'Professional, stable and efficient domain resolution service'"></p>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+                <!-- 特性1：快速解析 -->
+                <div class="bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-700 rounded-2xl p-8 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-xl transition-all duration-200 text-center cursor-pointer group" style="animation-delay: 0.1s;">
+                    <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3" x-text="$store.i18n.locale === 'zh' ? '快速解析' : 'Fast Resolution'"></h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '全球CDN加速，毫秒级响应，确保域名快速生效' : 'Global CDN acceleration with millisecond response'"></p>
+                </div>
+
+                <!-- 特性2：稳定可靠 -->
+                <div class="bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-700 rounded-2xl p-8 hover:border-green-500 dark:hover:border-green-500 hover:shadow-xl transition-all duration-200 text-center cursor-pointer group" style="animation-delay: 0.2s;">
+                    <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3" x-text="$store.i18n.locale === 'zh' ? '稳定可靠' : 'Stable & Reliable'"></h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '99.9%在线率保障，多重备份机制，数据安全无忧' : '99.9% uptime guarantee with multiple backup mechanisms'"></p>
+                </div>
+
+                <!-- 特性3：多种记录 -->
+                <div class="bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-700 rounded-2xl p-8 hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-xl transition-all duration-200 text-center cursor-pointer group" style="animation-delay: 0.3s;">
+                    <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3" x-text="$store.i18n.locale === 'zh' ? '多种记录' : 'Multiple Records'"></h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '支持A、AAAA、CNAME、MX、TXT等多种DNS记录类型' : 'Support A, AAAA, CNAME, MX, TXT and more record types'"></p>
+                </div>
+
+                <!-- 特性4：简单易用 -->
+                <div class="bg-white dark:bg-gray-800 border-2 border-slate-200 dark:border-gray-700 rounded-2xl p-8 hover:border-orange-500 dark:hover:border-orange-500 hover:shadow-xl transition-all duration-200 text-center cursor-pointer group" style="animation-delay: 0.4s;">
+                    <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-3" x-text="$store.i18n.locale === 'zh' ? '简单易用' : 'Easy to Use'"></h3>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '直观的管理界面，一键添加记录，无需专业知识' : 'Intuitive interface, one-click record addition'"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

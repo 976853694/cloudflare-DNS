@@ -1,0 +1,788 @@
+{% extends "base.html" %}
+
+{% block title %}安全设置 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="securityPage()" x-init="init()">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.locale === 'zh' ? '安全设置' : 'Security Settings'"></h1>
+
+    <div class="max-w-2xl space-y-6">
+        <!-- 双因素认证 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '双因素认证 (2FA)' : 'Two-Factor Authentication (2FA)'"></h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '使用身份验证器应用增强账户安全' : 'Enhance account security with authenticator app'"></p>
+                </div>
+                <span x-show="twofa.enabled" class="px-2 py-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 text-xs rounded" x-text="$store.i18n.locale === 'zh' ? '已启用' : 'Enabled'"></span>
+                <span x-show="!twofa.enabled" class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded" x-text="$store.i18n.locale === 'zh' ? '未启用' : 'Disabled'"></span>
+            </div>
+            
+            <!-- 未启用状态 -->
+            <div x-show="!twofa.enabled" class="mt-4">
+                <button @click="setup2FA()" :disabled="loading" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '启用双因素认证' : 'Enable 2FA'">
+                </button>
+            </div>
+            
+            <!-- 已启用状态 -->
+            <div x-show="twofa.enabled" class="mt-4 space-y-3">
+                <p class="text-sm text-gray-600 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '剩余备用码: ' : 'Remaining backup codes: '"></span><span class="font-medium" x-text="twofa.backup_codes_remaining"></span><span x-text="$store.i18n.locale === 'zh' ? ' 个' : ''"></span></p>
+                <div class="flex gap-3">
+                    <button @click="showRegenBackup = true" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '重新生成备用码' : 'Regenerate Backup Codes'"></button>
+                    <button @click="showDisable2FA = true" class="px-4 py-2 text-red-600 border border-red-200 dark:border-red-800 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20" x-text="$store.i18n.locale === 'zh' ? '关闭2FA' : 'Disable 2FA'"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 快捷登录绑定 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+            <h3 class="font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '快捷登录绑定' : 'OAuth Account Binding'"></h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '绑定第三方账号后可使用快捷登录' : 'Bind third-party accounts for quick login'"></p>
+            
+            <!-- 绑定结果提示 -->
+            <div x-show="bindMessage" x-cloak class="mb-4 p-3 rounded-lg text-sm" :class="bindSuccess ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'" x-text="bindMessage"></div>
+            
+            <div class="space-y-3">
+                <!-- 手机号绑定 -->
+                <div x-show="phone.smsEnabled" class="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '手机号' : 'Phone'"></p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="phone.bound ? phone.phoneMasked : ($store.i18n.locale === 'zh' ? '未绑定' : 'Not bound')"></p>
+                        </div>
+                    </div>
+                    <button x-show="!phone.bound" @click="showBindPhone = true" class="px-4 py-2 text-sm bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '绑定' : 'Bind'"></button>
+                    <div x-show="phone.bound" class="flex gap-2">
+                        <button @click="showChangePhone = true" class="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '换绑' : 'Change'"></button>
+                        <button @click="showUnbindPhone = true" class="px-3 py-2 text-sm border border-red-200 dark:border-red-800 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" x-text="$store.i18n.locale === 'zh' ? '解绑' : 'Unbind'"></button>
+                    </div>
+                </div>
+
+                <!-- GitHub -->
+                <div x-show="oauth.github.enabled" class="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-white">GitHub</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="oauth.github.bound ? ($store.i18n.locale === 'zh' ? '已绑定' : 'Bound') : ($store.i18n.locale === 'zh' ? '未绑定' : 'Not bound')"></p>
+                        </div>
+                    </div>
+                    <button x-show="!oauth.github.bound" @click="bindOAuth('github')" :disabled="bindingOAuth" class="px-4 py-2 text-sm bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '绑定' : 'Bind'"></button>
+                    <button x-show="oauth.github.bound" @click="unbindOAuth('github')" :disabled="bindingOAuth" class="px-4 py-2 text-sm border border-red-200 dark:border-red-800 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" x-text="$store.i18n.locale === 'zh' ? '解绑' : 'Unbind'"></button>
+                </div>
+                
+                <!-- Google -->
+                <div x-show="oauth.google.enabled" class="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-white">Google</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="oauth.google.bound ? ($store.i18n.locale === 'zh' ? '已绑定' : 'Bound') : ($store.i18n.locale === 'zh' ? '未绑定' : 'Not bound')"></p>
+                        </div>
+                    </div>
+                    <button x-show="!oauth.google.bound" @click="bindOAuth('google')" :disabled="bindingOAuth" class="px-4 py-2 text-sm bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '绑定' : 'Bind'"></button>
+                    <button x-show="oauth.google.bound" @click="unbindOAuth('google')" :disabled="bindingOAuth" class="px-4 py-2 text-sm border border-red-200 dark:border-red-800 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" x-text="$store.i18n.locale === 'zh' ? '解绑' : 'Unbind'"></button>
+                </div>
+                
+                <!-- NodeLoc -->
+                <div x-show="oauth.nodeloc.enabled" class="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-white">NodeLoc</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="oauth.nodeloc.bound ? ($store.i18n.locale === 'zh' ? '已绑定' : 'Bound') : ($store.i18n.locale === 'zh' ? '未绑定' : 'Not bound')"></p>
+                        </div>
+                    </div>
+                    <button x-show="!oauth.nodeloc.bound" @click="bindOAuth('nodeloc')" :disabled="bindingOAuth" class="px-4 py-2 text-sm bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '绑定' : 'Bind'"></button>
+                    <button x-show="oauth.nodeloc.bound" @click="unbindOAuth('nodeloc')" :disabled="bindingOAuth" class="px-4 py-2 text-sm border border-red-200 dark:border-red-800 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" x-text="$store.i18n.locale === 'zh' ? '解绑' : 'Unbind'"></button>
+                </div>
+                
+                <!-- Telegram -->
+                <div x-show="telegram.enabled" class="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-6 h-6 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-white">Telegram</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="telegram.bound ? (telegram.telegram_username ? '@' + telegram.telegram_username : ($store.i18n.locale === 'zh' ? '已绑定' : 'Bound')) : ($store.i18n.locale === 'zh' ? '未绑定' : 'Not bound')"></p>
+                        </div>
+                    </div>
+                    <button x-show="!telegram.bound" @click="showTelegramBind = true" class="px-4 py-2 text-sm bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '绑定' : 'Bind'"></button>
+                    <button x-show="telegram.bound" @click="unbindTelegram()" :disabled="telegramUnbinding" class="px-4 py-2 text-sm border border-red-200 dark:border-red-800 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20" x-text="$store.i18n.locale === 'zh' ? '解绑' : 'Unbind'"></button>
+                </div>
+                
+                <!-- 无可用的快捷登录 -->
+                <p x-show="!oauth.github.enabled && !oauth.google.enabled && !oauth.nodeloc.enabled" class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无可用的快捷登录方式' : 'No OAuth providers available'"></p>
+            </div>
+        </div>
+
+        <!-- 登录IP限制 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+            <h3 class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '登录IP限制' : 'Login IP Restriction'"></h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '限制只允许指定IP登录（留空不限制）' : 'Restrict login to specific IPs (leave empty for no restriction)'"></p>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-2"><span x-text="$store.i18n.locale === 'zh' ? '当前IP: ' : 'Current IP: '"></span><span class="font-mono" x-text="currentIp"></span></p>
+            
+            <div class="mt-4">
+                <textarea x-model="ipRestriction" rows="3" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm" :placeholder="$store.i18n.locale === 'zh' ? '每行一个IP，例如:\n192.168.1.1\n10.0.0.1' : 'One IP per line, e.g.:\n192.168.1.1\n10.0.0.1'"></textarea>
+            </div>
+            <button @click="saveIpRestriction()" :disabled="saving" class="mt-3 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500 text-sm">
+                <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+            </button>
+        </div>
+
+        <!-- 登录历史 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+            <h3 class="font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '最近登录' : 'Recent Logins'"></h3>
+            <div class="space-y-3">
+                <template x-for="log in loginHistory" :key="log.id">
+                    <div class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                        <div>
+                            <p class="text-sm font-mono text-gray-900 dark:text-white" x-text="log.ip_address || '-'"></p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400" x-text="log.created_at ? log.created_at.slice(0,16).replace('T',' ') : ''"></p>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="loginHistory.length === 0" class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无登录记录' : 'No login history'"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2FA设置弹窗 -->
+    <div x-show="showSetup" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showSetup = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '设置双因素认证' : 'Setup Two-Factor Authentication'"></h3>
+            
+            <div x-show="setupStep === 1" class="space-y-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '使用身份验证器应用（如 Google Authenticator、Microsoft Authenticator）扫描下方二维码' : 'Scan the QR code below with your authenticator app (e.g., Google Authenticator, Microsoft Authenticator)'"></p>
+                <div class="flex justify-center">
+                    <img :src="qrCodeUrl" class="w-48 h-48 border dark:border-gray-600 rounded" x-show="qrCodeUrl">
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '或手动输入密钥:' : 'Or enter the secret key manually:'"></p>
+                    <p class="font-mono text-sm bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded select-all" x-text="setupData.secret"></p>
+                </div>
+                <button @click="setupStep = 2" class="w-full px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '下一步' : 'Next'"></button>
+            </div>
+            
+            <div x-show="setupStep === 2" class="space-y-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '输入身份验证器显示的6位验证码' : 'Enter the 6-digit code from your authenticator app'"></p>
+                <input type="text" x-model="verifyCode" maxlength="6" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-center text-2xl font-mono tracking-widest bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="000000">
+                <div x-show="setupError" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="setupError"></div>
+                <button @click="enable2FA()" :disabled="verifying" class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <span x-show="!verifying" x-text="$store.i18n.locale === 'zh' ? '验证并启用' : 'Verify and Enable'"></span>
+                    <span x-show="verifying" x-text="$store.i18n.locale === 'zh' ? '验证中...' : 'Verifying...'"></span>
+                </button>
+            </div>
+            
+            <div x-show="setupStep === 3" class="space-y-4">
+                <div class="text-center text-green-600 mb-4">
+                    <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <p class="font-medium mt-2" x-text="$store.i18n.locale === 'zh' ? '双因素认证已启用！' : 'Two-Factor Authentication Enabled!'"></p>
+                </div>
+                <p class="text-sm text-gray-600 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '请妥善保存以下备用码，用于无法使用验证器时登录:' : 'Please save these backup codes for login when you cannot use your authenticator:'"></p>
+                <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-3 grid grid-cols-2 gap-2">
+                    <template x-for="code in backupCodes" :key="code">
+                        <p class="font-mono text-sm text-center text-gray-900 dark:text-white" x-text="code"></p>
+                    </template>
+                </div>
+                <button @click="showSetup = false; load2FAStatus()" class="w-full px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '完成' : 'Done'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 关闭2FA弹窗 -->
+    <div x-show="showDisable2FA" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showDisable2FA = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '关闭双因素认证' : 'Disable Two-Factor Authentication'"></h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '当前密码' : 'Current Password'"></label>
+                    <input type="password" x-model="disableForm.password" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '验证码' : 'Verification Code'"></label>
+                    <input type="text" x-model="disableForm.code" maxlength="6" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div x-show="disableError" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="disableError"></div>
+                <div class="flex gap-3">
+                    <button @click="showDisable2FA = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                    <button @click="disable2FA()" :disabled="disabling" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Disable'"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 绑定手机号弹窗 -->
+    <div x-show="showBindPhone" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showBindPhone = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '绑定手机号' : 'Bind Phone Number'"></h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '手机号' : 'Phone Number'"></label>
+                    <input type="tel" x-model="phoneBindForm.phone" maxlength="11" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="请输入手机号">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '验证码' : 'Verification Code'"></label>
+                    <div class="flex gap-2">
+                        <input type="text" x-model="phoneBindForm.code" maxlength="6" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="请输入验证码">
+                        <button type="button" @click="sendPhoneCode('bind')" :disabled="phoneSending || phoneCountdown > 0"
+                            class="px-4 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition whitespace-nowrap disabled:opacity-50">
+                            <span x-text="phoneCountdown > 0 ? phoneCountdown + 's' : (phoneSending ? '发送中...' : '获取验证码')"></span>
+                        </button>
+                    </div>
+                </div>
+                <div x-show="phoneError" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="phoneError"></div>
+                <div class="flex gap-3">
+                    <button @click="showBindPhone = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                    <button @click="bindPhone()" :disabled="phoneBinding" class="flex-1 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '绑定' : 'Bind'"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 解绑手机号弹窗 -->
+    <div x-show="showUnbindPhone" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showUnbindPhone = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '解绑手机号' : 'Unbind Phone Number'"></h3>
+            <div class="space-y-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '请输入当前手机号收到的验证码以确认解绑' : 'Enter the verification code sent to your phone to confirm unbinding'"></p>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '验证码' : 'Verification Code'"></label>
+                    <div class="flex gap-2">
+                        <input type="text" x-model="phoneUnbindForm.code" maxlength="6" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="请输入验证码">
+                        <button type="button" @click="sendPhoneCode('verify')" :disabled="phoneSending || phoneCountdown > 0"
+                            class="px-4 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition whitespace-nowrap disabled:opacity-50">
+                            <span x-text="phoneCountdown > 0 ? phoneCountdown + 's' : (phoneSending ? '发送中...' : '获取验证码')"></span>
+                        </button>
+                    </div>
+                </div>
+                <div x-show="phoneError" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="phoneError"></div>
+                <div class="flex gap-3">
+                    <button @click="showUnbindPhone = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                    <button @click="unbindPhone()" :disabled="phoneBinding" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700" x-text="$store.i18n.locale === 'zh' ? '解绑' : 'Unbind'"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 换绑手机号弹窗 -->
+    <div x-show="showChangePhone" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showChangePhone = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '换绑手机号' : 'Change Phone Number'"></h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '原手机验证码' : 'Old Phone Code'"></label>
+                    <div class="flex gap-2">
+                        <input type="text" x-model="phoneChangeForm.old_code" maxlength="6" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="请输入验证码">
+                        <button type="button" @click="sendPhoneCode('verify')" :disabled="phoneSending || phoneCountdown > 0"
+                            class="px-4 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition whitespace-nowrap disabled:opacity-50">
+                            <span x-text="phoneCountdown > 0 ? phoneCountdown + 's' : (phoneSending ? '发送中...' : '获取验证码')"></span>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '新手机号' : 'New Phone Number'"></label>
+                    <input type="tel" x-model="phoneChangeForm.new_phone" maxlength="11" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="请输入新手机号">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '新手机验证码' : 'New Phone Code'"></label>
+                    <div class="flex gap-2">
+                        <input type="text" x-model="phoneChangeForm.new_code" maxlength="6" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="请输入验证码">
+                        <button type="button" @click="sendNewPhoneCode()" :disabled="newPhoneSending || newPhoneCountdown > 0"
+                            class="px-4 py-2 bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition whitespace-nowrap disabled:opacity-50">
+                            <span x-text="newPhoneCountdown > 0 ? newPhoneCountdown + 's' : (newPhoneSending ? '发送中...' : '获取验证码')"></span>
+                        </button>
+                    </div>
+                </div>
+                <div x-show="phoneError" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="phoneError"></div>
+                <div class="flex gap-3">
+                    <button @click="showChangePhone = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                    <button @click="changePhone()" :disabled="phoneBinding" class="flex-1 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '换绑' : 'Change'"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Telegram 绑定弹窗 -->
+    <div x-show="showTelegramBind" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showTelegramBind = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '绑定 Telegram' : 'Bind Telegram'"></h3>
+            <div class="space-y-4">
+                <div x-show="!telegramBindCode" class="text-center py-4">
+                    <button @click="generateTelegramCode()" :disabled="telegramGenerating" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <span x-show="!telegramGenerating" x-text="$store.i18n.locale === 'zh' ? '获取绑定码' : 'Get Bind Code'"></span>
+                        <span x-show="telegramGenerating" class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    </button>
+                </div>
+                <div x-show="telegramBindCode" class="space-y-4">
+                    <div class="text-center">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-2" x-text="$store.i18n.locale === 'zh' ? '您的绑定码（5分钟内有效）：' : 'Your bind code (valid for 5 minutes):'"></p>
+                        <p class="text-3xl font-mono font-bold text-blue-600 dark:text-blue-400 tracking-widest select-all" x-text="telegramBindCode"></p>
+                    </div>
+                    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-sm text-gray-600 dark:text-gray-400">
+                        <p class="font-medium mb-2" x-text="$store.i18n.locale === 'zh' ? '绑定步骤：' : 'Steps:'"></p>
+                        <ol class="list-decimal list-inside space-y-1">
+                            <li x-text="$store.i18n.locale === 'zh' ? '打开 Telegram，搜索机器人 @' + telegram.bot_username : 'Open Telegram, search for bot @' + telegram.bot_username"></li>
+                            <li x-text="$store.i18n.locale === 'zh' ? '私聊机器人，发送命令：' : 'Send command to bot:'"></li>
+                        </ol>
+                        <p class="mt-2 font-mono bg-gray-200 dark:bg-gray-600 px-3 py-2 rounded text-gray-900 dark:text-white select-all">/bind <span x-text="telegramBindCode"></span></p>
+                    </div>
+                </div>
+                <div x-show="telegramError" class="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="telegramError"></div>
+                <div class="flex gap-3">
+                    <button @click="showTelegramBind = false; telegramBindCode = ''" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Close'"></button>
+                    <button x-show="telegramBindCode" @click="generateTelegramCode()" :disabled="telegramGenerating" class="flex-1 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '重新获取' : 'Regenerate'"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function securityPage() {
+    return {
+        twofa: { enabled: false, backup_codes_remaining: 0 },
+        currentIp: '', ipRestriction: '', loginHistory: [],
+        loading: false, saving: false,
+        showSetup: false, setupStep: 1, setupData: {}, verifyCode: '', verifying: false, setupError: '', backupCodes: [],
+        showDisable2FA: false, disableForm: { password: '', code: '' }, disabling: false, disableError: '',
+        showRegenBackup: false,
+        qrCodeUrl: '',
+        oauth: { github: { enabled: false, bound: false }, google: { enabled: false, bound: false }, nodeloc: { enabled: false, bound: false } },
+        bindingOAuth: false,
+        bindMessage: '',
+        bindSuccess: false,
+        // 手机绑定相关
+        phone: { smsEnabled: false, bound: false, phoneMasked: '' },
+        showBindPhone: false,
+        showUnbindPhone: false,
+        showChangePhone: false,
+        phoneBindForm: { phone: '', code: '' },
+        phoneUnbindForm: { code: '' },
+        phoneChangeForm: { old_code: '', new_phone: '', new_code: '' },
+        phoneSending: false,
+        phoneCountdown: 0,
+        newPhoneSending: false,
+        newPhoneCountdown: 0,
+        phoneBinding: false,
+        phoneError: '',
+        // Telegram 绑定相关
+        telegram: { enabled: false, bound: false, telegram_username: '', bot_username: '' },
+        showTelegramBind: false,
+        telegramBindCode: '',
+        telegramGenerating: false,
+        telegramUnbinding: false,
+        telegramError: '',
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            this.load2FAStatus();
+            this.loadIpRestriction();
+            this.loadLoginHistory();
+            this.loadOAuthStatus();
+            this.loadPhoneStatus();
+            this.loadTelegramStatus();
+            this.handleOAuthCallback();
+        },
+        async loadPhoneStatus() {
+            try {
+                const res = await fetch('/api/security/phone/bindable', { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.phone = {
+                        smsEnabled: data.data.sms_enabled,
+                        bound: data.data.phone_bound,
+                        phoneMasked: data.data.phone_masked,
+                        phoneRaw: data.data.phone
+                    };
+                }
+            } catch (e) {}
+        },
+        async sendPhoneCode(action) {
+            const phoneToSend = action === 'bind' ? this.phoneBindForm.phone : this.phone.phoneRaw;
+            if (!phoneToSend || !/^1[3-9]\d{9}$/.test(phoneToSend)) {
+                this.phoneError = '请输入正确的手机号';
+                return;
+            }
+            this.phoneSending = true;
+            this.phoneError = '';
+            try {
+                const res = await fetch('/api/security/phone/send-code', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phoneToSend, action: action })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.phoneCountdown = 60;
+                    const timer = setInterval(() => {
+                        this.phoneCountdown--;
+                        if (this.phoneCountdown <= 0) clearInterval(timer);
+                    }, 1000);
+                } else {
+                    this.phoneError = data.message;
+                }
+            } catch (e) {
+                this.phoneError = '网络错误';
+            }
+            this.phoneSending = false;
+        },
+        async sendNewPhoneCode() {
+            if (!this.phoneChangeForm.new_phone || !/^1[3-9]\d{9}$/.test(this.phoneChangeForm.new_phone)) {
+                this.phoneError = '请输入正确的新手机号';
+                return;
+            }
+            this.newPhoneSending = true;
+            this.phoneError = '';
+            try {
+                const res = await fetch('/api/security/phone/send-code', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: this.phoneChangeForm.new_phone, action: 'bind' })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.newPhoneCountdown = 60;
+                    const timer = setInterval(() => {
+                        this.newPhoneCountdown--;
+                        if (this.newPhoneCountdown <= 0) clearInterval(timer);
+                    }, 1000);
+                } else {
+                    this.phoneError = data.message;
+                }
+            } catch (e) {
+                this.phoneError = '网络错误';
+            }
+            this.newPhoneSending = false;
+        },
+        async bindPhone() {
+            if (!this.phoneBindForm.phone || !this.phoneBindForm.code) {
+                this.phoneError = '请填写完整信息';
+                return;
+            }
+            this.phoneBinding = true;
+            this.phoneError = '';
+            try {
+                const res = await fetch('/api/security/phone/bind', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.phoneBindForm)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showBindPhone = false;
+                    this.phoneBindForm = { phone: '', code: '' };
+                    this.loadPhoneStatus();
+                    this.bindMessage = '手机号绑定成功';
+                    this.bindSuccess = true;
+                } else {
+                    this.phoneError = data.message;
+                }
+            } catch (e) {
+                this.phoneError = '网络错误';
+            }
+            this.phoneBinding = false;
+        },
+        async unbindPhone() {
+            if (!this.phoneUnbindForm.code) {
+                this.phoneError = '请输入验证码';
+                return;
+            }
+            this.phoneBinding = true;
+            this.phoneError = '';
+            try {
+                const res = await fetch('/api/security/phone/unbind', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.phoneUnbindForm)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showUnbindPhone = false;
+                    this.phoneUnbindForm = { code: '' };
+                    this.loadPhoneStatus();
+                    this.bindMessage = '手机号解绑成功';
+                    this.bindSuccess = true;
+                } else {
+                    this.phoneError = data.message;
+                }
+            } catch (e) {
+                this.phoneError = '网络错误';
+            }
+            this.phoneBinding = false;
+        },
+        async changePhone() {
+            if (!this.phoneChangeForm.old_code || !this.phoneChangeForm.new_phone || !this.phoneChangeForm.new_code) {
+                this.phoneError = '请填写完整信息';
+                return;
+            }
+            this.phoneBinding = true;
+            this.phoneError = '';
+            try {
+                const res = await fetch('/api/security/phone/change', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.phoneChangeForm)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showChangePhone = false;
+                    this.phoneChangeForm = { old_code: '', new_phone: '', new_code: '' };
+                    this.loadPhoneStatus();
+                    this.bindMessage = '手机号换绑成功';
+                    this.bindSuccess = true;
+                } else {
+                    this.phoneError = data.message;
+                }
+            } catch (e) {
+                this.phoneError = '网络错误';
+            }
+            this.phoneBinding = false;
+        },
+        handleOAuthCallback() {
+            const params = new URLSearchParams(window.location.search);
+            const bindSuccess = params.get('bind_success');
+            const bindError = params.get('bind_error');
+            
+            if (bindSuccess) {
+                const names = { github: 'GitHub', google: 'Google', nodeloc: 'NodeLoc' };
+                this.bindMessage = (Alpine.store('i18n').locale === 'zh' ? '成功绑定 ' : 'Successfully bound ') + (names[bindSuccess] || bindSuccess);
+                this.bindSuccess = true;
+                window.history.replaceState({}, '', '/user/security');
+            } else if (bindError) {
+                const errorMessages = {
+                    'github_denied': '您取消了 GitHub 授权',
+                    'google_denied': '您取消了 Google 授权',
+                    'nodeloc_denied': '您取消了 NodeLoc 授权',
+                    'github_already_bound': '该 GitHub 账号已被其他用户绑定',
+                    'google_already_bound': '该 Google 账号已被其他用户绑定',
+                    'nodeloc_already_bound': '该 NodeLoc 账号已被其他用户绑定',
+                    'invalid_state': '请求无效，请重试',
+                    'user_not_found': '用户不存在'
+                };
+                this.bindMessage = errorMessages[bindError] || '绑定失败';
+                this.bindSuccess = false;
+                window.history.replaceState({}, '', '/user/security');
+            }
+        },
+        async loadOAuthStatus() {
+            try {
+                const res = await fetch('/api/auth/oauth/bindable', { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.oauth = data.data;
+                }
+            } catch (e) {}
+        },
+        async bindOAuth(provider) {
+            this.bindingOAuth = true;
+            this.bindMessage = '';
+            try {
+                const res = await fetch(`/api/auth/oauth/bind/${provider}`, { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                if (data.code === 200 && data.data.url) {
+                    window.location.href = data.data.url;
+                } else {
+                    this.bindMessage = data.message || '绑定失败';
+                    this.bindSuccess = false;
+                }
+            } catch (e) {
+                this.bindMessage = '网络错误';
+                this.bindSuccess = false;
+            }
+            this.bindingOAuth = false;
+        },
+        async unbindOAuth(provider) {
+            const names = { github: 'GitHub', google: 'Google', nodeloc: 'NodeLoc' };
+            if (!confirm((Alpine.store('i18n').locale === 'zh' ? '确定要解绑 ' : 'Are you sure to unbind ') + names[provider] + '?')) return;
+            
+            this.bindingOAuth = true;
+            this.bindMessage = '';
+            try {
+                const res = await fetch(`/api/auth/oauth/unbind/${provider}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.bindMessage = Alpine.store('i18n').locale === 'zh' ? '解绑成功' : 'Unbound successfully';
+                    this.bindSuccess = true;
+                    this.loadOAuthStatus();
+                } else {
+                    this.bindMessage = data.message || '解绑失败';
+                    this.bindSuccess = false;
+                }
+            } catch (e) {
+                this.bindMessage = '网络错误';
+                this.bindSuccess = false;
+            }
+            this.bindingOAuth = false;
+        },
+        async load2FAStatus() {
+            const res = await fetch('/api/security/2fa/status', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.twofa = data.data;
+        },
+        async loadIpRestriction() {
+            const res = await fetch('/api/security/ip-restriction', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.ipRestriction = data.data.allowed_ips.join('\n');
+                this.currentIp = data.data.current_ip;
+            }
+        },
+        async loadLoginHistory() {
+            const res = await fetch('/api/security/sessions', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.loginHistory = data.data.history;
+        },
+        async setup2FA() {
+            this.loading = true;
+            const res = await fetch('/api/security/2fa/setup', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.setupData = data.data;
+                this.setupStep = 1;
+                this.verifyCode = '';
+                this.setupError = '';
+                // 使用Google Charts API生成二维码
+                if (data.data.uri) {
+                    this.qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=' + encodeURIComponent(data.data.uri);
+                }
+                this.showSetup = true;
+            }
+            this.loading = false;
+        },
+        async enable2FA() {
+            this.setupError = '';
+            if (this.verifyCode.length !== 6) { this.setupError = '请输入6位验证码'; return; }
+            this.verifying = true;
+            const res = await fetch('/api/security/2fa/enable', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: this.verifyCode })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.backupCodes = data.data.backup_codes;
+                this.setupStep = 3;
+            } else {
+                this.setupError = data.message;
+            }
+            this.verifying = false;
+        },
+        async disable2FA() {
+            this.disableError = '';
+            this.disabling = true;
+            const res = await fetch('/api/security/2fa/disable', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.disableForm)
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.showDisable2FA = false;
+                this.load2FAStatus();
+            } else {
+                this.disableError = data.message;
+            }
+            this.disabling = false;
+        },
+        async saveIpRestriction() {
+            this.saving = true;
+            const ips = this.ipRestriction.split('\n').map(ip => ip.trim()).filter(ip => ip);
+            const res = await fetch('/api/security/ip-restriction', {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allowed_ips: ips })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                alert('保存成功');
+            } else {
+                alert(data.message);
+            }
+            this.saving = false;
+        },
+        // Telegram 相关方法
+        async loadTelegramStatus() {
+            try {
+                const res = await fetch('/api/security/telegram/status', { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.telegram = {
+                        enabled: data.data.enabled,
+                        bound: data.data.bound,
+                        telegram_username: data.data.telegram_username,
+                        bot_username: data.data.bot_username
+                    };
+                }
+            } catch (e) {}
+        },
+        async generateTelegramCode() {
+            this.telegramGenerating = true;
+            this.telegramError = '';
+            try {
+                const res = await fetch('/api/security/telegram/bind-code', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.telegramBindCode = data.data.code;
+                    this.telegram.bot_username = data.data.bot_username;
+                } else {
+                    this.telegramError = data.message;
+                }
+            } catch (e) {
+                this.telegramError = '网络错误';
+            }
+            this.telegramGenerating = false;
+        },
+        async unbindTelegram() {
+            if (!confirm(Alpine.store('i18n').locale === 'zh' ? '确定要解绑 Telegram 吗？' : 'Are you sure to unbind Telegram?')) return;
+            
+            this.telegramUnbinding = true;
+            try {
+                const res = await fetch('/api/security/telegram/unbind', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.bindMessage = Alpine.store('i18n').locale === 'zh' ? 'Telegram 解绑成功' : 'Telegram unbound successfully';
+                    this.bindSuccess = true;
+                    this.loadTelegramStatus();
+                } else {
+                    this.bindMessage = data.message;
+                    this.bindSuccess = false;
+                }
+            } catch (e) {
+                this.bindMessage = '网络错误';
+                this.bindSuccess = false;
+            }
+            this.telegramUnbinding = false;
+        }
+    }
+}
+</script>
+{% endblock %}

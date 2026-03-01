@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}WHOIS 查询 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="pt-14 lg:pt-0 min-h-screen">
+    <div class="p-4 sm:p-6" x-data="whoisPage()" x-init="init()">    <div class="mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('whois.title')"></h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('whois.description')"></p>
+    </div>
+
+    <!-- 查询表单 -->
+    <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200 rounded-2xl p-4 sm:p-6 mb-6">
+        <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex-1">
+                <input type="text" 
+                       x-model="domain" 
+                       @keyup.enter="query()"
+                       :placeholder="$store.i18n.t('whois.placeholder')"
+                       class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <button @click="query()" 
+                    :disabled="loading || !domain.trim()" 
+                    class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[120px]">
+                <svg x-show="loading" class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <svg x-show="!loading" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <span x-text="loading ? $store.i18n.t('whois.querying') : $store.i18n.t('whois.query')"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 错误提示 / 未注册提示 -->
+    <div x-show="error" x-cloak class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4 mb-6">
+        <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="text-red-700 dark:text-red-300" x-text="error"></span>
+        </div>
+    </div>
+
+    <!-- 未注册结果 -->
+    <div x-show="notRegistered" x-cloak class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200 rounded-2xl overflow-hidden">
+        <div class="p-4 sm:p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="queriedDomain"></h2>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                <span class="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm" x-text="$store.i18n.t('whois.notRegistered')"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查询结果 -->
+    <div x-show="result" x-cloak class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200 rounded-2xl overflow-hidden">
+        <div class="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="result?.domain"></h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            <span x-show="result?.cached" class="inline-flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span x-text="$store.i18n.t('whois.cached')"></span>
+                            </span>
+                            <span x-show="!result?.cached" x-text="$store.i18n.t('whois.realtime')"></span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-4 sm:p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 注册人 -->
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('whois.registrant')"></p>
+                        <p class="text-gray-900 dark:text-white font-medium" x-text="result?.registrant || '-'"></p>
+                    </div>
+                </div>
+                
+                <!-- 联系邮箱 -->
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-purple-500 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('whois.email')"></p>
+                        <p class="text-gray-900 dark:text-white font-medium font-mono" x-text="result?.email || '-'"></p>
+                    </div>
+                </div>
+                
+                <!-- 注册时间 -->
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-green-500 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('whois.creationDate')"></p>
+                        <p class="text-gray-900 dark:text-white font-medium" x-text="result?.creation_date || '-'"></p>
+                    </div>
+                </div>
+                
+                <!-- 到期时间 -->
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-amber-500 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('whois.expiryDate')"></p>
+                        <p class="text-gray-900 dark:text-white font-medium" x-text="result?.expiry_date || '-'"></p>
+                    </div>
+                </div>
+                
+                <!-- 父域名（仅子域名显示） -->
+                <div class="flex items-start gap-3" x-show="result?.parent_domain">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-indigo-500 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('whois.parentDomain')"></p>
+                        <p class="text-gray-900 dark:text-white font-medium" x-text="result?.parent_domain || '-'"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 域名状态 -->
+            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div x-show="result?.status?.length > 0">
+                        <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3" x-text="$store.i18n.t('whois.status')"></h3>
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="s in result?.status" :key="s">
+                                <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm" x-text="s"></span>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- 联系持有人按钮 - 始终显示 -->
+                    <div x-show="result?.owner_id">
+                        <button @click="contactOwner()" 
+                                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                            </svg>
+                            <span x-text="$store.i18n.t('whois.contactOwner')"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function whoisPage() {
+    return {
+        domain: '',
+        loading: false,
+        error: '',
+        result: null,
+        notRegistered: false,
+        queriedDomain: '',
+        currentUserId: null,
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        get canContact() {
+            // 已登录且不是自己的域名
+            return this.token && this.currentUserId && this.result?.owner_id && this.result.owner_id !== this.currentUserId;
+        },
+        
+        init() {
+            // 获取当前用户ID
+            this.getCurrentUser();
+            
+            // 从 URL 参数获取域名
+            const params = new URLSearchParams(window.location.search);
+            const d = params.get('domain');
+            if (d) {
+                this.domain = d;
+                this.query();
+            }
+        },
+        
+        async getCurrentUser() {
+            if (!this.token) return;
+            try {
+                const res = await fetch('/api/user/profile', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200 && data.data) {
+                    this.currentUserId = data.data.id;
+                }
+            } catch (e) {
+                console.error('Failed to get user info');
+            }
+        },
+        
+        contactOwner() {
+            if (!this.token) {
+                // 未登录，跳转登录页
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.href);
+                return;
+            }
+            if (!this.result?.owner_id) return;
+            
+            // 跳转到工单页面，带上接收用户ID和域名信息，页面会自动打开创建弹窗
+            const params = new URLSearchParams({
+                to_user_id: this.result.owner_id,
+                subject: this.locale === 'zh' ? `关于域名 ${this.result.domain} 的咨询` : `Inquiry about domain ${this.result.domain}`
+            });
+            window.location.href = '/tickets?' + params.toString();
+        },
+        
+        async query() {
+            if (!this.domain.trim()) return;
+            
+            this.loading = true;
+            this.error = '';
+            this.result = null;
+            this.notRegistered = false;
+            this.queriedDomain = this.domain.trim();
+            
+            try {
+                const headers = {};
+                if (this.token) {
+                    headers['Authorization'] = 'Bearer ' + this.token;
+                }
+                
+                const res = await fetch(`/api/whois/${encodeURIComponent(this.domain.trim())}`, {
+                    headers: headers
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    this.result = data.data;
+                    // 更新 URL
+                    const url = new URL(window.location);
+                    url.searchParams.set('domain', this.domain.trim());
+                    window.history.replaceState({}, '', url);
+                } else if (data.code === 404) {
+                    // 未注册
+                    this.notRegistered = true;
+                    const url = new URL(window.location);
+                    url.searchParams.set('domain', this.domain.trim());
+                    window.history.replaceState({}, '', url);
+                } else {
+                    this.error = data.message || (this.locale === 'zh' ? '查询失败' : 'Query failed');
+                }
+            } catch (e) {
+                this.error = this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry';
+            }
+            
+            this.loading = false;
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}工单详情 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="adminTicketDetailPage()" x-init="init()">
+    <!-- 返回按钮 -->
+    <div class="mb-4">
+        <a href="/admin/tickets" class="inline-flex items-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            <span x-text="$store.i18n.t('common.back')"></span>
+        </a>
+    </div>
+
+    <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+
+    <div x-show="!loading && ticket" class="space-y-6">
+        <!-- 工单信息 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:shadow-lg transition-shadow">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900 dark:text-white" x-text="ticket.subject"></h1>
+                    <div class="flex items-center gap-3 mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        <span class="font-mono" x-text="ticket.ticket_no"></span>
+                        <span>•</span>
+                        <span x-text="ticket.from_username"></span>
+                        <span>•</span>
+                        <span x-text="ticket.created_at"></span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span :class="{
+                        'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': ticket.status === 0,
+                        'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': ticket.status === 1,
+                        'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300': ticket.status === 2
+                    } transition-colors" class="px-3 py-1 rounded-full text-sm" x-text="ticket.status_text"></span>
+                    <button x-show="ticket.status !== 2" @click="closeTicket()" class="px-3 py-1 bg-orange-500 text-white rounded-xl text-sm hover:bg-orange-600" x-text="$store.i18n.t('adminTicket.close')"></button>
+                </div>
+            </div>
+            <div class="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 whitespace-pre-wrap" x-text="ticket.content"></div>
+        </div>
+
+        <!-- 回复列表 -->
+        <div class="space-y-4">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('adminTicket.replyHistory')"></h2>
+            
+            <template x-for="reply in ticket.replies" :key="reply.id">
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow" :class="reply.is_admin ? 'border-l-4 border-l-blue-500' : ''">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-gray-900 dark:text-white" x-text="reply.username"></span>
+                            <span x-show="reply.is_admin" class="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs rounded transition-colors" x-text="$store.i18n.t('adminTicket.admin')"></span>
+                        </div>
+                        <span class="text-sm text-gray-500 dark:text-gray-400" x-text="reply.created_at"></span>
+                    </div>
+                    <div class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap" x-text="reply.content"></div>
+                </div>
+            </template>
+
+            <div x-show="ticket.replies && ticket.replies.length === 0" class="text-center py-8 text-gray-400 dark:text-gray-500" x-text="$store.i18n.t('adminTicket.noReplies')"></div>
+        </div>
+
+        <!-- 回复表单 -->
+        <div x-show="ticket.status !== 2" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:shadow-lg transition-shadow">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('adminTicket.replyTicket')"></h3>
+            <textarea x-model="replyContent" rows="4" :placeholder="$store.i18n.t('adminTicket.replyPlaceholder')" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"></textarea>
+            <div class="flex justify-end mt-4">
+                <button @click="submitReply()" :disabled="submitting || !replyContent.trim()" class="px-6 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!submitting" x-text="$store.i18n.t('adminTicket.submitReply')"></span>
+                    <span x-show="submitting" x-text="$store.i18n.t('common.submitting')"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 工单已关闭提示 -->
+        <div x-show="ticket.status === 2" class="bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl p-6 text-center">
+            <svg class="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('adminTicket.ticketClosed')"></p>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div x-show="toast.show" x-cloak x-transition class="fixed bottom-4 right-4 px-4 py-2 rounded-xl text-white text-sm z-50" :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" x-text="toast.message"></div>
+</div>
+
+<script>
+function adminTicketDetailPage() {
+    return {
+        ticket: null,
+        loading: true,
+        replyContent: '',
+        submitting: false,
+        toast: { show: false, message: '', type: 'success' },
+
+        async init() {
+            const pathParts = location.pathname.split('/');
+            const ticketId = pathParts[pathParts.length - 1];
+            await this.loadTicket(ticketId);
+        },
+
+        async loadTicket(id) {
+            this.loading = true;
+            try {
+                const res = await fetch(`/api/admin/tickets/${id}`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.ticket = data.data.ticket;
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                console.error('Load ticket failed:', e);
+                this.showToast('加载失败', 'error');
+            }
+            this.loading = false;
+        },
+
+        async submitReply() {
+            if (!this.replyContent.trim()) return;
+            this.submitting = true;
+            try {
+                const res = await fetch(`/api/admin/tickets/${this.ticket.id}/reply`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: this.replyContent })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast(Alpine.store('i18n').t('adminTicket.replySuccess'), 'success');
+                    this.replyContent = '';
+                    await this.loadTicket(this.ticket.id);
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast('回复失败', 'error');
+            }
+            this.submitting = false;
+        },
+
+        async closeTicket() {
+            if (!confirm(Alpine.store('i18n').t('adminTicket.confirmClose'))) return;
+            try {
+                const res = await fetch(`/api/admin/tickets/${this.ticket.id}/close`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast(Alpine.store('i18n').t('adminTicket.closeSuccess'), 'success');
+                    await this.loadTicket(this.ticket.id);
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast('操作失败', 'error');
+            }
+        },
+
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => this.toast.show = false, 3000);
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %}用户管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="usersPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '用户管理' : 'User Management'"></h1>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+            <select x-model="statusFilter" @change="page=1; loadUsers()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.locale === 'zh' ? '全部状态' : 'All Status'"></option>
+                <option value="1" x-text="$store.i18n.locale === 'zh' ? '正常' : 'Active'"></option>
+                <option value="2" x-text="$store.i18n.locale === 'zh' ? '沉睡' : 'Dormant'"></option>
+                <option value="0" x-text="$store.i18n.locale === 'zh' ? '已禁用' : 'Disabled'"></option>
+            </select>
+            <select x-model="phoneBoundFilter" @change="page=1; loadUsers()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.locale === 'zh' ? '手机绑定' : 'Phone Binding'"></option>
+                <option value="1" x-text="$store.i18n.locale === 'zh' ? '已绑定' : 'Bound'"></option>
+                <option value="0" x-text="$store.i18n.locale === 'zh' ? '未绑定' : 'Unbound'"></option>
+            </select>
+            <div class="flex gap-2">
+                <input type="text" x-model="search" @keyup.enter="page=1; loadUsers()" :placeholder="$store.i18n.locale === 'zh' ? '搜索用户名/邮箱/手机...' : 'Search username/email/phone...'" class="flex-1 sm:w-48 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <button @click="page=1; loadUsers()" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '搜索' : 'Search'"></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <!-- 桌面端表格 -->
+        <div x-show="!loading" class="hidden lg:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '用户名' : 'Username'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '邮箱' : 'Email'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '手机号' : 'Phone'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '角色' : 'Role'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '域名配额' : 'Domain Quota'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '积分' : 'Points'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '余额' : 'Balance'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">2FA</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '快捷登录' : 'OAuth'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '注册时间' : 'Registered'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="user in users" :key="user.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-6 py-4 text-gray-500 dark:text-gray-400 text-sm" x-text="user.id"></td>
+                            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white" x-text="user.username"></td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300" x-text="user.email"></td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                <span x-show="user.phone" x-text="user.phone"></span>
+                                <span x-show="!user.phone" class="text-gray-400 dark:text-gray-500">-</span>
+                            </td>
+                            <td class="px-6 py-4"><span :class="{'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300': user.role === 'admin', 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': user.role === 'demo', 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300': user.role === 'user'}" class="px-2 py-1 rounded text-xs" x-text="user.role === 'admin' ? ($store.i18n.locale === 'zh' ? '管理员' : 'Admin') : (user.role === 'demo' ? ($store.i18n.locale === 'zh' ? '演示' : 'Demo') : ($store.i18n.locale === 'zh' ? '用户' : 'User'))"></span></td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300"><span x-text="(user.used_domains || 0) + ' / ' + user.max_domains"></span></td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300" x-text="user.points || 0"></td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300">¥<span x-text="(user.balance || 0).toFixed(2)"></span></td>
+                            <td class="px-6 py-4">
+                                <span :class="user.totp_enabled ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'" class="px-2 py-1 rounded text-xs" x-text="user.totp_enabled ? ($store.i18n.locale === 'zh' ? '已启用' : 'Enabled') : ($store.i18n.locale === 'zh' ? '未启用' : 'Disabled')"></span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-1">
+                                    <template x-if="user.oauth_bindings?.github">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400" @click="confirmUnbindOAuth(user, 'github')" :title="$store.i18n.locale === 'zh' ? '点击解绑' : 'Click to unbind'">
+                                            <svg class="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd"/></svg>
+                                            GH
+                                        </span>
+                                    </template>
+                                    <template x-if="user.oauth_bindings?.google">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400" @click="confirmUnbindOAuth(user, 'google')" :title="$store.i18n.locale === 'zh' ? '点击解绑' : 'Click to unbind'">
+                                            <svg class="w-3 h-3 mr-0.5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                                            G
+                                        </span>
+                                    </template>
+                                    <template x-if="user.oauth_bindings?.nodeloc">
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400" @click="confirmUnbindOAuth(user, 'nodeloc')" :title="$store.i18n.locale === 'zh' ? '点击解绑' : 'Click to unbind'">
+                                            <svg class="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                                            NL
+                                        </span>
+                                    </template>
+                                    <span x-show="!user.oauth_bindings?.github && !user.oauth_bindings?.google && !user.oauth_bindings?.nodeloc" class="text-gray-400 dark:text-gray-500 text-xs">-</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4"><span :class="user.status === 1 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : (user.status === 2 ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300')" class="px-2 py-1 rounded text-xs" x-text="user.status === 1 ? ($store.i18n.locale === 'zh' ? '正常' : 'Active') : (user.status === 2 ? ($store.i18n.locale === 'zh' ? '沉睡' : 'Dormant') : ($store.i18n.locale === 'zh' ? '已禁用' : 'Disabled'))"></span></td>
+                            <td class="px-6 py-4 text-gray-500 dark:text-gray-400 text-sm" x-text="new Date(user.created_at).toLocaleDateString()"></td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center space-x-3">
+                                    <button @click="openEditModal(user)" class="text-blue-500 hover:text-blue-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                    <button @click="toggleStatus(user)" :class="user.status === 1 ? 'text-orange-500 hover:text-orange-700' : 'text-green-500 hover:text-green-700'" class="text-sm" x-text="user.status === 1 ? ($store.i18n.locale === 'zh' ? '封禁' : 'Ban') : ($store.i18n.locale === 'zh' ? '解封' : 'Unban')"></button>
+                                    <button x-show="user.role !== 'admin'" @click="confirmDelete(user)" class="text-red-500 hover:text-red-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="!loading && users.length === 0">
+                        <td colspan="13" class="px-6 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无用户数据' : 'No users found'"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 移动端卡片列表 -->
+        <div x-show="!loading" class="lg:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="user in users" :key="user.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <div>
+                            <span class="font-medium text-gray-900 dark:text-white" x-text="user.username"></span>
+                            <span :class="{'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300': user.role === 'admin', 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': user.role === 'demo', 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300': user.role === 'user'}" class="ml-2 px-2 py-0.5 rounded text-xs" x-text="user.role === 'admin' ? ($store.i18n.locale === 'zh' ? '管理员' : 'Admin') : (user.role === 'demo' ? ($store.i18n.locale === 'zh' ? '演示' : 'Demo') : ($store.i18n.locale === 'zh' ? '用户' : 'User'))"></span>
+                        </div>
+                        <span :class="user.status === 1 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : (user.status === 2 ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300')" class="px-2 py-0.5 rounded text-xs" x-text="user.status === 1 ? ($store.i18n.locale === 'zh' ? '正常' : 'Active') : (user.status === 2 ? ($store.i18n.locale === 'zh' ? '沉睡' : 'Dormant') : ($store.i18n.locale === 'zh' ? '已禁用' : 'Disabled'))"></span>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2 truncate" x-text="user.email"></p>
+                    <div class="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 mb-1">
+                        <span><span x-text="$store.i18n.locale === 'zh' ? '域名: ' : 'Domains: '"></span><span x-text="(user.used_domains || 0) + '/' + user.max_domains"></span></span>
+                        <span><span x-text="$store.i18n.locale === 'zh' ? '积分: ' : 'Points: '"></span><span x-text="user.points || 0"></span></span>
+                        <span><span x-text="$store.i18n.locale === 'zh' ? '余额: ' : 'Balance: '"></span>¥<span x-text="(user.balance || 0).toFixed(2)"></span></span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
+                        <span>2FA: <span :class="user.totp_enabled ? 'text-green-600' : 'text-gray-400 dark:text-gray-500'" x-text="user.totp_enabled ? ($store.i18n.locale === 'zh' ? '已启用' : 'On') : ($store.i18n.locale === 'zh' ? '未启用' : 'Off')"></span></span>
+                        <div class="flex items-center gap-1">
+                            <template x-if="user.oauth_bindings?.github"><span class="text-gray-600 dark:text-gray-400" @click="confirmUnbindOAuth(user, 'github')">GH</span></template>
+                            <template x-if="user.oauth_bindings?.google"><span class="text-gray-600 dark:text-gray-400" @click="confirmUnbindOAuth(user, 'google')">G</span></template>
+                            <template x-if="user.oauth_bindings?.nodeloc"><span class="text-blue-600 dark:text-blue-400" @click="confirmUnbindOAuth(user, 'nodeloc')">NL</span></template>
+                        </div>
+                        <span x-text="new Date(user.created_at).toLocaleDateString()"></span>
+                    </div>
+                    <div class="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <button @click="openEditModal(user)" class="text-blue-500 hover:text-blue-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                        <button @click="toggleStatus(user)" :class="user.status === 1 ? 'text-orange-500 hover:text-orange-700' : 'text-green-500 hover:text-green-700'" class="text-sm" x-text="user.status === 1 ? ($store.i18n.locale === 'zh' ? '封禁' : 'Ban') : ($store.i18n.locale === 'zh' ? '解封' : 'Unban')"></button>
+                        <button x-show="user.role !== 'admin'" @click="confirmDelete(user)" class="text-red-500 hover:text-red-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="users.length === 0" class="p-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无用户数据' : 'No users found'"></div>
+        </div>
+
+        <div x-show="!loading && pagination.pages > 1" class="px-4 sm:px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span class="text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '共 ' : 'Total '"></span><span x-text="pagination.total"></span><span x-text="$store.i18n.locale === 'zh' ? ' 条记录' : ' records'"></span></span>
+            <div class="flex items-center space-x-2">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <span class="px-3 py-1 text-gray-600 dark:text-gray-400 text-sm" x-text="page + ' / ' + pagination.pages"></span>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑用户弹窗 -->
+    <div x-show="showEditModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showEditModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '编辑用户' : 'Edit User'"></h3>
+                <button @click="showEditModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '用户名' : 'Username'"></label>
+                    <input type="text" x-model="editForm.username" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '邮箱' : 'Email'"></label>
+                    <input type="email" x-model="editForm.email" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '新密码' : 'New Password'"></span> <span class="text-gray-400 font-normal" x-text="$store.i18n.locale === 'zh' ? '(留空不修改)' : '(leave empty to keep)'"></span></label>
+                    <input type="password" x-model="editForm.password" :placeholder="$store.i18n.locale === 'zh' ? '输入新密码' : 'Enter new password'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '角色' : 'Role'"></label>
+                        <select x-model="editForm.role" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="user" x-text="$store.i18n.locale === 'zh' ? '普通用户' : 'User'"></option>
+                            <option value="demo" x-text="$store.i18n.locale === 'zh' ? '演示用户' : 'Demo'"></option>
+                            <option value="admin" x-text="$store.i18n.locale === 'zh' ? '管理员' : 'Admin'"></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '域名配额' : 'Domain Quota'"></label>
+                        <input type="number" x-model="editForm.max_domains" min="0" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '积分调整' : 'Points Adjust'"></span> <span class="text-gray-400 font-normal" x-text="'(' + ($store.i18n.locale === 'zh' ? '当前: ' : 'Current: ') + (editForm.current_points || 0) + ')'"></span></label>
+                        <input type="number" x-model="editForm.points_change" :placeholder="$store.i18n.locale === 'zh' ? '正数增加，负数减少' : '+add, -subtract'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '余额调整' : 'Balance Adjust'"></span> <span class="text-gray-400 font-normal" x-text="'(' + ($store.i18n.locale === 'zh' ? '当前: ¥' : 'Current: ¥') + (editForm.current_balance || 0).toFixed(2) + ')'"></span></label>
+                        <input type="number" step="0.01" x-model="editForm.balance_change" :placeholder="$store.i18n.locale === 'zh' ? '正数增加，负数减少' : '+add, -subtract'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></label>
+                    <select x-model="editForm.status" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '正常' : 'Active'"></option>
+                        <option value="2" x-text="$store.i18n.locale === 'zh' ? '沉睡' : 'Dormant'"></option>
+                        <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                    </select>
+                    <p x-show="editForm.status == 2" class="text-xs text-yellow-600 dark:text-yellow-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '沉睡用户需要重新验证邮箱才能登录' : 'Dormant users need to re-verify email to login'"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showEditModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveUser()" :disabled="saving" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showDeleteModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4" @click.stop>
+            <div class="p-6 text-center">
+                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '确认删除用户' : 'Confirm Delete User'"></h3>
+                <p class="text-gray-500 dark:text-gray-400 text-sm mb-1"><span x-text="$store.i18n.locale === 'zh' ? '确定要删除用户 ' : 'Are you sure you want to delete user '"></span><span class="font-medium text-gray-700 dark:text-gray-300" x-text="deleteTarget?.username"></span><span x-text="$store.i18n.locale === 'zh' ? ' 吗？' : '?'"></span></p>
+                <p class="text-red-500 dark:text-red-400 text-xs" x-text="$store.i18n.locale === 'zh' ? '该操作将删除用户的所有域名和DNS记录，且不可恢复！' : 'This will delete all domains and DNS records. This action cannot be undone!'"></p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-center space-x-3">
+                <button @click="showDeleteModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="deleteUser()" :disabled="deleting" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
+                    <span x-show="!deleting" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Confirm Delete'"></span>
+                    <span x-show="deleting" x-text="$store.i18n.locale === 'zh' ? '删除中...' : 'Deleting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div x-show="toast.show" x-cloak x-transition class="fixed bottom-6 right-6 z-50">
+        <div :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" class="text-white px-4 py-2 rounded-lg shadow-lg text-sm" x-text="toast.message"></div>
+    </div>
+
+    <!-- OAuth 解绑确认弹窗 -->
+    <div x-show="showUnbindOAuthModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showUnbindOAuthModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4" @click.stop>
+            <div class="p-6 text-center">
+                <div class="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '解绑快捷登录' : 'Unbind OAuth'"></h3>
+                <p class="text-gray-500 dark:text-gray-400 text-sm">
+                    <span x-text="$store.i18n.locale === 'zh' ? '确定要解绑用户 ' : 'Are you sure to unbind '"></span>
+                    <span class="font-medium text-gray-700 dark:text-gray-300" x-text="unbindOAuthTarget?.user?.username"></span>
+                    <span x-text="$store.i18n.locale === 'zh' ? ' 的 ' : &quot;'s &quot;"></span>
+                    <span class="font-medium text-gray-700 dark:text-gray-300" x-text="unbindOAuthTarget?.providerName"></span>
+                    <span x-text="$store.i18n.locale === 'zh' ? ' 账号吗？' : ' account?'"></span>
+                </p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-center space-x-3">
+                <button @click="showUnbindOAuthModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="unbindOAuth()" :disabled="unbindingOAuth" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700 disabled:opacity-50">
+                    <span x-show="!unbindingOAuth" x-text="$store.i18n.locale === 'zh' ? '确认解绑' : 'Confirm Unbind'"></span>
+                    <span x-show="unbindingOAuth" x-text="$store.i18n.locale === 'zh' ? '解绑中...' : 'Unbinding...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function usersPage() {
+    return {
+        users: [],
+        loading: true,
+        search: '',
+        statusFilter: '',
+        phoneBoundFilter: '',
+        page: 1,
+        pagination: { pages: 1, total: 0 },
+        showEditModal: false,
+        showDeleteModal: false,
+        editForm: { id: null, username: '', email: '', password: '', role: 'user', max_domains: 5, status: 1, points_change: '', balance_change: '', current_points: 0, current_balance: 0 },
+        deleteTarget: null,
+        saving: false,
+        deleting: false,
+        toast: { show: false, message: '', type: 'success' },
+        showUnbindOAuthModal: false,
+        unbindOAuthTarget: null,
+        unbindingOAuth: false,
+
+        get token() { return localStorage.getItem('token'); },
+
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadUsers();
+        },
+
+        async loadUsers() {
+            this.loading = true;
+            let url = `/api/admin/users?page=${this.page}&per_page=15`;
+            if (this.search) url += `&search=${encodeURIComponent(this.search)}`;
+            if (this.statusFilter !== '') url += `&status=${this.statusFilter}`;
+            if (this.phoneBoundFilter !== '') url += `&phone_bound=${this.phoneBoundFilter}`;
+            try {
+                const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.users = data.data.users;
+                    this.pagination = data.data.pagination;
+                } else if (data.code === 401) {
+                    window.location.href = '/login';
+                }
+            } catch (e) {
+                this.showToast('加载失败', 'error');
+            }
+            this.loading = false;
+        },
+
+        openEditModal(user) {
+            this.editForm = {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                password: '',
+                role: user.role,
+                max_domains: user.max_domains,
+                status: user.status,
+                points_change: '',
+                balance_change: '',
+                current_points: user.points || 0,
+                current_balance: user.balance || 0
+            };
+            this.showEditModal = true;
+        },
+
+        async saveUser() {
+            if (!this.editForm.username.trim() || !this.editForm.email.trim()) {
+                this.showToast('请填写用户名和邮箱', 'error');
+                return;
+            }
+            this.saving = true;
+            const payload = {
+                username: this.editForm.username.trim(),
+                email: this.editForm.email.trim(),
+                role: this.editForm.role,
+                max_domains: parseInt(this.editForm.max_domains),
+                status: parseInt(this.editForm.status)
+            };
+            if (this.editForm.password) {
+                payload.password = this.editForm.password;
+            }
+            // 积分调整
+            if (this.editForm.points_change !== '' && this.editForm.points_change !== 0) {
+                payload.points_change = parseInt(this.editForm.points_change);
+            }
+            // 余额调整
+            if (this.editForm.balance_change !== '' && this.editForm.balance_change !== 0) {
+                payload.balance_change = parseFloat(this.editForm.balance_change);
+            }
+            try {
+                const res = await fetch(`/api/admin/users/${this.editForm.id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast('用户更新成功', 'success');
+                    this.showEditModal = false;
+                    await this.loadUsers();
+                } else {
+                    this.showToast(data.message || '更新失败', 'error');
+                }
+            } catch (e) {
+                this.showToast('网络错误', 'error');
+            }
+            this.saving = false;
+        },
+
+        async toggleStatus(user) {
+            const newStatus = user.status === 1 ? 0 : 1;
+            const action = newStatus === 0 ? '封禁' : '解封';
+            try {
+                const res = await fetch(`/api/admin/users/${user.id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast(`已${action}用户 ${user.username}`, 'success');
+                    await this.loadUsers();
+                } else {
+                    this.showToast(data.message || `${action}失败`, 'error');
+                }
+            } catch (e) {
+                this.showToast('网络错误', 'error');
+            }
+        },
+
+        confirmDelete(user) {
+            this.deleteTarget = user;
+            this.showDeleteModal = true;
+        },
+
+        async deleteUser() {
+            if (!this.deleteTarget) return;
+            this.deleting = true;
+            try {
+                const res = await fetch(`/api/admin/users/${this.deleteTarget.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast('用户删除成功', 'success');
+                    this.showDeleteModal = false;
+                    this.deleteTarget = null;
+                    await this.loadUsers();
+                } else {
+                    this.showToast(data.message || '删除失败', 'error');
+                }
+            } catch (e) {
+                this.showToast('网络错误', 'error');
+            }
+            this.deleting = false;
+        },
+
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => { this.toast.show = false; }, 3000);
+        },
+
+        confirmUnbindOAuth(user, provider) {
+            const providerNames = { github: 'GitHub', google: 'Google', nodeloc: 'NodeLoc' };
+            this.unbindOAuthTarget = { user, provider, providerName: providerNames[provider] };
+            this.showUnbindOAuthModal = true;
+        },
+
+        async unbindOAuth() {
+            if (!this.unbindOAuthTarget) return;
+            this.unbindingOAuth = true;
+            try {
+                const res = await fetch(`/api/admin/users/${this.unbindOAuthTarget.user.id}/oauth/${this.unbindOAuthTarget.provider}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast(`已解绑 ${this.unbindOAuthTarget.user.username} 的 ${this.unbindOAuthTarget.providerName} 账号`, 'success');
+                    this.showUnbindOAuthModal = false;
+                    this.unbindOAuthTarget = null;
+                    await this.loadUsers();
+                } else {
+                    this.showToast(data.message || '解绑失败', 'error');
+                }
+            } catch (e) {
+                this.showToast('网络错误', 'error');
+            }
+            this.unbindingOAuth = false;
+        },
+
+        async goPage(newPage) {
+            if (newPage < 1 || newPage > this.pagination.pages || newPage === this.page) return;
+            this.page = newPage;
+            await this.loadUsers();
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN" :class="{ 'dark': $store.theme.dark }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}</title>
+    <meta name="description" content="{{ site_settings.site_description|default('六趣DNS二级域名解析系统') }}">
+    <script src="{{ url_for('static', filename='js/tailwind.js') }}"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/slider-captcha.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/slider-captcha.css') }}">
+    {% if site_settings.site_favicon %}
+    <link rel="icon" href="{{ site_settings.site_favicon }}">
+    {% endif %}
+    <script>
+        // 主题初始化 - 在页面加载前执行，避免闪烁
+        (function() {
+            const theme = localStorage.getItem('theme');
+            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+        
+        // Alpine.js 主题状态
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('theme', {
+                dark: localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches),
+                toggle() {
+                    this.dark = !this.dark;
+                    localStorage.setItem('theme', this.dark ? 'dark' : 'light');
+                    // 同步更新 DOM
+                    if (this.dark) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                }
+            });
+        });
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 min-h-screen overflow-x-hidden" x-data="{ user: null, mobileMenuOpen: false }" x-init="
+    const token = localStorage.getItem('token');
+    if (token) {
+        fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(r => r.json())
+        .then(d => { if(d.code === 200) user = d.data; })
+        .catch(() => {});
+    }
+    // 已登录用户禁止访问登录/注册页
+    if (token && (location.pathname === '/login' || location.pathname === '/register')) {
+        location.href = '/user';
+    }
+">
+    {% if site_settings.announcement %}
+    <div class="bg-blue-600 text-white text-center py-2 text-sm">
+        {{ site_settings.announcement }}
+    </div>
+    {% endif %}
+
+    <!-- Top Navigation -->
+    <nav class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    {% if site_settings.site_logo %}
+                    <a href="/" class="flex items-center">
+                        <img src="{{ site_settings.site_logo }}" alt="{{ site_settings.site_name }}" class="h-8">
+                    </a>
+                    {% else %}
+                    <a href="/" class="text-xl font-bold text-gray-900 dark:text-white">{{ site_settings.site_name|default('六趣DNS') }}</a>
+                    {% endif %}
+                </div>
+                
+                <!-- Desktop Menu -->
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="/" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition" x-text="$store.i18n.t('common.home')"></a>
+                    <!-- 语言切换按钮 -->
+                    <button @click="$store.i18n.toggleLocale()" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" :title="$store.i18n.t('language.switchLanguage')">
+                        <span class="text-sm font-medium" x-text="$store.i18n.locale === 'zh' ? 'EN' : '中文'"></span>
+                    </button>
+                    <!-- 主题切换按钮 -->
+                    <button @click="$store.theme.toggle()" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" :title="$store.theme.dark ? $store.i18n.t('theme.switchToLight') : $store.i18n.t('theme.switchToDark')">
+                        <template x-if="$store.theme.dark">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            </svg>
+                        </template>
+                        <template x-if="!$store.theme.dark">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                            </svg>
+                        </template>
+                    </button>
+                    <template x-if="!user">
+                        <div class="flex items-center space-x-4">
+                            <a href="/login" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition" x-text="$store.i18n.t('common.login')"></a>
+                            <a href="/register" class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition" x-text="$store.i18n.t('common.register')"></a>
+                        </div>
+                    </template>
+                    <template x-if="user">
+                        <div class="flex items-center space-x-4">
+                            <a href="/user" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition" x-text="$store.i18n.t('nav.dashboard')"></a>
+                            <template x-if="user.role === 'admin' || user.role === 'demo'">
+                                <a href="/admin" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition" x-text="$store.i18n.t('nav.admin')"></a>
+                            </template>
+                            <button @click="localStorage.removeItem('token'); location.reload();" class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition" x-text="$store.i18n.t('common.logout')"></button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <div class="md:hidden flex items-center">
+                    <!-- 语言切换 -->
+                    <button @click="$store.i18n.toggleLocale()" class="p-2 mr-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" :title="$store.i18n.t('language.switchLanguage')">
+                        <span class="text-xs font-medium" x-text="$store.i18n.locale === 'zh' ? 'EN' : '中'"></span>
+                    </button>
+                    <button @click="$store.theme.toggle()" class="p-2 mr-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" :title="$store.theme.dark ? $store.i18n.t('theme.switchToLight') : $store.i18n.t('theme.switchToDark')">
+                        <template x-if="$store.theme.dark">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            </svg>
+                        </template>
+                        <template x-if="!$store.theme.dark">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                            </svg>
+                        </template>
+                    </button>
+                    <button @click="mobileMenuOpen = !mobileMenuOpen" class="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path x-show="!mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                            <path x-show="mobileMenuOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div x-show="mobileMenuOpen" x-cloak class="md:hidden bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
+            <div class="px-4 py-4 space-y-3">
+                <a href="/" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" x-text="$store.i18n.t('common.home')"></a>
+                <template x-if="!user">
+                    <div class="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <a href="/login" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" x-text="$store.i18n.t('common.login')"></a>
+                        <a href="/register" class="block bg-blue-600 text-white text-center py-2 rounded-lg" x-text="$store.i18n.t('common.register')"></a>
+                    </div>
+                </template>
+                <template x-if="user">
+                    <div class="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <a href="/user" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" x-text="$store.i18n.t('nav.dashboard')"></a>
+                        <template x-if="user.role === 'admin' || user.role === 'demo'">
+                            <a href="/admin" class="block text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white" x-text="$store.i18n.t('nav.admin')"></a>
+                        </template>
+                        <button @click="localStorage.removeItem('token'); location.reload();" class="block w-full text-left text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" x-text="$store.i18n.t('common.logout')"></button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <div class="flex flex-col md:flex-row justify-between items-center text-sm text-gray-400 dark:text-gray-500">
+                <p>&copy; 2026 {{ site_settings.site_name|default('六趣DNS') }}. All rights reserved.
+                    {% if site_settings.footer_text %} {{ site_settings.footer_text }}{% endif %}
+                </p>
+                <div class="flex items-center gap-4 mt-2 md:mt-0">
+                    <a href="/privacy" class="hover:text-blue-600 dark:hover:text-blue-400 transition" x-text="$store.i18n.t('legal.privacyPolicy')"></a>
+                    <a href="/abuse" class="hover:text-blue-600 dark:hover:text-blue-400 transition" x-text="$store.i18n.t('legal.abuseReport')"></a>
+                    {% if site_settings.icp_number %}
+                    <a href="https://beian.miit.gov.cn/" target="_blank" class="hover:text-blue-600 dark:hover:text-blue-400 transition">{{ site_settings.icp_number }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+    
+    {% if site_settings.analytics_code %}
+    {{ site_settings.analytics_code|safe }}
+    {% endif %}
+</body>
+</html>

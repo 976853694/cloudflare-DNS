@@ -1,0 +1,117 @@
+{% extends "base_public.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] flex items-center justify-center py-12 px-4">
+    <div class="max-w-md w-full" x-data="magicLinkVerify()" x-init="init()">
+        <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200 rounded-2xl p-8 text-center">
+            <!-- 验证中 -->
+            <div x-show="status === 'verifying'">
+                <div class="w-16 h-16 mx-auto mb-4">
+                    <svg class="animate-spin w-full h-full text-gray-400" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('auth.magicLinkVerifying')"></h2>
+                <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('auth.pleaseWait')"></p>
+            </div>
+
+            <!-- 验证成功 -->
+            <div x-show="status === 'success'" x-cloak>
+                <div class="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('auth.magicLinkVerifySuccess')"></h2>
+                <p class="text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.t('auth.redirecting')"></p>
+            </div>
+
+            <!-- 验证失败 -->
+            <div x-show="status === 'error'" x-cloak>
+                <div class="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                    <svg class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('auth.magicLinkVerifyFailed')"></h2>
+                <p class="text-gray-500 dark:text-gray-400 mb-4" x-text="errorMessage"></p>
+                <a href="/login" class="inline-block px-6 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500 transition" x-text="$store.i18n.t('auth.backToLogin')"></a>
+            </div>
+
+            <!-- 无效链接 -->
+            <div x-show="status === 'invalid'" x-cloak>
+                <div class="w-16 h-16 mx-auto mb-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+                    <svg class="w-8 h-8 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('auth.magicLinkInvalid')"></h2>
+                <p class="text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.t('auth.magicLinkInvalidHint')"></p>
+                <a href="/login" class="inline-block px-6 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500 transition" x-text="$store.i18n.t('auth.backToLogin')"></a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function magicLinkVerify() {
+    return {
+        status: 'verifying', // verifying, success, error, invalid
+        errorMessage: '',
+        verifying: false, // 防止重复请求
+        verified: false, // 标记是否已验证成功
+
+        async init() {
+            // 防止重复调用
+            if (this.verifying || this.verified) return;
+            this.verifying = true;
+
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+
+            if (!token) {
+                this.status = 'invalid';
+                return;
+            }
+
+            await this.verify(token);
+        },
+
+        async verify(token) {
+            try {
+                const res = await fetch(`/api/auth/magic-link/verify?token=${encodeURIComponent(token)}`);
+                const data = await res.json();
+
+                if (data.code === 200 && data.data && data.data.access_token) {
+                    this.verified = true; // 标记已成功
+                    this.status = 'success';
+                    localStorage.setItem('token', data.data.access_token);
+                    if (data.data.user) {
+                        localStorage.setItem('user', JSON.stringify(data.data.user));
+                    }
+                    // 延迟跳转，让用户看到成功提示
+                    setTimeout(() => {
+                        window.location.href = '/user';
+                    }, 1500);
+                } else {
+                    // 如果已经验证成功，忽略后续错误
+                    if (this.verified) return;
+                    this.status = 'error';
+                    this.errorMessage = data.message || (this.$store.i18n.locale === 'zh' ? '验证失败' : 'Verification failed');
+                }
+            } catch (e) {
+                // 如果已经验证成功，忽略后续错误
+                if (this.verified) return;
+                this.status = 'error';
+                this.errorMessage = this.$store.i18n.locale === 'zh' ? '网络错误，请稍后重试' : 'Network error, please try again';
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

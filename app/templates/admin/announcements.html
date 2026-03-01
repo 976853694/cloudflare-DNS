@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}公告管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="announcementsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '公告管理' : 'Announcement Management'"></h1>
+        <button @click="openCreateModal()" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '发布公告' : 'New Announcement'"></button>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden overflow-x-auto hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        <table x-show="!loading" class="w-full min-w-[700px]">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '标题' : 'Title'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '类型' : 'Type'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '置顶' : 'Pinned'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '发布时间' : 'Published'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="ann in announcements" :key="ann.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-4 py-4">
+                            <p class="font-medium text-gray-900 dark:text-white" x-text="ann.title"></p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1" x-text="ann.content"></p>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span class="px-2 py-1 rounded text-xs" :class="typeClass(ann.type)" x-text="getTypeText(ann.type)"></span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span class="px-2 py-1 rounded text-xs" :class="ann.status === 1 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'" x-text="ann.status === 1 ? ($store.i18n.locale === 'zh' ? '已发布' : 'Published') : ($store.i18n.locale === 'zh' ? '草稿' : 'Draft')"></span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <button @click="togglePin(ann)" class="text-sm" :class="ann.is_pinned ? 'text-orange-500 hover:text-orange-700' : 'text-gray-400 dark:text-gray-500 hover:text-gray-600'" x-text="ann.is_pinned ? ($store.i18n.locale === 'zh' ? '已置顶' : 'Pinned') : ($store.i18n.locale === 'zh' ? '置顶' : 'Pin')"></button>
+                        </td>
+                        <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400" x-text="new Date(ann.created_at).toLocaleString()"></td>
+                        <td class="px-4 py-4">
+                            <div class="flex items-center space-x-2">
+                                <button @click="openEditModal(ann)" class="text-blue-500 hover:text-blue-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                <button @click="confirmDelete(ann)" class="text-red-500 hover:text-red-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="!loading && announcements.length === 0">
+                    <td colspan="6" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无公告' : 'No announcements'"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4 hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="editMode ? ($store.i18n.locale === 'zh' ? '编辑公告' : 'Edit Announcement') : ($store.i18n.locale === 'zh' ? '发布公告' : 'New Announcement')"></h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '标题' : 'Title'"></label>
+                    <input type="text" x-model="form.title" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '公告标题' : 'Announcement title'">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '内容' : 'Content'"></label>
+                    <textarea x-model="form.content" rows="4" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '公告内容' : 'Announcement content'"></textarea>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '类型' : 'Type'"></label>
+                        <select x-model="form.type" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="info" x-text="$store.i18n.locale === 'zh' ? '通知' : 'Info'"></option>
+                            <option value="success" x-text="$store.i18n.locale === 'zh' ? '成功' : 'Success'"></option>
+                            <option value="warning" x-text="$store.i18n.locale === 'zh' ? '警告' : 'Warning'"></option>
+                            <option value="error" x-text="$store.i18n.locale === 'zh' ? '紧急' : 'Urgent'"></option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></label>
+                        <select x-model="form.status" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '发布' : 'Publish'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '草稿' : 'Draft'"></option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <label class="flex items-center">
+                        <input type="checkbox" x-model="form.is_pinned" class="rounded border-gray-300 dark:border-gray-600 mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '置顶公告' : 'Pin Announcement'"></span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" x-model="form.is_popup" class="rounded border-gray-300 dark:border-gray-600 mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '弹窗提醒（重要公告）' : 'Popup Alert (Important)'"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="save()" :disabled="saving" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl text-sm disabled:opacity-50">
+                    <span x-text="saving ? ($store.i18n.locale === 'zh' ? '保存中...' : 'Saving...') : ($store.i18n.locale === 'zh' ? '保存' : 'Save')"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function announcementsPage() {
+    return {
+        announcements: [], loading: true, showModal: false, editMode: false, saving: false,
+        form: { id: null, title: '', content: '', type: 'info', status: 1, is_pinned: false, is_popup: false },
+        get token() { return localStorage.getItem('token'); },
+        typeClass(type) {
+            const classes = { 
+                info: 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300', 
+                success: 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300', 
+                warning: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300', 
+                error: 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' 
+            };
+            return classes[type] || classes.info;
+        },
+        getTypeText(type) {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            const texts = { 
+                info: isZh ? '通知' : 'Info', 
+                success: isZh ? '成功' : 'Success', 
+                warning: isZh ? '警告' : 'Warning', 
+                error: isZh ? '紧急' : 'Urgent' 
+            };
+            return texts[type] || type;
+        },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.load();
+        },
+        async load() {
+            this.loading = true;
+            const res = await fetch('/api/admin/announcements', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.announcements = data.data.announcements;
+            this.loading = false;
+        },
+        openCreateModal() {
+            this.editMode = false;
+            this.form = { id: null, title: '', content: '', type: 'info', status: 1, is_pinned: false, is_popup: false };
+            this.showModal = true;
+        },
+        openEditModal(ann) {
+            this.editMode = true;
+            this.form = { ...ann, status: ann.status.toString() };
+            this.showModal = true;
+        },
+        async save() {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            if (!this.form.title.trim() || !this.form.content.trim()) { 
+                alert(isZh ? '请填写标题和内容' : 'Please enter title and content'); 
+                return; 
+            }
+            this.saving = true;
+            const url = this.editMode ? `/api/admin/announcements/${this.form.id}` : '/api/admin/announcements';
+            const method = this.editMode ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+                method, headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...this.form, status: parseInt(this.form.status) })
+            });
+            const data = await res.json();
+            if (data.code === 200 || data.code === 201) { this.showModal = false; await this.load(); }
+            else { alert(data.message); }
+            this.saving = false;
+        },
+        async togglePin(ann) {
+            await fetch(`/api/admin/announcements/${ann.id}`, {
+                method: 'PUT', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_pinned: !ann.is_pinned })
+            });
+            await this.load();
+        },
+        async confirmDelete(ann) {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            const msg = isZh ? `确定删除公告"${ann.title}"？` : `Delete announcement "${ann.title}"?`;
+            if (!confirm(msg)) return;
+            try {
+                const res = await fetch(`/api/admin/announcements/${ann.id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                if (data.code !== 200) { alert(data.message || (isZh ? '删除失败' : 'Delete failed')); }
+                await this.load();
+            } catch (e) { alert((isZh ? '删除失败: ' : 'Delete failed: ') + e.message); }
+        }
+    }
+}
+</script>
+{% endblock %}

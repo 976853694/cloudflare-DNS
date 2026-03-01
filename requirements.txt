@@ -1,0 +1,52 @@
+# Flask Web Framework
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-JWT-Extended==4.6.0
+Flask-CORS==4.0.0
+Flask-Migrate==4.0.5
+
+# Database
+PyMySQL==1.1.0
+cryptography==41.0.7
+
+# Password Hashing
+bcrypt==4.1.2
+
+# HTTP Requests (for Cloudflare API)
+requests==2.31.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Data Validation
+email-validator==2.1.0
+marshmallow==3.20.1
+
+# Captcha
+captcha==0.7.1
+Pillow>=10.0.0
+
+# QR Code Generation
+qrcode>=7.4.0
+
+# Scheduler
+APScheduler>=3.10.0
+
+# Production Server
+gunicorn==21.2.0
+waitress==2.1.2
+
+# Development Tools
+pytest==7.4.3
+pytest-cov==4.1.0
+hypothesis>=6.0.0
+
+# Aliyun DNS SDK
+alibabacloud-alidns20150109==3.0.8
+alibabacloud-tea-openapi>=0.3.0
+
+# Aliyun DirectMail SDK
+alibabacloud-dm20151123>=1.0.0
+
+# WHOIS Query
+python-whois>=0.8.0

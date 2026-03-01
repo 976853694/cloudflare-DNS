@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}APP版本管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="appVersionsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? 'APP版本管理' : 'App Version Management'"></h1>
+        <button @click="openCreateModal()" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '发布新版本' : 'Release New Version'"></button>
+    </div>
+
+    <!-- 筛选 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4 hover:shadow-lg transition-shadow">
+        <div class="flex items-center space-x-4">
+            <select x-model="filter.platform" @change="load()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.locale === 'zh' ? '全部平台' : 'All Platforms'"></option>
+                <option value="android">Android</option>
+                <option value="ios">iOS</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden overflow-x-auto hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        <table x-show="!loading" class="w-full min-w-[800px]">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '平台' : 'Platform'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '版本号' : 'Version'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '构建号' : 'Build'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '强制更新' : 'Force Update'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '下载次数' : 'Downloads'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '发布时间' : 'Released'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="v in versions" :key="v.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-4 py-4">
+                            <span class="px-2 py-1 rounded text-xs" :class="v.platform === 'android' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' transition-colors" x-text="v.platform === 'android' ? 'Android' : 'iOS'"></span>
+                        </td>
+                        <td class="px-4 py-4 font-medium text-gray-900 dark:text-white" x-text="v.version"></td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300" x-text="v.build"></td>
+                        <td class="px-4 py-4">
+                            <span class="px-2 py-1 rounded text-xs" :class="v.force_update ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'" x-text="v.force_update ? ($store.i18n.locale === 'zh' ? '是' : 'Yes') : ($store.i18n.locale === 'zh' ? '否' : 'No')"></span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span class="px-2 py-1 rounded text-xs" :class="v.status === 1 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'" x-text="v.status === 1 ? ($store.i18n.locale === 'zh' ? '已发布' : 'Published') : ($store.i18n.locale === 'zh' ? '已禁用' : 'Disabled')"></span>
+                        </td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300" x-text="v.download_count"></td>
+                        <td class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400" x-text="v.created_at"></td>
+                        <td class="px-4 py-4">
+                            <div class="flex items-center space-x-2">
+                                <button @click="openEditModal(v)" class="text-blue-500 hover:text-blue-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                <button @click="toggleStatus(v)" class="text-sm" :class="v.status === 1 ? 'text-orange-500 hover:text-orange-700' : 'text-green-500 hover:text-green-700'" x-text="v.status === 1 ? ($store.i18n.locale === 'zh' ? '禁用' : 'Disable') : ($store.i18n.locale === 'zh' ? '启用' : 'Enable')"></button>
+                                <button @click="confirmDelete(v)" class="text-red-500 hover:text-red-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="!loading && versions.length === 0">
+                    <td colspan="8" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无版本' : 'No versions'"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 分页 -->
+    <div x-show="pagination.pages > 1" class="mt-4 flex justify-center">
+        <nav class="flex items-center space-x-1">
+            <button @click="goPage(pagination.page - 1)" :disabled="pagination.page <= 1" class="px-3 py-1 rounded border border-gray-200 dark:border-gray-600 text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+            <span class="px-3 py-1 text-sm text-gray-600 dark:text-gray-400" x-text="`${pagination.page} / ${pagination.pages}`"></span>
+            <button @click="goPage(pagination.page + 1)" :disabled="pagination.page >= pagination.pages" class="px-3 py-1 rounded border border-gray-200 dark:border-gray-600 text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+        </nav>
+    </div>
+
+    <!-- Modal -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="editMode ? ($store.i18n.locale === 'zh' ? '编辑版本' : 'Edit Version') : ($store.i18n.locale === 'zh' ? '发布新版本' : 'Release New Version')"></h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '平台' : 'Platform'"></span> <span class="text-red-500">*</span></label>
+                        <select x-model="form.platform" :disabled="editMode" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="" x-text="$store.i18n.locale === 'zh' ? '请选择' : 'Select'"></option>
+                            <option value="android">Android</option>
+                            <option value="ios">iOS</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '版本号' : 'Version'"></span> <span class="text-red-500">*</span></label>
+                        <input type="text" x-model="form.version" :disabled="editMode" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="1.0.0">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '构建号' : 'Build Number'"></span> <span class="text-red-500">*</span></label>
+                        <input type="number" x-model="form.build" :disabled="editMode" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="1">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '文件大小' : 'File Size'"></label>
+                        <input type="text" x-model="form.file_size" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="10.5 MB">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '下载地址' : 'Download URL'"></span> <span class="text-red-500">*</span></label>
+                    <input type="url" x-model="form.download_url" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="https://example.com/app.apk">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最低支持版本' : 'Minimum Version'"></label>
+                    <input type="text" x-model="form.min_version" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '1.0.0（低于此版本强制更新）' : '1.0.0 (force update below this)'">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '更新日志' : 'Changelog'"></label>
+                    <textarea x-model="form.update_log" rows="4" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '1. 新增xxx功能\n2. 修复xxx问题' : '1. Added xxx feature\n2. Fixed xxx issue'"></textarea>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <label class="flex items-center">
+                        <input type="checkbox" x-model="form.force_update" class="rounded border-gray-300 dark:border-gray-600 mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '强制更新' : 'Force Update'"></span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" x-model="form.status" class="rounded border-gray-300 dark:border-gray-600 mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '立即发布' : 'Publish Now'"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="save()" :disabled="saving" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl text-sm disabled:opacity-50">
+                    <span x-text="saving ? ($store.i18n.locale === 'zh' ? '保存中...' : 'Saving...') : ($store.i18n.locale === 'zh' ? '保存' : 'Save')"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function appVersionsPage() {
+    return {
+        versions: [], loading: true, showModal: false, editMode: false, saving: false,
+        filter: { platform: '' },
+        pagination: { page: 1, per_page: 10, total: 0, pages: 0 },
+        form: { id: null, platform: '', version: '', build: '', download_url: '', file_size: '', update_log: '', force_update: false, min_version: '', status: true },
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.load();
+        },
+        async load() {
+            this.loading = true;
+            const params = new URLSearchParams({ page: this.pagination.page, per_page: this.pagination.per_page });
+            if (this.filter.platform) params.append('platform', this.filter.platform);
+            const res = await fetch('/api/admin/app-versions?' + params, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.versions = data.data.versions;
+                this.pagination = data.data.pagination;
+            }
+            this.loading = false;
+        },
+        goPage(page) {
+            if (page < 1 || page > this.pagination.pages) return;
+            this.pagination.page = page;
+            this.load();
+        },
+        openCreateModal() {
+            this.editMode = false;
+            this.form = { id: null, platform: '', version: '', build: '', download_url: '', file_size: '', update_log: '', force_update: false, min_version: '', status: true };
+            this.showModal = true;
+        },
+        openEditModal(v) {
+            this.editMode = true;
+            this.form = { ...v, status: v.status === 1 };
+            this.showModal = true;
+        },
+        async save() {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            if (!this.form.platform) { alert(isZh ? '请选择平台' : 'Please select platform'); return; }
+            if (!this.form.version.trim()) { alert(isZh ? '请填写版本号' : 'Please enter version'); return; }
+            if (!this.form.build) { alert(isZh ? '请填写构建号' : 'Please enter build number'); return; }
+            if (!this.form.download_url.trim()) { alert(isZh ? '请填写下载地址' : 'Please enter download URL'); return; }
+            this.saving = true;
+            const url = this.editMode ? `/api/admin/app-versions/${this.form.id}` : '/api/admin/app-versions';
+            const method = this.editMode ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+                method, headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...this.form, build: parseInt(this.form.build), status: this.form.status ? 1 : 0 })
+            });
+            const data = await res.json();
+            if (data.code === 200 || data.code === 201) { this.showModal = false; await this.load(); }
+            else { alert(data.message); }
+            this.saving = false;
+        },
+        async toggleStatus(v) {
+            const res = await fetch(`/api/admin/app-versions/${v.id}`, {
+                method: 'PUT', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: v.status === 1 ? 0 : 1 })
+            });
+            const data = await res.json();
+            if (data.code === 200) await this.load();
+            else alert(data.message);
+        },
+        async confirmDelete(v) {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            const msg = isZh ? `确定删除版本 ${v.platform} ${v.version}？` : `Delete version ${v.platform} ${v.version}?`;
+            if (!confirm(msg)) return;
+            const res = await fetch(`/api/admin/app-versions/${v.id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code !== 200) alert(data.message || (isZh ? '删除失败' : 'Delete failed'));
+            await this.load();
+        }
+    }
+}
+</script>
+{% endblock %}

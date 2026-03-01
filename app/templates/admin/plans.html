@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+
+{% block title %}套餐管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="plansPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '套餐管理' : 'Plan Management'"></h1>
+        <div class="flex items-center gap-2">
+            <select x-model="domainFilter" @change="loadPlans()" class="flex-1 sm:flex-none px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.locale === 'zh' ? '全部域名' : 'All Domains'"></option>
+                <template x-for="d in domains" :key="d.id">
+                    <option :value="d.id" x-text="d.name"></option>
+                </template>
+            </select>
+            <button @click="showTypeSelector = true" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500 whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '添加套餐' : 'Add Plan'"></button>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        <table x-show="!loading" class="w-full hidden lg:table table-fixed">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-28" x-text="$store.i18n.locale === 'zh' ? '套餐名称' : 'Plan Name'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '关联域名' : 'Domains'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-20" x-text="$store.i18n.locale === 'zh' ? '价格' : 'Price'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-20" x-text="$store.i18n.locale === 'zh' ? '有效期' : 'Duration'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-20" x-text="$store.i18n.locale === 'zh' ? '字符限制' : 'Char Limit'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-16" x-text="$store.i18n.locale === 'zh' ? '记录数' : 'Records'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-16" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-24" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="plan in plans" :key="plan.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-4 py-4 font-medium text-gray-900 dark:text-white">
+                            <div class="truncate" x-text="plan.name"></div>
+                            <div class="flex gap-1 mt-1">
+                                <span x-show="plan.is_free" class="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs transition-colors" x-text="$store.i18n.locale === 'zh' ? '免费' : 'Free'"></span>
+                                <span x-show="plan.upstream_plan_id" class="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-xs transition-colors" x-text="$store.i18n.locale === 'zh' ? '上游' : 'Upstream'"></span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300">
+                            <div class="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                                <template x-for="name in (plan.domain_names || [plan.domain_name])" :key="name">
+                                    <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap" x-text="name"></span>
+                                </template>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap">¥<span x-text="plan.price.toFixed(2)"></span></td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap" x-text="plan.duration_text"></td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap" x-text="plan.min_length + '-' + plan.max_length"></td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 whitespace-nowrap" x-text="plan.max_records_text"></td>
+                        <td class="px-4 py-4"><span :class="plan.status === 1 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'" class="px-2 py-1 rounded text-xs whitespace-nowrap" x-text="plan.status === 1 ? ($store.i18n.locale === 'zh' ? '启用' : 'Enabled') : ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled')"></span></td>
+                        <td class="px-4 py-4">
+                            <div class="flex items-center space-x-2">
+                                <button @click="openEditModal(plan)" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                <button @click="confirmDelete(plan)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="!loading && plans.length === 0">
+                    <td colspan="8" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无套餐' : 'No plans'"></td>
+                </tr>
+            </tbody>
+        </table>
+        <div x-show="!loading" class="lg:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="plan in plans" :key="plan.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <h3 class="font-medium text-gray-900 dark:text-white">
+                            <span x-text="plan.name"></span>
+                            <span x-show="plan.is_free" class="ml-2 px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs transition-colors" x-text="$store.i18n.locale === 'zh' ? '免费' : 'Free'"></span>
+                            <span x-show="plan.upstream_plan_id" class="ml-2 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-xs transition-colors" x-text="$store.i18n.locale === 'zh' ? '上游' : 'Upstream'"></span>
+                        </h3>
+                        <span :class="plan.status === 1 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'" class="px-2 py-1 rounded text-xs" x-text="plan.status === 1 ? ($store.i18n.locale === 'zh' ? '启用' : 'Enabled') : ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled')"></span>
+                    </div>
+                    <div class="flex flex-wrap gap-1 mb-2">
+                        <template x-for="name in (plan.domain_names || [plan.domain_name])" :key="name">
+                            <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs text-gray-700 dark:text-gray-300" x-text="name"></span>
+                        </template>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '价格: ' : 'Price: '"></span><span class="text-gray-700 dark:text-gray-300">¥<span x-text="plan.price.toFixed(2)"></span></span></p>
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '有效期: ' : 'Duration: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="plan.duration_text"></span></p>
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '字符: ' : 'Chars: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="plan.min_length + '-' + plan.max_length"></span></p>
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '记录: ' : 'Records: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="plan.max_records_text"></span></p>
+                    </div>
+                    <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <button @click="openEditModal(plan)" class="text-blue-500 dark:text-blue-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                        <button @click="confirmDelete(plan)" class="text-red-500 dark:text-red-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="plans.length === 0" class="p-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无套餐' : 'No plans'"></div>
+        </div>
+    </div>
+
+    <!-- 套餐类型选择器 -->
+    <div x-show="showTypeSelector" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showTypeSelector = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '选择套餐类型' : 'Select Plan Type'"></h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6" x-text="$store.i18n.locale === 'zh' ? '请选择要创建的套餐类型' : 'Please select the type of plan to create'"></p>
+            <div class="grid grid-cols-2 gap-4">
+                <button @click="openPaidPlanModal()" class="p-6 border-2 border-gray-200 dark:border-gray-600 rounded-xl hover:border-green-500 dark:hover:border-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all group">
+                    <div class="w-12 h-12 mx-auto mb-3 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-800/50">
+                        <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h4 class="font-medium text-gray-900 dark:text-white mb-1" x-text="$store.i18n.locale === 'zh' ? '收费套餐' : 'Paid Plan'"></h4>
+                    <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '用户需付费购买' : 'Users pay to purchase'"></p>
+                </button>
+                <button @click="openFreePlanModal()" class="p-6 border-2 border-gray-200 dark:border-gray-600 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all group">
+                    <div class="w-12 h-12 mx-auto mb-3 bg-blue-100 dark:bg-blue-900/50 rounded-full flex items-center justify-center group-hover:bg-blue-200 dark:group-hover:bg-blue-800/50">
+                        <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"></path></svg>
+                    </div>
+                    <h4 class="font-medium text-gray-900 dark:text-white mb-1" x-text="$store.i18n.locale === 'zh' ? '免费套餐' : 'Free Plan'"></h4>
+                    <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '用户免费申请' : 'Free for users'"></p>
+                </button>
+            </div>
+            <button @click="showTypeSelector = false" class="w-full mt-4 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+        </div>
+    </div>
+
+    <!-- 收费套餐弹窗 -->
+    <div x-show="showPaidModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showPaidModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editingPlan ? ($store.i18n.locale === 'zh' ? '编辑收费套餐' : 'Edit Paid Plan') : ($store.i18n.locale === 'zh' ? '添加收费套餐' : 'Add Paid Plan')"></h3>
+            <div x-show="error" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="error"></div>
+            <div x-show="isUpstreamPlan" class="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded-xl text-sm">
+                <span x-text="$store.i18n.locale === 'zh' ? '此套餐来自上游，仅可修改名称、价格和状态' : 'This plan is from upstream, only name, price and status can be modified'"></span>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '套餐名称' : 'Plan Name'"></label>
+                    <input type="text" x-model="paidForm.name" :placeholder="$store.i18n.locale === 'zh' ? '输入套餐名称' : 'Enter plan name'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '关联域名' : 'Associated Domains'"></label>
+                    <div class="border border-gray-200 dark:border-gray-600 rounded-xl max-h-40 overflow-y-auto" :class="isUpstreamPlan ? 'bg-gray-100 dark:bg-gray-600' : ''">
+                        <template x-for="d in domains" :key="d.id">
+                            <label class="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-0 cursor-pointer" :class="isUpstreamPlan ? 'cursor-not-allowed' : ''">
+                                <input type="checkbox" :value="d.id" x-model="paidForm.domain_ids" :disabled="isUpstreamPlan" class="mr-3 rounded border-gray-300 dark:border-gray-500 disabled:cursor-not-allowed">
+                                <span x-text="d.name" class="text-gray-700 dark:text-gray-300"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '价格 (元)' : 'Price (¥)'"></label>
+                        <input type="number" x-model="paidForm.price" step="0.01" min="0.01" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '收费套餐价格必须大于0' : 'Price must be greater than 0'"></p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '有效期 (天)' : 'Duration (days)'"></label>
+                        <input type="number" x-model="paidForm.duration_days" min="-1" :disabled="isUpstreamPlan" :placeholder="$store.i18n.locale === 'zh' ? '-1为永久' : '-1 for permanent'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最小字符数' : 'Min Length'"></label>
+                        <input type="number" x-model="paidForm.min_length" min="1" :disabled="isUpstreamPlan" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最大字符数' : 'Max Length'"></label>
+                        <input type="number" x-model="paidForm.max_length" min="1" :disabled="isUpstreamPlan" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最大记录数' : 'Max Records'"></label>
+                        <input type="number" x-model="paidForm.max_records" min="-1" :disabled="isUpstreamPlan" :placeholder="$store.i18n.locale === 'zh' ? '-1为无限' : '-1 for unlimited'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></label>
+                        <select x-model="paidForm.status" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '描述' : 'Description'"></label>
+                    <textarea x-model="paidForm.description" rows="2" :disabled="isUpstreamPlan" :placeholder="$store.i18n.locale === 'zh' ? '套餐描述（可选）' : 'Description (optional)'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-600"></textarea>
+                </div>
+            </div>
+            <div class="flex space-x-3 mt-6">
+                <button @click="showPaidModal = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="savePaidPlan()" :disabled="saving" class="flex-1 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 免费套餐弹窗 -->
+    <div x-show="showFreeModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showFreeModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editingPlan ? ($store.i18n.locale === 'zh' ? '编辑免费套餐' : 'Edit Free Plan') : ($store.i18n.locale === 'zh' ? '添加免费套餐' : 'Add Free Plan')"></h3>
+            <div x-show="error" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="error"></div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '套餐名称' : 'Plan Name'"></label>
+                    <input type="text" x-model="freeForm.name" :placeholder="$store.i18n.locale === 'zh' ? '输入套餐名称' : 'Enter plan name'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '关联域名' : 'Associated Domains'"></label>
+                    <div class="border border-gray-200 dark:border-gray-600 rounded-xl max-h-40 overflow-y-auto">
+                        <template x-for="d in domains" :key="d.id">
+                            <label class="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-0 cursor-pointer">
+                                <input type="checkbox" :value="d.id" x-model="freeForm.domain_ids" class="mr-3 rounded border-gray-300 dark:border-gray-500">
+                                <span x-text="d.name" class="text-gray-700 dark:text-gray-300"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '有效期 (天)' : 'Duration (days)'"></label>
+                        <input type="number" x-model="freeForm.duration_days" min="-1" :placeholder="$store.i18n.locale === 'zh' ? '-1为永久' : '-1 for permanent'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></label>
+                        <select x-model="freeForm.status" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最小字符数' : 'Min Length'"></label>
+                        <input type="number" x-model="freeForm.min_length" min="1" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最大字符数' : 'Max Length'"></label>
+                        <input type="number" x-model="freeForm.max_length" min="1" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最大记录数' : 'Max Records'"></label>
+                    <input type="number" x-model="freeForm.max_records" min="-1" :placeholder="$store.i18n.locale === 'zh' ? '-1为无限' : '-1 for unlimited'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '描述' : 'Description'"></label>
+                    <textarea x-model="freeForm.description" rows="2" :placeholder="$store.i18n.locale === 'zh' ? '套餐描述（可选）' : 'Description (optional)'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></textarea>
+                </div>
+                <!-- 免费套餐限制设置 -->
+                <div class="border-t border-gray-200 dark:border-gray-600 pt-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="$store.i18n.locale === 'zh' ? '申请限制' : 'Application Limits'"></h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '最大申请次数' : 'Max Applications'"></label>
+                            <input type="number" x-model="freeForm.max_purchase_count" min="0" :placeholder="$store.i18n.locale === 'zh' ? '0为不限' : '0 for unlimited'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '每用户最多申请次数' : 'Max applications per user'"></p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '续费窗口 (天)' : 'Renewal Window (days)'"></label>
+                            <input type="number" x-model="freeForm.renew_before_days" min="0" :placeholder="$store.i18n.locale === 'zh' ? '0为不限' : '0 for unlimited'" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '到期前多少天可续费' : 'Days before expiry to renew'"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex space-x-3 mt-6">
+                <button @click="showFreeModal = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveFreePlan()" :disabled="saving" class="flex-1 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showDeleteModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Confirm Delete'"></h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 dark:text-gray-300"><span x-text="$store.i18n.locale === 'zh' ? '确定要删除套餐 ' : 'Delete plan '"></span><span class="font-medium text-gray-900 dark:text-white" x-text="deletePlan?.name"></span><span x-text="$store.i18n.locale === 'zh' ? ' 吗？' : '?'"></span></p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showDeleteModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doDelete()" :disabled="deleting" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50">
+                    <span x-show="!deleting" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></span>
+                    <span x-show="deleting" x-text="$store.i18n.locale === 'zh' ? '删除中...' : 'Deleting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+""
+
+{% block scripts %}
+<script>
+function plansPage() {
+    return {
+        plans: [], domains: [], loading: true, domainFilter: '',
+        showTypeSelector: false, showPaidModal: false, showFreeModal: false, showDeleteModal: false,
+        editingPlan: null, deletePlan: null, error: '', saving: false, deleting: false,
+        paidForm: { name: '', domain_ids: [], price: 1, duration_days: 30, min_length: 3, max_length: 20, max_records: 10, status: '1', description: '' },
+        freeForm: { name: '', domain_ids: [], duration_days: 30, min_length: 3, max_length: 20, max_records: 10, status: '1', description: '', max_purchase_count: 1, renew_before_days: 7 },
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        get isUpstreamPlan() { return this.editingPlan && this.editingPlan.upstream_plan_id; },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadDomains();
+            await this.loadPlans();
+        },
+        async loadDomains() {
+            const res = await fetch('/api/admin/domains', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.domains = data.data.domains;
+        },
+        async loadPlans() {
+            this.loading = true;
+            let url = '/api/admin/plans';
+            if (this.domainFilter) url += '?domain_id=' + this.domainFilter;
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.plans = data.data.plans.map(p => ({
+                    ...p,
+                    duration_text: p.duration_days === -1 ? (this.locale === 'zh' ? '永久' : 'Permanent') : (p.duration_days + (this.locale === 'zh' ? '天' : 'd')),
+                    max_records_text: p.max_records === -1 ? (this.locale === 'zh' ? '无限' : 'Unlimited') : p.max_records
+                }));
+            }
+            this.loading = false;
+        },
+        openPaidPlanModal() {
+            this.showTypeSelector = false;
+            this.editingPlan = null;
+            this.paidForm = { name: '', domain_ids: [], price: 1, duration_days: 30, min_length: 3, max_length: 20, max_records: 10, status: '1', description: '' };
+            this.error = '';
+            this.showPaidModal = true;
+        },
+        openFreePlanModal() {
+            this.showTypeSelector = false;
+            this.editingPlan = null;
+            this.freeForm = { name: '', domain_ids: [], duration_days: 30, min_length: 3, max_length: 20, max_records: 10, status: '1', description: '', max_purchase_count: 1, renew_before_days: 7 };
+            this.error = '';
+            this.showFreeModal = true;
+        },
+        openEditModal(plan) {
+            this.editingPlan = plan;
+            this.error = '';
+            if (plan.is_free) {
+                this.freeForm = {
+                    name: plan.name,
+                    domain_ids: plan.domain_ids || [plan.domain_id],
+                    duration_days: plan.duration_days,
+                    min_length: plan.min_length,
+                    max_length: plan.max_length,
+                    max_records: plan.max_records,
+                    status: String(plan.status),
+                    description: plan.description || '',
+                    max_purchase_count: plan.max_purchase_count || 0,
+                    renew_before_days: plan.renew_before_days || 0
+                };
+                this.showFreeModal = true;
+            } else {
+                this.paidForm = {
+                    name: plan.name,
+                    domain_ids: plan.domain_ids || [plan.domain_id],
+                    price: plan.price,
+                    duration_days: plan.duration_days,
+                    min_length: plan.min_length,
+                    max_length: plan.max_length,
+                    max_records: plan.max_records,
+                    status: String(plan.status),
+                    description: plan.description || ''
+                };
+                this.showPaidModal = true;
+            }
+        },
+        async savePaidPlan() {
+            this.saving = true; this.error = '';
+            if (!this.paidForm.name.trim()) {
+                this.error = this.locale === 'zh' ? '请填写套餐名称' : 'Please enter plan name';
+                this.saving = false;
+                return;
+            }
+            if (!this.paidForm.domain_ids || this.paidForm.domain_ids.length === 0) {
+                this.error = this.locale === 'zh' ? '请选择至少一个关联域名' : 'Please select at least one domain';
+                this.saving = false;
+                return;
+            }
+            const price = parseFloat(this.paidForm.price);
+            if (price <= 0) {
+                this.error = this.locale === 'zh' ? '收费套餐价格必须大于0' : 'Price must be greater than 0';
+                this.saving = false;
+                return;
+            }
+            const body = {
+                name: this.paidForm.name,
+                domain_ids: this.paidForm.domain_ids,
+                price: price,
+                duration_days: parseInt(this.paidForm.duration_days),
+                min_length: parseInt(this.paidForm.min_length),
+                max_length: parseInt(this.paidForm.max_length),
+                max_records: parseInt(this.paidForm.max_records),
+                status: parseInt(this.paidForm.status),
+                description: this.paidForm.description,
+                is_free: false,
+                max_purchase_count: 0,
+                renew_before_days: 0,
+                points_per_day: 0
+            };
+            const url = this.editingPlan ? '/api/admin/plans/' + this.editingPlan.id : '/api/admin/plans';
+            const method = this.editingPlan ? 'PUT' : 'POST';
+            const res = await fetch(url, { method, headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (data.code === 200 || data.code === 201) { this.showPaidModal = false; await this.loadPlans(); }
+            else { this.error = data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'); }
+            this.saving = false;
+        },
+        async saveFreePlan() {
+            this.saving = true; this.error = '';
+            if (!this.freeForm.name.trim()) {
+                this.error = this.locale === 'zh' ? '请填写套餐名称' : 'Please enter plan name';
+                this.saving = false;
+                return;
+            }
+            if (!this.freeForm.domain_ids || this.freeForm.domain_ids.length === 0) {
+                this.error = this.locale === 'zh' ? '请选择至少一个关联域名' : 'Please select at least one domain';
+                this.saving = false;
+                return;
+            }
+            const body = {
+                name: this.freeForm.name,
+                domain_ids: this.freeForm.domain_ids,
+                price: 0,
+                duration_days: parseInt(this.freeForm.duration_days),
+                min_length: parseInt(this.freeForm.min_length),
+                max_length: parseInt(this.freeForm.max_length),
+                max_records: parseInt(this.freeForm.max_records),
+                status: parseInt(this.freeForm.status),
+                description: this.freeForm.description,
+                is_free: true,
+                max_purchase_count: parseInt(this.freeForm.max_purchase_count) || 0,
+                renew_before_days: parseInt(this.freeForm.renew_before_days) || 0,
+                points_per_day: 0
+            };
+            const url = this.editingPlan ? '/api/admin/plans/' + this.editingPlan.id : '/api/admin/plans';
+            const method = this.editingPlan ? 'PUT' : 'POST';
+            const res = await fetch(url, { method, headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (data.code === 200 || data.code === 201) { this.showFreeModal = false; await this.loadPlans(); }
+            else { this.error = data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'); }
+            this.saving = false;
+        },
+        confirmDelete(plan) { this.deletePlan = plan; this.showDeleteModal = true; },
+        async doDelete() {
+            this.deleting = true;
+            const res = await fetch('/api/admin/plans/' + this.deletePlan.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) { this.showDeleteModal = false; await this.loadPlans(); }
+            else { alert(data.message || (this.locale === 'zh' ? '删除失败' : 'Delete failed')); }
+            this.deleting = false;
+        }
+    }
+}
+</script>
+{% endblock %}

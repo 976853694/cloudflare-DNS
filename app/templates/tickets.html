@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }} - 工单中心{% endblock %}
+
+{% block content %}
+<div class="min-h-screen">
+    <div class="p-4 lg:p-6 max-w-6xl mx-auto" x-data="ticketsPage()">
+        <!-- 页面标题 -->
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('ticket.title')"></h1>
+            <button @click="showCreateModal = true" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <span x-text="$store.i18n.t('ticket.create')"></span>
+            </button>
+        </div>
+
+        <!-- 筛选栏 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+            <div class="flex flex-wrap gap-4">
+                <select x-model="filter.status" @change="loadTickets()" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.t('ticket.allStatus')"></option>
+                    <option value="0" x-text="$store.i18n.t('ticket.statusPending')"></option>
+                    <option value="1" x-text="$store.i18n.t('ticket.statusProcessing')"></option>
+                    <option value="2" x-text="$store.i18n.t('ticket.statusClosed')"></option>
+                </select>
+                <select x-model="filter.type" @change="loadTickets()" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.t('ticket.allTypes')"></option>
+                    <option value="1" x-text="$store.i18n.t('ticket.typeUser')"></option>
+                    <option value="2" x-text="$store.i18n.t('ticket.typeAdmin')"></option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 工单列表 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <!-- 加载中 -->
+            <template x-if="loading">
+                <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+                    <div class="w-8 h-8 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 rounded-full animate-spin mx-auto mb-2"></div>
+                    <span x-text="$store.i18n.t('common.loading')"></span>
+                </div>
+            </template>
+
+            <!-- 空状态 -->
+            <template x-if="!loading && tickets.length === 0">
+                <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <p x-text="$store.i18n.t('ticket.noTickets')"></p>
+                </div>
+            </template>
+
+            <!-- 工单列表 -->
+            <template x-if="!loading && tickets.length > 0">
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="ticket in tickets" :key="ticket.id">
+                        <a :href="'/tickets/' + ticket.id" class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                            <div class="flex items-start justify-between">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-xs text-gray-500 dark:text-gray-400" x-text="ticket.ticket_no"></span>
+                                        <span class="px-2 py-0.5 text-xs rounded-full" 
+                                              :class="{
+                                                  'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': ticket.status === 0,
+                                                  'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200': ticket.status === 1,
+                                                  'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': ticket.status === 2
+                                              }"
+                                              x-text="ticket.status_text"></span>
+                                        <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400" x-text="ticket.type_text"></span>
+                                    </div>
+                                    <h3 class="text-base font-medium text-gray-900 dark:text-white truncate" x-text="ticket.subject"></h3>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2" x-text="ticket.content"></p>
+                                    <div class="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                        <span x-text="ticket.created_at"></span>
+                                        <span x-show="ticket.reply_count > 0">
+                                            <span x-text="ticket.reply_count"></span> <span x-text="$store.i18n.t('ticket.replies')"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="ml-4 flex-shrink-0">
+                                    <template x-if="ticket.unread_count > 0">
+                                        <span class="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-white bg-red-500 rounded-full" x-text="ticket.unread_count"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </a>
+                    </template>
+                </div>
+            </template>
+
+            <!-- 分页 -->
+            <template x-if="!loading && totalPages > 1">
+                <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                        <span x-text="$store.i18n.t('common.total')"></span> <span x-text="total"></span> <span x-text="$store.i18n.t('common.records')"></span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="page > 1 && (page--, loadTickets())" :disabled="page <= 1" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50" x-text="$store.i18n.t('common.prev')"></button>
+                        <span class="px-3 py-1 text-sm text-gray-600 dark:text-gray-400" x-text="page + ' / ' + totalPages"></span>
+                        <button @click="page < totalPages && (page++, loadTickets())" :disabled="page >= totalPages" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:opacity-50" x-text="$store.i18n.t('common.next')"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- 创建工单弹窗 -->
+        <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="showCreateModal = false">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg" @click.stop>
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('ticket.create')"></h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <!-- 工单类型 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('ticket.type')"></label>
+                        <select x-model="createForm.type" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="2" x-text="$store.i18n.t('ticket.typeAdmin')"></option>
+                            <option value="1" x-text="$store.i18n.t('ticket.typeUser')"></option>
+                        </select>
+                    </div>
+                    <!-- 接收用户（用户对用户时显示） -->
+                    <div x-show="createForm.type == 1">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('ticket.toUser')"></label>
+                        <!-- 如果有 to_user_id，显示只读信息 -->
+                        <template x-if="createForm.to_user_id">
+                            <div class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+                                <span x-text="$store.i18n.t('ticket.contactFromWhois')"></span>
+                            </div>
+                        </template>
+                        <!-- 否则显示输入框 -->
+                        <template x-if="!createForm.to_user_id">
+                            <input type="text" x-model="createForm.to_username" :placeholder="$store.i18n.t('ticket.toUserPlaceholder')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        </template>
+                    </div>
+                    <!-- 工单标题 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('ticket.subject')"></label>
+                        <input type="text" x-model="createForm.subject" :placeholder="$store.i18n.t('ticket.subjectPlaceholder')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+                    <!-- 工单内容 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('ticket.content')"></label>
+                        <textarea x-model="createForm.content" rows="5" :placeholder="$store.i18n.t('ticket.contentPlaceholder')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"></textarea>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('ticket.noEmailHint')"></p>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                    <button @click="showCreateModal = false" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button @click="createTicket()" :disabled="creating" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                        <span x-show="!creating" x-text="$store.i18n.t('common.submit')"></span>
+                        <span x-show="creating" x-text="$store.i18n.t('common.loading')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function ticketsPage() {
+    return {
+        loading: true,
+        tickets: [],
+        total: 0,
+        page: 1,
+        totalPages: 1,
+        filter: { status: '', type: '' },
+        showCreateModal: false,
+        creating: false,
+        createForm: { type: 2, to_username: '', to_user_id: null, subject: '', content: '' },
+
+        init() {
+            this.loadTickets();
+            this.checkUrlParams();
+        },
+        
+        checkUrlParams() {
+            // 检查 URL 参数，支持从 WHOIS 页面跳转过来预填工单
+            const params = new URLSearchParams(window.location.search);
+            const toUserId = params.get('to_user_id');
+            const subject = params.get('subject');
+            
+            if (toUserId) {
+                // 设置为用户对用户工单
+                this.createForm.type = 1;
+                this.createForm.to_user_id = parseInt(toUserId);
+                if (subject) {
+                    this.createForm.subject = decodeURIComponent(subject);
+                }
+                // 自动打开创建弹窗
+                this.showCreateModal = true;
+                // 清除 URL 参数
+                window.history.replaceState({}, '', '/tickets');
+            }
+        },
+
+        async loadTickets() {
+            this.loading = true;
+            const token = localStorage.getItem('token');
+            if (!token) { location.href = '/login'; return; }
+
+            let url = `/api/tickets?page=${this.page}`;
+            if (this.filter.status !== '') url += `&status=${this.filter.status}`;
+            if (this.filter.type !== '') url += `&type=${this.filter.type}`;
+
+            try {
+                const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.tickets = data.data.tickets;
+                    this.total = data.data.total;
+                    this.totalPages = data.data.pages;
+                }
+            } catch (e) {
+                console.error('Load tickets failed:', e);
+            }
+            this.loading = false;
+        },
+
+        async createTicket() {
+            if (!this.createForm.subject.trim()) {
+                alert(this.$store.i18n.t('ticket.subjectRequired'));
+                return;
+            }
+            if (!this.createForm.content.trim()) {
+                alert(this.$store.i18n.t('ticket.contentRequired'));
+                return;
+            }
+            // 用户对用户工单必须填写接收用户（除非有 to_user_id）
+            if (this.createForm.type == 1 && !this.createForm.to_username.trim() && !this.createForm.to_user_id) {
+                alert(this.$store.i18n.t('ticket.toUserRequired'));
+                return;
+            }
+
+            this.creating = true;
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/tickets', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.createForm)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showCreateModal = false;
+                    this.createForm = { type: 2, to_username: '', to_user_id: null, subject: '', content: '' };
+                    this.loadTickets();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                console.error('Create ticket failed:', e);
+            }
+            this.creating = false;
+        }
+    };
+}
+</script>
+{% endblock %}

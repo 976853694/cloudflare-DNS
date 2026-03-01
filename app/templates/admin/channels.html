@@ -1,0 +1,642 @@
+{% extends "base.html" %}
+
+{% block title %}渠道管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="channelsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '渠道管理' : 'Channel Management'"></h1>
+        <button @click="openAddModal()" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition w-full sm:w-auto" x-text="$store.i18n.locale === 'zh' ? '添加渠道' : 'Add Channel'"></button>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <!-- 桌面端表格 -->
+        <table x-show="!loading && channels.length > 0" class="w-full hidden sm:table">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '名称' : 'Name'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '服务商' : 'Provider'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '域名数' : 'Domains'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="channel in channels" :key="channel.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-6 py-4 font-medium text-gray-900 dark:text-white" x-text="channel.name"></td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 text-xs rounded-full" 
+                                  :class="getProviderClass(channel.provider_type)"
+                                  x-text="channel.provider_name"></span>
+                        </td>
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300" x-text="channel.domains_count"></td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 text-xs rounded-full" 
+                                  :class="channel.status === 1 ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'"
+                                  x-text="channel.status === 1 ? ($store.i18n.locale === 'zh' ? '启用' : 'Enabled') : ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled')"></span>
+                        </td>
+                        <td class="px-6 py-4 space-x-2">
+                            <button @click="viewZones(channel)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '查看域名' : 'View Domains'"></button>
+                            <button x-show="channel.provider_type === 'liuqu'" @click="openSyncModal(channel)" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '同步域名' : 'Sync Domains'"></button>
+                            <button @click="verifyChannel(channel)" class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '验证' : 'Verify'"></button>
+                            <button @click="openEditModal(channel)" class="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                            <button @click="openConfigModal(channel)" class="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '配置' : 'Config'"></button>
+                            <button @click="confirmDelete(channel)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <!-- 移动端卡片视图 -->
+        <div x-show="!loading && channels.length > 0" class="sm:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="channel in channels" :key="channel.id">
+                <div class="p-4">
+                    <div class="flex items-start justify-between mb-2">
+                        <h3 class="font-medium text-gray-900 dark:text-white" x-text="channel.name"></h3>
+                        <span class="text-xs px-2 py-1 rounded-full" 
+                              :class="getProviderClass(channel.provider_type)"
+                              x-text="channel.provider_name"></span>
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '域名数: ' : 'Domains: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="channel.domains_count"></span></p>
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '状态: ' : 'Status: '"></span><span :class="channel.status === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'" x-text="channel.status === 1 ? ($store.i18n.locale === 'zh' ? '启用' : 'Enabled') : ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled')"></span></p>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 flex flex-wrap gap-3">
+                        <button @click="viewZones(channel)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '查看域名' : 'View Domains'"></button>
+                        <button x-show="channel.provider_type === 'liuqu'" @click="openSyncModal(channel)" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '同步域名' : 'Sync Domains'"></button>
+                        <button @click="verifyChannel(channel)" class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '验证' : 'Verify'"></button>
+                        <button @click="openEditModal(channel)" class="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                        <button @click="openConfigModal(channel)" class="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '配置' : 'Config'"></button>
+                        <button @click="confirmDelete(channel)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="!loading && channels.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无渠道，点击上方按钮添加' : 'No channels, click button above to add'"></div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editMode ? ($store.i18n.locale === 'zh' ? '编辑渠道' : 'Edit Channel') : ($store.i18n.locale === 'zh' ? '添加渠道' : 'Add Channel')"></h3>
+            <div x-show="error" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="error"></div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '渠道名称' : 'Channel Name'"></label>
+                <input type="text" x-model="form.name" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '渠道名称' : 'Channel name'">
+            </div>
+            
+            <div class="mb-4" x-show="!editMode">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '服务商' : 'Provider'"></label>
+                <select x-model="form.provider_type" @change="onProviderChange()" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '请选择服务商' : 'Select provider'"></option>
+                    <template x-for="p in providers" :key="p.type">
+                        <option :value="p.type" x-text="p.name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- 动态凭据字段 -->
+            <template x-for="field in currentFields" :key="field.name">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <span x-text="field.label"></span>
+                        <span x-show="field.required" class="text-red-500">*</span>
+                    </label>
+                    <input :type="field.type" 
+                           x-model="form.credentials[field.name]" 
+                           class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" 
+                           :placeholder="field.help || field.label">
+                </div>
+            </template>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '备注' : 'Remark'"></label>
+                <input type="text" x-model="form.remark" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '可选备注' : 'Optional remark'">
+            </div>
+            
+            <div class="flex space-x-3">
+                <button @click="showModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveChannel" :disabled="saving" class="flex-1 px-4 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="editMode ? ($store.i18n.locale === 'zh' ? '保存' : 'Save') : ($store.i18n.locale === 'zh' ? '添加' : 'Add')"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '验证中...' : 'Verifying...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Modal -->
+    <div x-show="showConfigModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showConfigModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4"><span x-text="$store.i18n.locale === 'zh' ? '渠道配置 - ' : 'Channel Config - '"></span><span x-text="configChannel?.name"></span></h3>
+            <div x-show="configError" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="configError"></div>
+            <div x-show="configSuccess" class="mb-4 p-3 bg-green-50 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-xl text-sm" x-text="configSuccess"></div>
+            
+            <!-- 默认 TTL -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '默认 TTL' : 'Default TTL'"></label>
+                <select x-model="configForm.default_ttl" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '使用系统默认' : 'Use system default'"></option>
+                    <option value="1" x-text="$store.i18n.locale === 'zh' ? '自动' : 'Auto'"></option>
+                    <option value="60" x-text="$store.i18n.locale === 'zh' ? '1分钟' : '1 minute'"></option>
+                    <option value="120" x-text="$store.i18n.locale === 'zh' ? '2分钟' : '2 minutes'"></option>
+                    <option value="300" x-text="$store.i18n.locale === 'zh' ? '5分钟' : '5 minutes'"></option>
+                    <option value="600" x-text="$store.i18n.locale === 'zh' ? '10分钟' : '10 minutes'"></option>
+                    <option value="1800" x-text="$store.i18n.locale === 'zh' ? '30分钟' : '30 minutes'"></option>
+                    <option value="3600" x-text="$store.i18n.locale === 'zh' ? '1小时' : '1 hour'"></option>
+                    <option value="7200" x-text="$store.i18n.locale === 'zh' ? '2小时' : '2 hours'"></option>
+                    <option value="43200" x-text="$store.i18n.locale === 'zh' ? '12小时' : '12 hours'"></option>
+                    <option value="86400" x-text="$store.i18n.locale === 'zh' ? '1天' : '1 day'"></option>
+                </select>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '新建记录时的默认 TTL 值' : 'Default TTL value for new records'"></p>
+            </div>
+            
+            <!-- Cloudflare 代理默认设置 -->
+            <div class="mb-4" x-show="configChannel?.provider_type === 'cloudflare'">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '默认代理状态' : 'Default Proxy Status'"></label>
+                <div class="flex items-center space-x-4">
+                    <label class="flex items-center">
+                        <input type="radio" x-model="configForm.default_proxied" value="true" class="mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '开启' : 'On'"></span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" x-model="configForm.default_proxied" value="false" class="mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Off'"></span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" x-model="configForm.default_proxied" value="" class="mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '不设置' : 'Not set'"></span>
+                    </label>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '新建记录时是否默认开启 CDN 代理' : 'Enable CDN proxy by default for new records'"></p>
+            </div>
+            
+            <!-- 国内服务商默认线路 -->
+            <div class="mb-4" x-show="['aliyun', 'dnspod', 'huawei'].includes(configChannel?.provider_type)">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '默认解析线路' : 'Default DNS Line'"></label>
+                <select x-model="configForm.default_line" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '默认线路' : 'Default line'"></option>
+                    <template x-for="line in configLines" :key="line.line_id">
+                        <option :value="line.line_id" x-text="line.name"></option>
+                    </template>
+                </select>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '新建记录时的默认解析线路' : 'Default DNS line for new records'"></p>
+            </div>
+            
+            <!-- 默认权重 -->
+            <div class="mb-4" x-show="['aliyun', 'dnspod', 'huawei'].includes(configChannel?.provider_type)">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '默认权重' : 'Default Weight'"></label>
+                <input type="number" x-model="configForm.default_weight" min="0" max="100" :placeholder="$store.i18n.locale === 'zh' ? '留空表示不启用' : 'Leave empty to disable'" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '新建记录时的默认权重值（0-100）' : 'Default weight for new records (0-100)'"></p>
+            </div>
+            
+            <!-- 状态开关 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '渠道状态' : 'Channel Status'"></label>
+                <div class="flex items-center space-x-4">
+                    <label class="flex items-center">
+                        <input type="radio" x-model="configForm.status" :value="1" class="mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" x-model="configForm.status" :value="0" class="mr-2">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></span>
+                    </label>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '禁用后该渠道下的域名将无法进行 DNS 操作' : 'Domains under this channel cannot perform DNS operations when disabled'"></p>
+            </div>
+            
+            <div class="flex space-x-3">
+                <button @click="showConfigModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveConfig" :disabled="configSaving" class="flex-1 px-4 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!configSaving" x-text="$store.i18n.locale === 'zh' ? '保存配置' : 'Save Config'"></span>
+                    <span x-show="configSaving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zones Modal -->
+    <div x-show="showZonesModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showZonesModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="currentChannel?.name + ($store.i18n.locale === 'zh' ? ' 的域名列表' : ' Domain List')"></h3>
+            <div x-show="zonesLoading" class="py-8 text-center"><div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+            <div x-show="!zonesLoading && zones.length === 0" class="py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无域名' : 'No domains'"></div>
+            <div x-show="!zonesLoading && zones.length > 0" class="space-y-2">
+                <template x-for="zone in zones" :key="zone.zone_id">
+                    <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="zone.name"></p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 font-mono" x-text="zone.zone_id"></p>
+                    </div>
+                </template>
+            </div>
+            <button @click="showZonesModal = false" class="mt-4 w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Close'"></button>
+        </div>
+    </div>
+
+    <!-- Sync Domains Modal (六趣DNS) -->
+    <div x-show="showSyncModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showSyncModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4"><span x-text="$store.i18n.locale === 'zh' ? '同步上游域名 - ' : 'Sync Upstream Domains - '"></span><span x-text="syncChannel?.name"></span></h3>
+            
+            <!-- 上游账户信息 -->
+            <div x-show="syncUserInfo" class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/50 rounded-xl transition-colors">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-blue-700 dark:text-blue-300"><span x-text="$store.i18n.locale === 'zh' ? '上游账户: ' : 'Upstream Account: '"></span><span x-text="syncUserInfo?.username"></span></span>
+                    <span class="text-blue-700 dark:text-blue-300"><span x-text="$store.i18n.locale === 'zh' ? '余额: ' : 'Balance: '"></span><span x-text="syncUserInfo?.balance_text || ('¥' + syncUserInfo?.balance)"></span></span>
+                </div>
+            </div>
+            
+            <div x-show="syncError" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="syncError"></div>
+            <div x-show="syncSuccess" class="mb-4 p-3 bg-green-50 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-xl text-sm" x-text="syncSuccess"></div>
+            
+            <div x-show="syncLoading" class="py-8 text-center">
+                <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+                <p class="mt-2 text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '正在获取上游域名...' : 'Loading upstream domains...'"></p>
+            </div>
+            
+            <div x-show="!syncLoading && remoteDomains.length === 0" class="py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '上游暂无可用域名' : 'No available upstream domains'">
+            </div>
+            
+            <!-- 域名列表 -->
+            <div x-show="!syncLoading && remoteDomains.length > 0" class="space-y-4">
+                <template x-for="domain in remoteDomains" :key="domain.id">
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-3">
+                            <div class="flex items-center space-x-3">
+                                <input type="checkbox" 
+                                       :id="'domain_' + domain.id"
+                                       :checked="isSelectedDomain(domain.id)"
+                                       @change="toggleDomain(domain)"
+                                       class="w-4 h-4 text-gray-900 rounded">
+                                <label :for="'domain_' + domain.id" class="font-medium text-gray-900 dark:text-white" x-text="domain.name"></label>
+                            </div>
+                            <span x-show="domain.imported" class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 rounded-full" x-text="$store.i18n.locale === 'zh' ? '已导入' : 'Imported'"></span>
+                        </div>
+                        <p x-show="domain.description" class="text-sm text-gray-500 dark:text-gray-400 mb-3" x-text="domain.description"></p>
+                        
+                        <!-- 套餐列表 -->
+                        <div x-show="domain.plans && domain.plans.length > 0" class="space-y-2">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 font-medium" x-text="$store.i18n.locale === 'zh' ? '可用套餐:' : 'Available Plans:'"></p>
+                            <template x-for="plan in domain.plans" :key="plan.id">
+                                <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded text-sm">
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox"
+                                               :id="'plan_' + domain.id + '_' + plan.id"
+                                               :checked="isSelectedPlan(domain.id, plan.id)"
+                                               @change="togglePlan(domain, plan)"
+                                               class="w-4 h-4 text-gray-900 rounded">
+                                        <label :for="'plan_' + domain.id + '_' + plan.id" class="text-gray-700 dark:text-gray-300" x-text="plan.name"></label>
+                                    </div>
+                                    <div class="text-gray-500 dark:text-gray-400">
+                                        <span x-text="'¥' + plan.price"></span>
+                                        <span class="mx-1">/</span>
+                                        <span x-text="plan.duration_days === -1 ? ($store.i18n.locale === 'zh' ? '永久' : 'Forever') : plan.duration_days + ($store.i18n.locale === 'zh' ? '天' : ' days')"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="!domain.plans || domain.plans.length === 0" class="text-sm text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无可用套餐' : 'No available plans'">
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- 选中统计 -->
+            <div x-show="selectedItems.length > 0" class="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                <p class="text-sm text-gray-600 dark:text-gray-300">
+                    <span x-text="$store.i18n.locale === 'zh' ? '已选择 ' : 'Selected '"></span>
+                    <span class="font-medium text-gray-900 dark:text-white" x-text="selectedItems.length"></span>
+                    <span x-text="$store.i18n.locale === 'zh' ? ' 个域名，共 ' : ' domains, '"></span>
+                    <span class="font-medium text-gray-900 dark:text-white" x-text="getTotalPlansCount()"></span>
+                    <span x-text="$store.i18n.locale === 'zh' ? ' 个套餐' : ' plans'"></span>
+                </p>
+            </div>
+            
+            <div class="flex space-x-3 mt-6">
+                <button @click="showSyncModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="importDomains" :disabled="syncSaving || selectedItems.length === 0" 
+                        class="flex-1 px-4 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!syncSaving" x-text="$store.i18n.locale === 'zh' ? '导入选中' : 'Import Selected'"></span>
+                    <span x-show="syncSaving" x-text="$store.i18n.locale === 'zh' ? '导入中...' : 'Importing...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function channelsPage() {
+    return {
+        channels: [], providers: [], loading: true, 
+        showModal: false, showZonesModal: false, showConfigModal: false, showSyncModal: false, editMode: false,
+        form: { name: '', provider_type: '', credentials: {}, remark: '' },
+        currentFields: [], error: '', saving: false,
+        zones: [], zonesLoading: false, currentChannel: null, editId: null,
+        configChannel: null, configLines: [],
+        configForm: { default_ttl: '', default_proxied: '', default_line: '', default_weight: '', status: 1 },
+        configError: '', configSuccess: '', configSaving: false,
+        syncChannel: null, syncUserInfo: null, remoteDomains: [], selectedItems: [],
+        syncLoading: false, syncSaving: false, syncError: '', syncSuccess: '',
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        getProviderClass(type) {
+            const classes = {
+                'cloudflare': 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300',
+                'aliyun': 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+                'dnspod': 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                'huawei': 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                'liuqu': 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+            };
+            return classes[type] || 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        },
+        
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await Promise.all([this.loadChannels(), this.loadProviders()]);
+        },
+        
+        async loadChannels() {
+            this.loading = true;
+            const res = await fetch('/api/admin/channels', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.channels = data.data.channels;
+            this.loading = false;
+        },
+        
+        async loadProviders() {
+            const res = await fetch('/api/admin/channels/providers', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.providers = data.data.providers;
+        },
+        
+        onProviderChange() {
+            const provider = this.providers.find(p => p.type === this.form.provider_type);
+            this.currentFields = provider?.credential_fields || [];
+            this.form.credentials = {};
+        },
+        
+        openAddModal() {
+            this.editMode = false;
+            this.editId = null;
+            this.form = { name: '', provider_type: '', credentials: {}, remark: '' };
+            this.currentFields = [];
+            this.error = '';
+            this.showModal = true;
+        },
+        
+        openEditModal(channel) {
+            this.editMode = true;
+            this.editId = channel.id;
+            this.form = { 
+                name: channel.name, 
+                provider_type: channel.provider_type,
+                credentials: {},
+                remark: channel.remark || ''
+            };
+            const provider = this.providers.find(p => p.type === channel.provider_type);
+            this.currentFields = provider?.credential_fields || [];
+            this.error = '';
+            this.showModal = true;
+        },
+        
+        async openConfigModal(channel) {
+            this.configChannel = channel;
+            this.configError = '';
+            this.configSuccess = '';
+            this.configLines = [];
+            
+            const config = channel.config || {};
+            this.configForm = {
+                default_ttl: config.default_ttl || '',
+                default_proxied: config.default_proxied !== undefined ? String(config.default_proxied) : '',
+                default_line: config.default_line || '',
+                default_weight: config.default_weight || '',
+                status: channel.status
+            };
+            
+            if (['aliyun', 'dnspod', 'huawei'].includes(channel.provider_type)) {
+                try {
+                    const res = await fetch(`/api/admin/channels/${channel.id}/capabilities`, {
+                        headers: { 'Authorization': 'Bearer ' + this.token }
+                    });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        this.configLines = data.data.lines || [];
+                    }
+                } catch (e) {
+                    console.error('Load lines failed:', e);
+                }
+            }
+            
+            this.showConfigModal = true;
+        },
+        
+        async saveConfig() {
+            this.configSaving = true;
+            this.configError = '';
+            this.configSuccess = '';
+            
+            const config = {};
+            if (this.configForm.default_ttl) {
+                config.default_ttl = parseInt(this.configForm.default_ttl);
+            }
+            if (this.configForm.default_proxied !== '') {
+                config.default_proxied = this.configForm.default_proxied === 'true';
+            }
+            if (this.configForm.default_line) {
+                config.default_line = this.configForm.default_line;
+            }
+            if (this.configForm.default_weight) {
+                config.default_weight = parseInt(this.configForm.default_weight);
+            }
+            
+            try {
+                const res = await fetch(`/api/admin/channels/${this.configChannel.id}`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        config: config,
+                        status: this.configForm.status
+                    })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.configSuccess = this.locale === 'zh' ? '配置保存成功' : 'Config saved successfully';
+                    await this.loadChannels();
+                    setTimeout(() => { this.showConfigModal = false; }, 1000);
+                } else {
+                    this.configError = data.message;
+                }
+            } catch (e) {
+                this.configError = (this.locale === 'zh' ? '保存失败: ' : 'Save failed: ') + e.message;
+            }
+            this.configSaving = false;
+        },
+        
+        async saveChannel() {
+            this.saving = true; this.error = '';
+            const url = this.editMode ? `/api/admin/channels/${this.editId}` : '/api/admin/channels';
+            const method = this.editMode ? 'PUT' : 'POST';
+            
+            const res = await fetch(url, {
+                method, headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.form)
+            });
+            const data = await res.json();
+            if (data.code === 200 || data.code === 201) {
+                this.showModal = false;
+                await this.loadChannels();
+            } else {
+                this.error = data.message;
+            }
+            this.saving = false;
+        },
+        
+        async confirmDelete(channel) {
+            const hasDomainsMsg = this.locale === 'zh' ? '该渠道下还有域名，无法删除' : 'Cannot delete channel with domains';
+            if (channel.domains_count > 0) { alert(hasDomainsMsg); return; }
+            const confirmMsg = this.locale === 'zh' ? `确定删除渠道 ${channel.name}？` : `Delete channel ${channel.name}?`;
+            if (!confirm(confirmMsg)) return;
+            const res = await fetch(`/api/admin/channels/${channel.id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token } });
+            if ((await res.json()).code === 200) await this.loadChannels();
+        },
+        
+        async verifyChannel(channel) {
+            const res = await fetch(`/api/admin/channels/${channel.id}/verify`, { 
+                method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token } 
+            });
+            const data = await res.json();
+            const successMsg = this.locale === 'zh' ? '凭据验证成功！' : 'Credentials verified!';
+            const failMsg = this.locale === 'zh' ? '凭据验证失败：' : 'Verification failed: ';
+            alert(data.data?.valid ? successMsg : failMsg + data.message);
+        },
+        
+        async viewZones(channel) {
+            this.currentChannel = channel; this.showZonesModal = true; this.zonesLoading = true; this.zones = [];
+            const res = await fetch(`/api/admin/channels/${channel.id}/zones?all=1`, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.zones = data.data.zones;
+            this.zonesLoading = false;
+        },
+        
+        async openSyncModal(channel) {
+            this.syncChannel = channel;
+            this.syncUserInfo = null;
+            this.remoteDomains = [];
+            this.selectedItems = [];
+            this.syncError = '';
+            this.syncSuccess = '';
+            this.syncLoading = true;
+            this.showSyncModal = true;
+            
+            try {
+                const res = await fetch(`/api/admin/channels/${channel.id}/remote-domains`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.syncUserInfo = data.data.user_info;
+                    this.remoteDomains = data.data.domains || [];
+                } else {
+                    this.syncError = data.message || (this.locale === 'zh' ? '获取上游域名失败' : 'Failed to get upstream domains');
+                }
+            } catch (e) {
+                this.syncError = (this.locale === 'zh' ? '请求失败: ' : 'Request failed: ') + e.message;
+            }
+            this.syncLoading = false;
+        },
+        
+        isSelectedDomain(domainId) {
+            return this.selectedItems.some(item => item.domain_id === domainId);
+        },
+        
+        isSelectedPlan(domainId, planId) {
+            const item = this.selectedItems.find(i => i.domain_id === domainId);
+            return item && item.plans.some(p => p.id === planId);
+        },
+        
+        toggleDomain(domain) {
+            const idx = this.selectedItems.findIndex(i => i.domain_id === domain.id);
+            if (idx >= 0) {
+                this.selectedItems.splice(idx, 1);
+            } else {
+                this.selectedItems.push({
+                    domain_id: domain.id,
+                    domain_name: domain.name,
+                    plans: [...(domain.plans || [])]
+                });
+            }
+        },
+        
+        togglePlan(domain, plan) {
+            let item = this.selectedItems.find(i => i.domain_id === domain.id);
+            
+            if (!item) {
+                item = {
+                    domain_id: domain.id,
+                    domain_name: domain.name,
+                    plans: [plan]
+                };
+                this.selectedItems.push(item);
+            } else {
+                const planIdx = item.plans.findIndex(p => p.id === plan.id);
+                if (planIdx >= 0) {
+                    item.plans.splice(planIdx, 1);
+                    if (item.plans.length === 0) {
+                        const domainIdx = this.selectedItems.findIndex(i => i.domain_id === domain.id);
+                        this.selectedItems.splice(domainIdx, 1);
+                    }
+                } else {
+                    item.plans.push(plan);
+                }
+            }
+        },
+        
+        getTotalPlansCount() {
+            return this.selectedItems.reduce((sum, item) => sum + item.plans.length, 0);
+        },
+        
+        async importDomains() {
+            if (this.selectedItems.length === 0) return;
+            
+            this.syncSaving = true;
+            this.syncError = '';
+            this.syncSuccess = '';
+            
+            try {
+                const res = await fetch(`/api/admin/channels/${this.syncChannel.id}/import-domains`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ items: this.selectedItems })
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    this.syncSuccess = data.message;
+                    await this.loadChannels();
+                    this.selectedItems = [];
+                    setTimeout(() => this.openSyncModal(this.syncChannel), 1500);
+                } else {
+                    this.syncError = data.message || (this.locale === 'zh' ? '导入失败' : 'Import failed');
+                }
+            } catch (e) {
+                this.syncError = (this.locale === 'zh' ? '请求失败: ' : 'Request failed: ') + e.message;
+            }
+            this.syncSaving = false;
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}渠道管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="hostChannelsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                <a href="/host" class="hover:text-gray-700 dark:hover:text-gray-300">托管商面板</a>
+                <span>/</span>
+                <span>渠道管理</span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '渠道管理' : 'Channel Management'"></h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm">管理您的DNS服务商账户</p>
+        </div>
+        <button @click="openAddModal()" class="bg-gradient-to-br from-blue-500 to-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:from-blue-600 hover:to-blue-700 hover:shadow-lg transition-all duration-200 w-full sm:w-auto flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            <span x-text="$store.i18n.locale === 'zh' ? '添加渠道' : 'Add Channel'"></span>
+        </button>
+    </div>
+
+    <!-- 渠道卡片列表 -->
+    <div x-show="loading" class="p-10 text-center">
+        <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
+    </div>
+    
+    <div x-show="!loading && channels.length === 0" x-cloak class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-12 text-center">
+        <div class="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-10 h-10 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+            </svg>
+        </div>
+        <p class="text-gray-500 dark:text-gray-400 mb-3 text-lg" x-text="$store.i18n.locale === 'zh' ? '暂无渠道' : 'No channels'"></p>
+        <button @click="openAddModal()" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
+            添加第一个渠道 →
+        </button>
+    </div>
+    
+    <div x-show="!loading && channels.length > 0" x-cloak class="grid grid-cols-1 gap-4">
+        <template x-for="channel in channels" :key="channel.id">
+            <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl p-5 
+                        hover:bg-gradient-to-r hover:from-blue-50 hover:to-transparent dark:hover:from-blue-900/10 
+                        border-l-4 hover:border-l-blue-500 transition-all duration-200 group">
+                <div class="flex items-center gap-4">
+                    <!-- 服务商图标 -->
+                    <div class="w-14 h-14 bg-gradient-to-br rounded-xl flex items-center justify-center flex-shrink-0 
+                                group-hover:scale-110 transition-transform"
+                         :class="getProviderGradient(channel.provider_type)">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                        </svg>
+                    </div>
+                    
+                    <!-- 渠道信息 -->
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <p class="font-semibold text-gray-900 dark:text-white truncate text-lg" x-text="channel.name"></p>
+                            <span class="px-2.5 py-1 text-xs font-medium rounded-full flex-shrink-0" 
+                                  :class="channel.status === 1 ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'"
+                                  x-text="channel.status === 1 ? ($store.i18n.locale === 'zh' ? '启用' : 'Enabled') : ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled')"></span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3 text-sm">
+                            <span class="px-2.5 py-1 rounded-full text-xs font-medium" 
+                                  :class="getProviderClass(channel.provider_type)"
+                                  x-text="channel.provider_name"></span>
+                            <span class="text-gray-500 dark:text-gray-400">
+                                <span x-text="$store.i18n.locale === 'zh' ? '域名数: ' : 'Domains: '"></span>
+                                <span class="font-medium text-gray-700 dark:text-gray-300" x-text="channel.domains_count"></span>
+                            </span>
+                            <span x-show="channel.remark" class="text-gray-400 dark:text-gray-500 text-xs truncate max-w-xs" x-text="channel.remark"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作按钮 -->
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button @click="verifyChannel(channel)" 
+                                class="px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg 
+                                       hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors text-sm font-medium">
+                            <span x-text="$store.i18n.locale === 'zh' ? '验证' : 'Verify'"></span>
+                        </button>
+                        <button @click="openEditModal(channel)" 
+                                class="px-4 py-2 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg 
+                                       hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-sm font-medium">
+                            <span x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></span>
+                        </button>
+                        <button @click="confirmDelete(channel)" 
+                                class="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg 
+                                       hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-sm font-medium">
+                            <span x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+
+    <!-- Add/Edit Modal -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editMode ? ($store.i18n.locale === 'zh' ? '编辑渠道' : 'Edit Channel') : ($store.i18n.locale === 'zh' ? '添加渠道' : 'Add Channel')"></h3>
+            <div x-show="error" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="error"></div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '渠道名称' : 'Channel Name'"></label>
+                <input type="text" x-model="form.name" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '渠道名称' : 'Channel name'">
+            </div>
+            
+            <div class="mb-4" x-show="!editMode">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '服务商' : 'Provider'"></label>
+                <select x-model="form.provider_type" @change="onProviderChange()" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '请选择服务商' : 'Select provider'"></option>
+                    <template x-for="p in providers" :key="p.type">
+                        <option :value="p.type" x-text="p.name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- 动态凭据字段 -->
+            <template x-for="field in currentFields" :key="field.name">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <span x-text="field.label"></span>
+                        <span x-show="field.required" class="text-red-500">*</span>
+                    </label>
+                    <input :type="field.type" 
+                           x-model="form.credentials[field.name]" 
+                           class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" 
+                           :placeholder="field.help || field.label">
+                    <p x-show="field.help" class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="field.help"></p>
+                </div>
+            </template>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '备注' : 'Remark'"></label>
+                <input type="text" x-model="form.remark" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '可选备注' : 'Optional remark'">
+            </div>
+            
+            <div class="flex space-x-3">
+                <button @click="showModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveChannel" :disabled="saving" class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    <span x-show="!saving" x-text="editMode ? ($store.i18n.locale === 'zh' ? '保存' : 'Save') : ($store.i18n.locale === 'zh' ? '添加' : 'Add')"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '验证中...' : 'Verifying...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function hostChannelsPage() {
+    return {
+        loading: true,
+        channels: [],
+        providers: [],
+        showModal: false,
+        editMode: false,
+        editId: null,
+        saving: false,
+        error: '',
+        form: {
+            name: '',
+            provider_type: '',
+            credentials: {},
+            remark: ''
+        },
+        currentFields: [],
+        
+        async init() {
+            await Promise.all([this.loadProviders(), this.loadChannels()]);
+            this.loading = false;
+        },
+        
+        async loadProviders() {
+            try {
+                const res = await fetch('/api/host/channels/providers', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.providers = data.data.providers || [];
+                }
+            } catch (e) {
+                console.error('Load providers failed:', e);
+            }
+        },
+        
+        async loadChannels() {
+            try {
+                const res = await fetch('/api/host/channels', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.channels = data.data || [];
+                }
+            } catch (e) {
+                console.error('Load channels failed:', e);
+            }
+        },
+        
+        getProviderClass(type) {
+            const classes = {
+                'cloudflare': 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300',
+                'aliyun': 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+                'dnspod': 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                'huawei': 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                'west': 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300',
+                'godaddy': 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300',
+                'namecheap': 'bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300',
+                'route53': 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                'powerdns': 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+            };
+            return classes[type] || 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        },
+        
+        getProviderGradient(type) {
+            const gradients = {
+                'cloudflare': 'from-orange-500 to-orange-600',
+                'aliyun': 'from-blue-500 to-blue-600',
+                'dnspod': 'from-green-500 to-green-600',
+                'huawei': 'from-red-500 to-red-600',
+                'west': 'from-purple-500 to-purple-600',
+                'godaddy': 'from-teal-500 to-teal-600',
+                'namecheap': 'from-pink-500 to-pink-600',
+                'route53': 'from-yellow-500 to-yellow-600',
+                'powerdns': 'from-indigo-500 to-indigo-600'
+            };
+            return gradients[type] || 'from-gray-500 to-gray-600';
+        },
+        
+        openAddModal() {
+            this.editMode = false;
+            this.editId = null;
+            this.error = '';
+            this.form = { name: '', provider_type: '', credentials: {}, remark: '' };
+            this.currentFields = [];
+            this.showModal = true;
+        },
+        
+        openEditModal(channel) {
+            this.editMode = true;
+            this.editId = channel.id;
+            this.error = '';
+            this.form = {
+                name: channel.name,
+                provider_type: channel.provider_type,
+                credentials: {},
+                remark: channel.remark || ''
+            };
+            this.onProviderChange();
+            this.showModal = true;
+        },
+        
+        onProviderChange() {
+            const provider = this.providers.find(p => p.type === this.form.provider_type);
+            this.currentFields = provider?.credential_fields || [];
+            this.form.credentials = {};
+        },
+        
+        async saveChannel() {
+            this.error = '';
+            if (!this.form.name.trim()) {
+                this.error = this.$store.i18n.locale === 'zh' ? '请输入渠道名称' : 'Please enter channel name';
+                return;
+            }
+            if (!this.editMode && !this.form.provider_type) {
+                this.error = this.$store.i18n.locale === 'zh' ? '请选择服务商' : 'Please select provider';
+                return;
+            }
+            
+            // 验证必填凭据
+            for (const field of this.currentFields) {
+                if (field.required && !this.form.credentials[field.name]) {
+                    this.error = (this.$store.i18n.locale === 'zh' ? '请填写 ' : 'Please fill in ') + field.label;
+                    return;
+                }
+            }
+            
+            this.saving = true;
+            try {
+                const url = this.editMode ? `/api/host/channels/${this.editId}` : '/api/host/channels';
+                const method = this.editMode ? 'PUT' : 'POST';
+                const body = {
+                    name: this.form.name,
+                    remark: this.form.remark
+                };
+                if (!this.editMode) {
+                    body.provider_type = this.form.provider_type;
+                }
+                if (Object.keys(this.form.credentials).length > 0) {
+                    body.credentials = this.form.credentials;
+                }
+                
+                const res = await fetch(url, {
+                    method,
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showModal = false;
+                    await this.loadChannels();
+                    window.$toast?.success(this.editMode ? '渠道已更新' : '渠道已添加');
+                } else {
+                    this.error = data.message || '操作失败';
+                }
+            } catch (e) {
+                this.error = '网络错误';
+            }
+            this.saving = false;
+        },
+        
+        async verifyChannel(channel) {
+            try {
+                const res = await fetch(`/api/host/channels/${channel.id}/verify`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    window.$toast?.success(this.$store.i18n.locale === 'zh' ? '凭据验证成功' : 'Credentials verified');
+                } else {
+                    window.$toast?.error(data.message || (this.$store.i18n.locale === 'zh' ? '凭据验证失败' : 'Verification failed'));
+                }
+            } catch (e) {
+                window.$toast?.error(this.$store.i18n.locale === 'zh' ? '验证失败' : 'Verification failed');
+            }
+        },
+        
+        async confirmDelete(channel) {
+            if (!confirm(this.$store.i18n.locale === 'zh' ? `确定要删除渠道 "${channel.name}" 吗？` : `Delete channel "${channel.name}"?`)) return;
+            try {
+                const res = await fetch(`/api/host/channels/${channel.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    await this.loadChannels();
+                    window.$toast?.success(this.$store.i18n.locale === 'zh' ? '渠道已删除' : 'Channel deleted');
+                } else {
+                    window.$toast?.error(data.message || (this.$store.i18n.locale === 'zh' ? '删除失败' : 'Delete failed'));
+                }
+            } catch (e) {
+                window.$toast?.error(this.$store.i18n.locale === 'zh' ? '删除失败' : 'Delete failed');
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

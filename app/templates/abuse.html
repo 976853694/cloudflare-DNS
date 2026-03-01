@@ -1,0 +1,77 @@
+{% extends "base_public.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }} - 投诉举报{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-12 px-4">
+    <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-8">
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-8" x-text="$store.i18n.t('legal.abuseReport')"></h1>
+        
+        <div class="prose dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 space-y-6">
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.abuseIntroTitle')"></h2>
+                <p x-text="$store.i18n.t('legal.abuseIntroDesc')"></p>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.prohibitedContent')"></h2>
+                <p x-text="$store.i18n.t('legal.prohibitedContentDesc')"></p>
+                <ul class="list-disc list-inside mt-2 space-y-1">
+                    <li x-text="$store.i18n.t('legal.prohibitedIllegal')"></li>
+                    <li x-text="$store.i18n.t('legal.prohibitedFraud')"></li>
+                    <li x-text="$store.i18n.t('legal.prohibitedMalware')"></li>
+                    <li x-text="$store.i18n.t('legal.prohibitedSpam')"></li>
+                    <li x-text="$store.i18n.t('legal.prohibitedInfringe')"></li>
+                    <li x-text="$store.i18n.t('legal.prohibitedOther')"></li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.howToReport')"></h2>
+                <p x-text="$store.i18n.t('legal.howToReportDesc')"></p>
+                <ul class="list-disc list-inside mt-2 space-y-1">
+                    <li x-text="$store.i18n.t('legal.reportDomain')"></li>
+                    <li x-text="$store.i18n.t('legal.reportReason')"></li>
+                    <li x-text="$store.i18n.t('legal.reportEvidence')"></li>
+                    <li x-text="$store.i18n.t('legal.reportContact')"></li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.reportChannel')"></h2>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    {% if site_settings.support_email %}
+                    <p class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                        <span x-text="$store.i18n.t('auth.email')"></span>: 
+                        <a href="mailto:{{ site_settings.support_email }}?subject=Abuse Report" class="text-blue-600 dark:text-blue-400 hover:underline">{{ site_settings.support_email }}</a>
+                    </p>
+                    {% endif %}
+                    {% if site_settings.support_qq %}
+                    <p class="flex items-center gap-2 mt-2">
+                        <svg class="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                        </svg>
+                        <span>QQ: {{ site_settings.support_qq }}</span>
+                    </p>
+                    {% endif %}
+                    {% if not site_settings.support_email and not site_settings.support_qq %}
+                    <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('legal.noContactInfo')"></p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.processTime')"></h2>
+                <p x-text="$store.i18n.t('legal.processTimeDesc')"></p>
+            </section>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <a href="/" class="text-blue-600 dark:text-blue-400 hover:underline" x-text="$store.i18n.t('common.back')"></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

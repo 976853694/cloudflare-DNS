@@ -1,0 +1,346 @@
+{% extends "base.html" %}
+
+{% block title %}数据库备份 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="backupPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('backup.title')"></h1>
+        <button @click="createBackup()" :disabled="creating" class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-colors">
+            <svg x-show="creating" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <svg x-show="!creating" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg>
+            <span x-text="creating ? $store.i18n.t('backup.creating') : $store.i18n.t('backup.createBackup')"></span>
+        </button>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <!-- 加载状态 -->
+        <div x-show="loading" class="p-10 text-center">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        
+        <!-- 演示用户禁止访问提示 -->
+        <div x-show="!loading && forbidden" class="p-10 text-center">
+            <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <p class="text-gray-500 dark:text-gray-400 text-lg" x-text="$store.i18n.t('backup.forbidden')"></p>
+        </div>
+        
+        <div x-show="!loading && !forbidden" class="p-4 sm:p-6">
+            <!-- 恢复数据库区域 -->
+            <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                <h3 class="text-lg font-medium text-amber-800 dark:text-amber-300 mb-2" x-text="$store.i18n.t('backup.restoreTitle')"></h3>
+                <p class="text-sm text-amber-700 dark:text-amber-400 mb-4" x-text="$store.i18n.t('backup.restoreWarning')"></p>
+                
+                <div class="space-y-4">
+                    <div class="flex items-center gap-4">
+                        <label class="flex-1">
+                            <div class="relative border-2 border-dashed border-amber-300 dark:border-amber-700 rounded-xl p-4 text-center cursor-pointer hover:border-amber-400 dark:hover:border-amber-600 transition-colors"
+                                 @dragover.prevent="dragover = true"
+                                 @dragleave.prevent="dragover = false"
+                                 @drop.prevent="handleDrop($event)"
+                                 :class="{ 'border-amber-500 bg-amber-100 dark:bg-amber-900/40': dragover }">
+                                <input type="file" class="hidden" accept=".sql,.sql.gz" @change="handleFileSelect($event)" x-ref="fileInput">
+                                <svg class="w-8 h-8 mx-auto text-amber-500 dark:text-amber-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                <p class="text-sm text-amber-700 dark:text-amber-400" x-text="selectedFile ? selectedFile.name : $store.i18n.t('backup.dropOrClick')"></p>
+                                <p class="text-xs text-amber-600 dark:text-amber-500 mt-1" x-text="$store.i18n.t('backup.supportedFormats')"></p>
+                            </div>
+                        </label>
+                        <button @click="confirmRestore()" :disabled="!selectedFile || restoring" class="px-4 py-2 bg-amber-600 text-white rounded-xl hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                            <svg x-show="restoring" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span x-text="restoring ? $store.i18n.t('backup.restoring') : $store.i18n.t('backup.restore')"></span>
+                        </button>
+                    </div>
+                    
+                    <!-- 强制恢复选项 -->
+                    <div class="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                        <input type="checkbox" id="forceRestore" x-model="forceRestore" class="mt-1 w-4 h-4 text-red-600 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 rounded focus:ring-red-500">
+                        <label for="forceRestore" class="flex-1 cursor-pointer">
+                            <div class="text-sm font-medium text-red-800 dark:text-red-300" x-text="$store.i18n.t('backup.forceRestore')"></div>
+                            <div class="text-xs text-red-700 dark:text-red-400 mt-1" x-text="$store.i18n.t('backup.forceRestoreDesc')"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 备份列表 -->
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('backup.backupList')"></h3>
+            
+            <!-- 空状态 -->
+            <div x-show="backups.length === 0" class="text-center py-10">
+                <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
+                </svg>
+                <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('backup.noBackups')"></p>
+            </div>
+            
+            <!-- 备份表格 -->
+            <div x-show="backups.length > 0" class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <th class="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('backup.fileName')"></th>
+                            <th class="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('backup.fileSize')"></th>
+                            <th class="text-left py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('backup.createdAt')"></th>
+                            <th class="text-right py-3 px-4 text-sm font-medium text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('backup.actions')"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="backup in backups" :key="backup.name">
+                            <tr class="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                <td class="py-3 px-4">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                                        </svg>
+                                        <span class="text-sm text-gray-900 dark:text-white font-mono" x-text="backup.name"></span>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-300" x-text="backup.size_formatted"></td>
+                                <td class="py-3 px-4 text-sm text-gray-600 dark:text-gray-300" x-text="backup.created"></td>
+                                <td class="py-3 px-4 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button @click="downloadBackup(backup.name)" class="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors" :title="$store.i18n.t('backup.download')">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                            </svg>
+                                        </button>
+                                        <button @click="confirmDelete(backup.name)" class="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl" :title="$store.i18n.t('backup.delete')">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 恢复确认对话框 -->
+    <div x-show="showRestoreModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="showRestoreModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 hover:shadow-lg transition-shadow" @click.stop>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('backup.confirmRestoreTitle')"></h3>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-2" x-text="$store.i18n.t('backup.confirmRestoreMsg')"></p>
+            <p class="text-sm text-red-600 dark:text-red-400 mb-6" x-text="$store.i18n.t('backup.confirmRestoreWarning')"></p>
+            <div class="flex justify-end gap-3">
+                <button @click="showRestoreModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.t('common.cancel')"></button>
+                <button @click="doRestore()" class="px-4 py-2 bg-amber-600 text-white rounded-xl hover:bg-amber-700" x-text="$store.i18n.t('backup.confirmRestore')"></button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 删除确认对话框 -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @click.self="showDeleteModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 hover:shadow-lg transition-shadow" @click.stop>
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('backup.confirmDeleteTitle')"></h3>
+            </div>
+            <p class="text-gray-600 dark:text-gray-300 mb-2" x-text="$store.i18n.t('backup.confirmDeleteMsg')"></p>
+            <p class="text-sm font-mono text-gray-500 dark:text-gray-400 mb-6" x-text="deleteTarget"></p>
+            <div class="flex justify-end gap-3">
+                <button @click="showDeleteModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.t('common.cancel')"></button>
+                <button @click="doDelete()" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700" x-text="$store.i18n.t('backup.confirmDelete')"></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function backupPage() {
+    return {
+        backups: [],
+        loading: true,
+        forbidden: false,
+        creating: false,
+        restoring: false,
+        selectedFile: null,
+        dragover: false,
+        forceRestore: false,
+        showRestoreModal: false,
+        showDeleteModal: false,
+        deleteTarget: '',
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await this.loadBackups();
+        },
+        
+        async loadBackups() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/admin/backup/list', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.backups = data.data.backups;
+                } else if (data.code === 403) {
+                    this.forbidden = true;
+                }
+            } catch (e) {
+                console.error('Load backups failed:', e);
+            }
+            this.loading = false;
+        },
+        
+        async createBackup() {
+            this.creating = true;
+            try {
+                const res = await fetch('/api/admin/backup/create', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? `备份创建成功: ${data.data.filename}` : `Backup created: ${data.data.filename}`);
+                    await this.loadBackups();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '备份失败' : 'Backup failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.creating = false;
+        },
+        
+        async downloadBackup(filename) {
+            try {
+                const res = await fetch(`/api/admin/backup/download/${filename}`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                
+                if (!res.ok) {
+                    const data = await res.json();
+                    alert(data.message || (this.locale === 'zh' ? '下载失败' : 'Download failed'));
+                    return;
+                }
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } catch (e) {
+                alert(this.locale === 'zh' ? '下载失败，请重试' : 'Download failed, please retry');
+            }
+        },
+        
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.selectedFile = file;
+            }
+        },
+        
+        handleDrop(event) {
+            this.dragover = false;
+            const file = event.dataTransfer.files[0];
+            if (file && (file.name.endsWith('.sql') || file.name.endsWith('.sql.gz'))) {
+                this.selectedFile = file;
+            } else {
+                alert(this.locale === 'zh' ? '请上传 .sql 或 .sql.gz 文件' : 'Please upload .sql or .sql.gz file');
+            }
+        },
+        
+        confirmRestore() {
+            this.showRestoreModal = true;
+        },
+        
+        async doRestore() {
+            this.showRestoreModal = false;
+            this.restoring = true;
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', this.selectedFile);
+                formData.append('force', this.forceRestore ? 'true' : 'false');
+                
+                const res = await fetch('/api/admin/backup/restore', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    const mode = this.forceRestore ? (this.locale === 'zh' ? '强制覆盖' : 'Force') : (this.locale === 'zh' ? '普通' : 'Normal');
+                    const stats = data.data ? ` (${data.data.executed}/${data.data.total})` : '';
+                    alert((this.locale === 'zh' ? `数据库恢复成功 (${mode}模式)${stats}` : `Database restored (${mode} mode)${stats}`));
+                    this.selectedFile = null;
+                    this.forceRestore = false;
+                    this.$refs.fileInput.value = '';
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '恢复失败' : 'Restore failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.restoring = false;
+        },
+        
+        confirmDelete(filename) {
+            this.deleteTarget = filename;
+            this.showDeleteModal = true;
+        },
+        
+        async doDelete() {
+            this.showDeleteModal = false;
+            try {
+                const res = await fetch(`/api/admin/backup/${this.deleteTarget}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '备份文件已删除' : 'Backup deleted');
+                    await this.loadBackups();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '删除失败' : 'Delete failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.deleteTarget = '';
+        }
+    }
+}
+</script>
+{% endblock %}

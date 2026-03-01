@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}购买记录 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="ordersPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '购买记录' : 'Purchase Records'"></h1>
+            <button x-show="selectedIds.length > 0" @click="confirmBatchDelete()" class="px-3 py-1.5 bg-red-600 text-white rounded-xl text-sm hover:bg-red-700">
+                <span x-text="$store.i18n.locale === 'zh' ? '批量删除' : 'Batch Delete'"></span> (<span x-text="selectedIds.length"></span>)
+            </button>
+        </div>
+        <div class="flex gap-2">
+            <input type="text" x-model="search" @keyup.enter="page=1; loadRecords()" :placeholder="$store.i18n.locale === 'zh' ? '搜索域名/套餐...' : 'Search domain/plan...'" class="flex-1 sm:w-48 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            <button @click="page=1; loadRecords()" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-sm hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '搜索' : 'Search'"></button>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <!-- 桌面端表格 -->
+        <div x-show="!loading" class="hidden lg:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-3 text-left">
+                            <input type="checkbox" @change="toggleSelectAll($event.target.checked)" :checked="isAllSelected" class="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-500 rounded">
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '订单ID' : 'Order ID'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '用户' : 'User'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '套餐' : 'Plan'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '金额' : 'Amount'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '有效期' : 'Duration'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '支付方式' : 'Payment'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '时间' : 'Time'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="record in records" :key="record.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50" :class="{'bg-blue-50 dark:bg-blue-900/20': selectedIds.includes(record.id)} transition-colors">
+                            <td class="px-4 py-4">
+                                <input type="checkbox" :checked="selectedIds.includes(record.id)" @change="toggleSelect(record.id)" class="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-500 rounded">
+                            </td>
+                            <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm">#<span x-text="record.id"></span></td>
+                            <td class="px-4 py-4">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="record.user?.username"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="record.user?.email"></p>
+                            </td>
+                            <td class="px-4 py-4 font-mono text-sm text-gray-900 dark:text-white" x-text="record.subdomain_name"></td>
+                            <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="record.plan_name"></td>
+                            <td class="px-4 py-4 font-medium" :class="record.price == 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white'" x-text="record.price_text"></td>
+                            <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" :class="{'text-purple-600 dark:text-purple-400': record.duration_days === -1}" x-text="record.duration_text"></td>
+                            <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm" x-text="record.payment_method_text"></td>
+                            <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm" x-text="new Date(record.created_at).toLocaleString()"></td>
+                            <td class="px-4 py-4">
+                                <button @click="confirmDelete(record)" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="records.length === 0">
+                        <td colspan="10" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无购买记录' : 'No purchase records'"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+
+        <!-- 移动端卡片列表 -->
+        <div x-show="!loading" class="lg:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="record in records" :key="record.id">
+                <div class="p-4" :class="{'bg-blue-50 dark:bg-blue-900/20': selectedIds.includes(record.id)} transition-colors">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" :checked="selectedIds.includes(record.id)" @change="toggleSelect(record.id)" class="w-4 h-4 mt-1 text-blue-600 border-gray-300 dark:border-gray-500 rounded">
+                            <div>
+                                <p class="font-mono text-sm font-medium text-gray-900 dark:text-white" x-text="record.subdomain_name"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="record.plan_name"></p>
+                            </div>
+                        </div>
+                        <span class="font-medium text-sm" :class="record.price == 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white'" x-text="record.price_text"></span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <span x-text="record.user?.username"></span>
+                        <span :class="{'text-purple-600 dark:text-purple-400': record.duration_days === -1}" x-text="record.duration_text"></span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
+                        <span x-text="record.payment_method_text"></span>
+                        <span x-text="new Date(record.created_at).toLocaleDateString()"></span>
+                    </div>
+                    <div class="flex justify-end mt-2">
+                        <button @click="confirmDelete(record)" class="text-red-600 dark:text-red-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="records.length === 0" class="p-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无购买记录' : 'No purchase records'"></div>
+        </div>
+
+        <div x-show="!loading && pagination.pages > 1" class="px-4 sm:px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span class="text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '共 ' : 'Total '"></span><span x-text="pagination.total"></span><span x-text="$store.i18n.locale === 'zh' ? ' 条' : ' records'"></span></span>
+            <div class="flex items-center space-x-2">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <span class="text-sm text-gray-600 dark:text-gray-400" x-text="page + '/' + pagination.pages"></span>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量删除确认模态框 -->
+    <div x-show="showBatchDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showBatchDeleteModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '确认批量删除' : 'Confirm Batch Delete'"></h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 dark:text-gray-300"><span x-text="$store.i18n.locale === 'zh' ? '确定要删除选中的 ' : 'Delete '"></span><span class="font-bold text-red-600 dark:text-red-400" x-text="selectedIds.length"></span><span x-text="$store.i18n.locale === 'zh' ? ' 条购买记录吗？' : ' selected records?'"></span></p>
+                <p class="text-xs text-gray-400 dark:text-gray-500 mt-2" x-text="$store.i18n.locale === 'zh' ? '注意：此操作仅删除购买记录，不会影响用户的域名' : 'Note: This only deletes purchase records, not user domains'"></p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showBatchDeleteModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doBatchDelete()" :disabled="batchDeleting" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50">
+                    <span x-show="!batchDeleting" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Confirm Delete'"></span>
+                    <span x-show="batchDeleting" x-text="$store.i18n.locale === 'zh' ? '删除中...' : 'Deleting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showDeleteModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Confirm Delete'"></h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '确定要删除以下购买记录吗？' : 'Delete this purchase record?'"></p>
+                <div class="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                    <p class="text-sm"><span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '域名:' : 'Domain:'"></span> <span class="font-mono font-medium text-gray-900 dark:text-white" x-text="deleteItem?.subdomain_name"></span></p>
+                    <p class="text-sm"><span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '套餐:' : 'Plan:'"></span> <span class="text-gray-900 dark:text-white" x-text="deleteItem?.plan_name"></span></p>
+                    <p class="text-sm"><span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '用户:' : 'User:'"></span> <span class="text-gray-900 dark:text-white" x-text="deleteItem?.user?.username"></span></p>
+                </div>
+                <p class="text-xs text-gray-400 dark:text-gray-500 mt-2" x-text="$store.i18n.locale === 'zh' ? '注意：此操作仅删除购买记录，不会影响用户的域名' : 'Note: This only deletes purchase records, not user domains'"></p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showDeleteModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doDelete()" :disabled="deleting" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50">
+                    <span x-show="!deleting" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></span>
+                    <span x-show="deleting" x-text="$store.i18n.locale === 'zh' ? '删除中...' : 'Deleting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+function ordersPage() {
+    return {
+        records: [], loading: true, page: 1, search: '',
+        pagination: { pages: 1, total: 0 },
+        showDeleteModal: false, deleteItem: null, deleting: false,
+        selectedIds: [], showBatchDeleteModal: false, batchDeleting: false,
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadRecords();
+        },
+        async loadRecords() {
+            this.loading = true;
+            let url = `/api/admin/purchase-records?page=${this.page}&per_page=20`;
+            if (this.search) url += `&search=${encodeURIComponent(this.search)}`;
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.records = data.data.records;
+                this.pagination = data.data.pagination;
+                this.selectedIds = [];
+            }
+            this.loading = false;
+        },
+        get isAllSelected() {
+            return this.records.length > 0 && this.records.every(r => this.selectedIds.includes(r.id));
+        },
+        toggleSelect(id) {
+            const idx = this.selectedIds.indexOf(id);
+            if (idx > -1) { this.selectedIds.splice(idx, 1); } 
+            else { this.selectedIds.push(id); }
+        },
+        toggleSelectAll(checked) {
+            if (checked) { this.selectedIds = this.records.map(r => r.id); } 
+            else { this.selectedIds = []; }
+        },
+        confirmBatchDelete() { this.showBatchDeleteModal = true; },
+        async doBatchDelete() {
+            this.batchDeleting = true;
+            const res = await fetch('/api/admin/purchase-records/batch-delete', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: this.selectedIds })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.showBatchDeleteModal = false;
+                this.selectedIds = [];
+                await this.loadRecords();
+            } else {
+                const failMsg = Alpine.store('i18n').locale === 'zh' ? '批量删除失败' : 'Batch delete failed';
+                alert(data.message || failMsg);
+            }
+            this.batchDeleting = false;
+        },
+        confirmDelete(record) {
+            this.deleteItem = record;
+            this.showDeleteModal = true;
+        },
+        async doDelete() {
+            this.deleting = true;
+            const res = await fetch(`/api/admin/purchase-records/${this.deleteItem.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.showDeleteModal = false;
+                await this.loadRecords();
+            } else {
+                const failMsg = Alpine.store('i18n').locale === 'zh' ? '删除失败' : 'Delete failed';
+                alert(data.message || failMsg);
+            }
+            this.deleting = false;
+        },
+        async goPage(newPage) {
+            if (newPage < 1 || newPage > this.pagination.pages || newPage === this.page) return;
+            this.page = newPage;
+            await this.loadRecords();
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="redeemPage()" x-init="init()">
+    <div class="max-w-xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('nav.redeemCode')"></h1>
+            <!-- 获取卡密按钮 -->
+            {% if site_settings.redeem_channel_url %}
+            <a href="{{ site_settings.redeem_channel_url }}" target="_blank" class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+                {{ site_settings.redeem_channel_name|default('获取卡密') }}
+            </a>
+            {% endif %}
+        </div>
+        
+        <!-- 当前余额 -->
+        <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-6 mb-6 text-white">
+            <p class="text-blue-100 text-sm mb-1" x-text="$store.i18n.locale === 'zh' ? '当前余额' : 'Current Balance'"></p>
+            <p class="text-3xl font-bold" x-text="user?.balance_text || '¥0'"></p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+            <!-- 步骤1: 输入卡密 -->
+            <div x-show="step === 1">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '输入卡密' : 'Enter Redeem Code'"></label>
+                    <input type="text" x-model="code" @keyup.enter="verifyCode()" :placeholder="$store.i18n.locale === 'zh' ? '请输入卡密' : 'Enter code'" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:outline-none focus:border-gray-400 font-mono uppercase tracking-wider text-center text-lg">
+                </div>
+                <button @click="verifyCode()" :disabled="verifying || !code.trim()" class="w-full bg-gray-900 dark:bg-gray-700 text-white py-3 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span x-show="!verifying" x-text="$store.i18n.locale === 'zh' ? '验证卡密' : 'Verify Code'"></span>
+                    <span x-show="verifying" x-text="$store.i18n.locale === 'zh' ? '验证中...' : 'Verifying...'"></span>
+                </button>
+            </div>
+
+            <!-- 步骤2: 确认充值 -->
+            <div x-show="step === 2">
+                <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-center">
+                    <p class="text-gray-500 dark:text-gray-400 text-sm mb-2" x-text="$store.i18n.locale === 'zh' ? '充值金额' : 'Recharge Amount'"></p>
+                    <p class="text-3xl font-bold" :class="{'text-purple-600': codeInfo.amount === -1}" x-text="codeInfo.amount_text"></p>
+                    <p x-show="codeInfo.amount === -1" class="text-sm text-purple-600 mt-2" x-text="$store.i18n.locale === 'zh' ? '无限余额可无限购买套餐' : 'Unlimited balance for unlimited purchases'"></p>
+                </div>
+
+                <div class="flex space-x-3">
+                    <button @click="step = 1; codeInfo = {}" class="flex-1 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.t('common.back')"></button>
+                    <button @click="redeemCode()" :disabled="redeeming" class="flex-1 bg-gray-900 dark:bg-gray-700 text-white py-3 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50">
+                        <span x-show="!redeeming" x-text="$store.i18n.locale === 'zh' ? '确认充值' : 'Confirm Recharge'"></span>
+                        <span x-show="redeeming" x-text="$store.i18n.locale === 'zh' ? '充值中...' : 'Processing...'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 步骤3: 充值成功 -->
+            <div x-show="step === 3" class="text-center">
+                <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('common.success')"></h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '余额已到账' : 'Balance credited'"></p>
+                <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg mb-6">
+                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '当前余额' : 'Current Balance'"></p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="result.balance_text"></p>
+                </div>
+                <a href="/user/domains/new" class="inline-block bg-gray-900 dark:bg-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600" x-text="$store.i18n.t('nav.buyDomain')"></a>
+            </div>
+        </div>
+
+        <!-- 使用说明 -->
+        <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+            <h4 class="font-medium text-blue-900 dark:text-blue-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '使用说明' : 'Instructions'"></h4>
+            <ul class="text-sm text-blue-800 dark:text-blue-400 space-y-1">
+                <li x-text="'1. ' + ($store.i18n.locale === 'zh' ? '输入您获得的卡密进行验证' : 'Enter your redeem code to verify')"></li>
+                <li x-text="'2. ' + ($store.i18n.locale === 'zh' ? '验证成功后确认充值' : 'Confirm recharge after verification')"></li>
+                <li x-text="'3. ' + ($store.i18n.locale === 'zh' ? '充值成功后可使用余额购买域名套餐' : 'Use balance to purchase domain plans')"></li>
+                <li x-text="'4. ' + ($store.i18n.locale === 'zh' ? '无限余额卡可无限购买任意套餐' : 'Unlimited cards can purchase any plan')"></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div x-show="toast.show" x-cloak x-transition class="fixed bottom-6 right-6 z-50">
+        <div :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" class="text-white px-4 py-2 rounded-lg shadow-lg text-sm" x-text="toast.message"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function redeemPage() {
+    return {
+        step: 1,
+        code: '',
+        user: null,
+        codeInfo: {},
+        result: {},
+        verifying: false,
+        redeeming: false,
+        toast: { show: false, message: '', type: 'success' },
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadUser();
+        },
+        async loadUser() {
+            const res = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.user = data.data;
+        },
+        async verifyCode() {
+            if (!this.code.trim()) return;
+            this.verifying = true;
+            try {
+                const res = await fetch('/api/redeem/verify', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: this.code.trim() })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.codeInfo = data.data;
+                    this.step = 2;
+                } else {
+                    this.showToast(data.message || '验证失败', 'error');
+                }
+            } catch (e) {
+                this.showToast('网络错误', 'error');
+            }
+            this.verifying = false;
+        },
+        async redeemCode() {
+            this.redeeming = true;
+            try {
+                const res = await fetch('/api/redeem', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: this.code.trim() })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.result = data.data;
+                    this.step = 3;
+                } else {
+                    this.showToast(data.message || '充值失败', 'error');
+                }
+            } catch (e) {
+                this.showToast('网络错误', 'error');
+            }
+            this.redeeming = false;
+        },
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => { this.toast.show = false; }, 3000);
+        }
+    }
+}
+</script>
+{% endblock %}

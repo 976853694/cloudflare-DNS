@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}转移记录 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="userTransfers()" x-init="init()">
+    <!-- 标题 -->
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.t('transfer.myTransfers')"></h1>
+
+    <!-- 筛选标签 -->
+    <div class="flex flex-wrap gap-2 mb-6">
+        <button @click="direction = 'all'; loadData()" 
+            :class="direction === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition">
+            <span x-text="$store.i18n.t('common.all')"></span>
+        </button>
+        <button @click="direction = 'out'; loadData()" 
+            :class="direction === 'out' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition">
+            <span x-text="$store.i18n.t('transfer.transferOut')"></span>
+        </button>
+        <button @click="direction = 'in'; loadData()" 
+            :class="direction === 'in' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition">
+            <span x-text="$store.i18n.t('transfer.transferIn')"></span>
+        </button>
+    </div>
+
+    <!-- 加载中 -->
+    <template x-if="loading">
+        <div class="flex justify-center py-12">
+            <div class="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-blue-500 rounded-full animate-spin"></div>
+        </div>
+    </template>
+
+    <!-- 列表 -->
+    <template x-if="!loading">
+        <div>
+            <!-- 空状态 -->
+            <template x-if="transfers.length === 0">
+                <div class="text-center py-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                    <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                    </svg>
+                    <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('transfer.noRecords')"></p>
+                </div>
+            </template>
+
+            <!-- 记录列表 -->
+            <template x-if="transfers.length > 0">
+                <div class="space-y-4">
+                    <template x-for="item in transfers" :key="item.id">
+                        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <!-- 左侧信息 -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <!-- 方向标签 -->
+                                        <span x-show="item.direction === 'out'" class="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs rounded" x-text="$store.i18n.t('transfer.out')"></span>
+                                        <span x-show="item.direction === 'in'" class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs rounded" x-text="$store.i18n.t('transfer.in')"></span>
+                                        <!-- 域名 -->
+                                        <span class="font-medium text-gray-900 dark:text-white truncate" x-text="item.subdomain_name"></span>
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                                        <div>
+                                            <span x-text="item.direction === 'out' ? $store.i18n.t('transfer.to') : $store.i18n.t('transfer.from')"></span>
+                                            <span class="text-gray-700 dark:text-gray-300" x-text="item.direction === 'out' ? item.to_username : item.from_username"></span>
+                                        </div>
+                                        <div x-show="item.fee_points > 0">
+                                            <span x-text="$store.i18n.t('transfer.fee')"></span>: 
+                                            <span class="text-gray-700 dark:text-gray-300" x-text="item.fee_points + ' ' + $store.i18n.t('transfer.points')"></span>
+                                        </div>
+                                        <div x-show="item.remark" class="truncate">
+                                            <span x-text="$store.i18n.t('transfer.remark')"></span>: 
+                                            <span class="text-gray-700 dark:text-gray-300" x-text="item.remark"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 右侧状态和操作 -->
+                                <div class="flex flex-col items-end gap-2">
+                                    <!-- 状态 -->
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium"
+                                        :class="{
+                                            'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400': item.status === 0,
+                                            'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400': item.status === 1,
+                                            'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400': item.status === 2,
+                                            'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400': item.status === 3
+                                        }"
+                                        x-text="item.status_text"></span>
+                                    <!-- 时间 -->
+                                    <span class="text-xs text-gray-400" x-text="item.created_at"></span>
+                                    <!-- 取消按钮（仅待验证状态且是转出方） -->
+                                    <button x-show="item.status === 0 && item.direction === 'out'" 
+                                        @click="cancelTransfer(item.id)"
+                                        class="text-red-600 hover:text-red-800 text-sm">
+                                        <span x-text="$store.i18n.t('transfer.cancel')"></span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- 分页 -->
+                    <div x-show="total > perPage" class="flex justify-center items-center gap-4 mt-6">
+                        <button @click="page--; loadData()" :disabled="page <= 1"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <span x-text="$store.i18n.t('common.prev')"></span>
+                        </button>
+                        <span class="text-sm text-gray-600 dark:text-gray-400">
+                            <span x-text="page"></span> / <span x-text="Math.ceil(total / perPage)"></span>
+                        </span>
+                        <button @click="page++; loadData()" :disabled="page >= Math.ceil(total / perPage)"
+                            class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <span x-text="$store.i18n.t('common.next')"></span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </template>
+</div>
+
+<script>
+function userTransfers() {
+    return {
+        transfers: [],
+        loading: true,
+        direction: 'all',
+        page: 1,
+        perPage: 20,
+        total: 0,
+
+        async init() {
+            await this.loadData();
+        },
+
+        async loadData() {
+            this.loading = true;
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            try {
+                const params = new URLSearchParams({
+                    type: this.direction,
+                    page: this.page,
+                    per_page: this.perPage
+                });
+
+                const res = await fetch(`/api/domain/transfer/history?${params}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.transfers = data.data.items || [];
+                    this.total = data.data.total || 0;
+                }
+            } catch (e) {
+                console.error('Load transfers failed:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async cancelTransfer(transferId) {
+            if (!confirm(this.$store.i18n.t('transfer.confirmCancel'))) return;
+
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/domain/transfer/cancel', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ transfer_id: transferId })
+                });
+
+                const data = await res.json();
+                if (data.code === 200) {
+                    await this.loadData();
+                } else {
+                    alert(data.message || '取消失败');
+                }
+            } catch (e) {
+                alert('网络错误');
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block title %}操作日志 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="logsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '操作日志' : 'Operation Logs'"></h1>
+        <div class="flex flex-wrap gap-2">
+            <button x-show="selectedIds.length > 0" @click="batchDelete()" class="bg-red-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-red-600">
+                <span x-text="$store.i18n.locale === 'zh' ? '删除选中' : 'Delete Selected'"></span> (<span x-text="selectedIds.length"></span>)
+            </button>
+            <button @click="clearAll()" class="border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 px-4 py-2 rounded-xl text-sm hover:bg-red-50 dark:hover:bg-red-900/30" x-text="$store.i18n.locale === 'zh' ? '清空日志' : 'Clear All'"></button>
+        </div>
+    </div>
+
+    <!-- 搜索表单 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-4 hover:shadow-lg transition-shadow">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '用户名' : 'Username'"></label>
+                <input type="text" x-model="filters.username" :placeholder="$store.i18n.locale === 'zh' ? '输入用户名' : 'Enter username'" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '操作类型' : 'Action Type'"></label>
+                <select x-model="filters.action" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '全部' : 'All'"></option>
+                    <option value="create" x-text="$store.i18n.locale === 'zh' ? '创建' : 'Create'"></option>
+                    <option value="update" x-text="$store.i18n.locale === 'zh' ? '更新' : 'Update'"></option>
+                    <option value="delete" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></option>
+                    <option value="login" x-text="$store.i18n.locale === 'zh' ? '登录' : 'Login'"></option>
+                    <option value="logout" x-text="$store.i18n.locale === 'zh' ? '登出' : 'Logout'"></option>
+                    <option value="register" x-text="$store.i18n.locale === 'zh' ? '注册' : 'Register'"></option>
+                    <option value="enable" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enable'"></option>
+                    <option value="disable" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disable'"></option>
+                    <option value="recharge" x-text="$store.i18n.locale === 'zh' ? '充值' : 'Recharge'"></option>
+                    <option value="purchase" x-text="$store.i18n.locale === 'zh' ? '购买' : 'Purchase'"></option>
+                    <option value="renew" x-text="$store.i18n.locale === 'zh' ? '续费' : 'Renew'"></option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '开始日期' : 'Start Date'"></label>
+                <input type="date" x-model="filters.start_date" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '结束日期' : 'End Date'"></label>
+                <input type="date" x-model="filters.end_date" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+            </div>
+        </div>
+        <div class="flex gap-2 mt-4">
+            <button @click="search()" class="bg-blue-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-blue-600 transition-colors" x-text="$store.i18n.locale === 'zh' ? '搜索' : 'Search'"></button>
+            <button @click="resetFilters()" class="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '重置' : 'Reset'"></button>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        <!-- 桌面端表格 -->
+        <table x-show="!loading" class="w-full hidden sm:table">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-10">
+                        <input type="checkbox" x-model="selectAll" @change="toggleSelectAll()" class="rounded border-gray-300 dark:border-gray-600">
+                    </th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '时间' : 'Time'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '用户' : 'User'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Action'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '目标' : 'Target'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '详情' : 'Detail'"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">IP</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="log in logs" :key="log.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-4 py-4">
+                            <input type="checkbox" :checked="selectedIds.includes(log.id)" @change="$event.target.checked ? selectedIds.push(log.id) : selectedIds = selectedIds.filter(id => id !== log.id)" class="rounded border-gray-300 dark:border-gray-600">
+                        </td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="new Date(log.created_at).toLocaleString()"></td>
+                        <td class="px-4 py-4 font-medium text-gray-900 dark:text-white" x-text="log.username || '-'"></td>
+                        <td class="px-4 py-4">
+                            <span class="px-2 py-1 rounded text-xs" :class="{
+                                'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': log.action === 'create',
+                                'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': log.action === 'update',
+                                'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': log.action === 'delete',
+                                'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': log.action === 'login',
+                                'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': !['create','update','delete','login'].includes(log.action)
+                            } transition-colors" x-text="getActionText(log.action)"></span>
+                        </td>
+                        <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="getTargetText(log)"></td>
+                        <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm" x-text="log.detail || '-'"></td>
+                        <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm font-mono" x-text="log.ip_address || '-'"></td>
+                        <td class="px-4 py-4">
+                            <button @click="deleteLog(log)" class="text-red-500 dark:text-red-400 text-sm hover:text-red-700 dark:hover:text-red-300" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <!-- 移动端卡片视图 -->
+        <div x-show="!loading && logs.length > 0" class="sm:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="log in logs" :key="log.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-start gap-2">
+                            <input type="checkbox" :checked="selectedIds.includes(log.id)" @change="$event.target.checked ? selectedIds.push(log.id) : selectedIds = selectedIds.filter(id => id !== log.id)" class="rounded border-gray-300 dark:border-gray-600 mt-1">
+                            <span class="font-medium text-gray-900 dark:text-white" x-text="log.username || '-'"></span>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs" :class="{
+                            'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': log.action === 'create',
+                            'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': log.action === 'update',
+                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': log.action === 'delete',
+                            'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': log.action === 'login',
+                            'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': !['create','update','delete','login'].includes(log.action)
+                        } transition-colors" x-text="getActionText(log.action)"></span>
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '目标: ' : 'Target: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="getTargetText(log)"></span></p>
+                        <p class="truncate"><span x-text="$store.i18n.locale === 'zh' ? '详情: ' : 'Detail: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="log.detail || '-'"></span></p>
+                        <p class="flex justify-between">
+                            <span class="font-mono text-xs" x-text="log.ip_address || '-'"></span>
+                            <span class="text-xs" x-text="new Date(log.created_at).toLocaleString()"></span>
+                        </p>
+                    </div>
+                    <div class="pt-2 border-t border-gray-100 dark:border-gray-700 mt-2">
+                        <button @click="deleteLog(log)" class="text-red-500 dark:text-red-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="!loading && logs.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无操作日志' : 'No operation logs'"></div>
+        <div x-show="!loading && pagination.pages > 1" class="px-4 sm:px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-center space-x-2">
+            <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+            <span class="px-3 py-1 text-gray-600 dark:text-gray-400 text-sm" x-text="page + ' / ' + pagination.pages"></span>
+            <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div x-show="toast.show" x-cloak x-transition class="fixed bottom-6 right-6 z-50">
+        <div :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" class="text-white px-4 py-2 rounded-xl shadow-lg text-sm" x-text="toast.message"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function logsPage() {
+    return {
+        logs: [], loading: true, page: 1, pagination: { pages: 1, total: 0 },
+        selectedIds: [], selectAll: false,
+        toast: { show: false, message: '', type: 'success' },
+        filters: { username: '', action: '', start_date: '', end_date: '' },
+        // 操作类型映射
+        get actionMap() {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            return {
+                'create': isZh ? '创建' : 'Create',
+                'update': isZh ? '更新' : 'Update',
+                'delete': isZh ? '删除' : 'Delete',
+                'login': isZh ? '登录' : 'Login',
+                'logout': isZh ? '登出' : 'Logout',
+                'register': isZh ? '注册' : 'Register',
+                'enable': isZh ? '启用' : 'Enable',
+                'disable': isZh ? '禁用' : 'Disable',
+                'recharge': isZh ? '充值' : 'Recharge',
+                'purchase': isZh ? '购买' : 'Purchase',
+                'renew': isZh ? '续费' : 'Renew',
+                'verify': isZh ? '验证' : 'Verify',
+                'reset': isZh ? '重置' : 'Reset',
+                'export': isZh ? '导出' : 'Export',
+                'import': isZh ? '导入' : 'Import',
+                'sync': isZh ? '同步' : 'Sync'
+            };
+        },
+        // 目标类型映射
+        get targetMap() {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            return {
+                'user': isZh ? '用户' : 'User',
+                'domain': isZh ? '域名' : 'Domain',
+                'subdomain': isZh ? '子域名' : 'Subdomain',
+                'dns_record': isZh ? 'DNS记录' : 'DNS Record',
+                'plan': isZh ? '套餐' : 'Plan',
+                'order': isZh ? '订单' : 'Order',
+                'coupon': isZh ? '优惠券' : 'Coupon',
+                'redeem_code': isZh ? '兑换码' : 'Redeem Code',
+                'channel': isZh ? '渠道' : 'Channel',
+                'cf_account': isZh ? 'CF账户' : 'CF Account',
+                'dns_channel': isZh ? 'DNS渠道' : 'DNS Channel',
+                'announcement': isZh ? '公告' : 'Announcement',
+                'setting': isZh ? '设置' : 'Setting',
+                'ip_blacklist': isZh ? 'IP黑名单' : 'IP Blacklist',
+                'app_version': isZh ? '应用版本' : 'App Version',
+                'system': isZh ? '系统' : 'System'
+            };
+        },
+        getActionText(action) {
+            return this.actionMap[action] || action;
+        },
+        getTargetText(log) {
+            if (log.target_name) return log.target_name;
+            return this.targetMap[log.target_type] || log.target_type || '-';
+        },
+        get token() { return localStorage.getItem('token'); },
+        async init() { if (!this.token) { window.location.href = '/login'; return; } await this.load(); },
+        async load() {
+            this.loading = true;
+            this.selectedIds = [];
+            this.selectAll = false;
+            let url = `/api/admin/logs?page=${this.page}&per_page=20`;
+            if (this.filters.username) url += `&username=${encodeURIComponent(this.filters.username)}`;
+            if (this.filters.action) url += `&action=${encodeURIComponent(this.filters.action)}`;
+            if (this.filters.start_date) url += `&start_date=${encodeURIComponent(this.filters.start_date)}`;
+            if (this.filters.end_date) url += `&end_date=${encodeURIComponent(this.filters.end_date)}`;
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) { this.logs = data.data.logs; this.pagination = data.data.pagination; }
+            this.loading = false;
+        },
+        search() {
+            this.page = 1;
+            this.load();
+        },
+        resetFilters() {
+            this.filters = { username: '', action: '', start_date: '', end_date: '' };
+            this.page = 1;
+            this.load();
+        },
+        toggleSelectAll() {
+            if (this.selectAll) {
+                this.selectedIds = this.logs.map(l => l.id);
+            } else {
+                this.selectedIds = [];
+            }
+        },
+        async deleteLog(log) {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            if (!confirm(isZh ? '确定要删除这条日志吗？' : 'Are you sure to delete this log?')) return;
+            const res = await fetch(`/api/admin/logs/${log.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.showToast(isZh ? '删除成功' : 'Deleted successfully', 'success');
+                await this.load();
+            } else {
+                this.showToast(data.message || (isZh ? '删除失败' : 'Delete failed'), 'error');
+            }
+        },
+        async batchDelete() {
+            if (this.selectedIds.length === 0) return;
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            const msg = isZh ? `确定要删除选中的 ${this.selectedIds.length} 条日志吗？` : `Are you sure to delete ${this.selectedIds.length} selected logs?`;
+            if (!confirm(msg)) return;
+            const res = await fetch('/api/admin/logs/batch-delete', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: this.selectedIds })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.showToast(data.message, 'success');
+                await this.load();
+            } else {
+                this.showToast(data.message || (isZh ? '删除失败' : 'Delete failed'), 'error');
+            }
+        },
+        async clearAll() {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            if (!confirm(isZh ? '确定要清空所有日志吗？此操作不可恢复！' : 'Are you sure to clear all logs? This action cannot be undone!')) return;
+            const res = await fetch('/api/admin/logs/batch-delete', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clear_all: true })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.showToast(data.message, 'success');
+                this.page = 1;
+                await this.load();
+            } else {
+                this.showToast(data.message || (isZh ? '清空失败' : 'Clear failed'), 'error');
+            }
+        },
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => { this.toast.show = false; }, 3000);
+        },
+        async goPage(newPage) {
+            if (newPage < 1 || newPage > this.pagination.pages || newPage === this.page) return;
+            this.page = newPage;
+            await this.load();
+        }
+    }
+}
+</script>
+{% endblock %}

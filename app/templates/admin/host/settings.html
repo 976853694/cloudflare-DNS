@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}托管设置 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 max-w-full" x-data="hostSettings()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                <a href="/admin" class="hover:text-gray-700 dark:hover:text-gray-300" x-text="$store.i18n.t('host.admin.breadcrumb')"></a>
+                <span>/</span>
+                <span x-text="$store.i18n.t('host.admin.settings.title')"></span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.settings.title')"></h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm" x-text="$store.i18n.t('host.admin.settings.description')"></p>
+        </div>
+    </div>
+
+    <!-- Settings Form -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div x-show="loading" class="p-8 text-center">
+            <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <form x-show="!loading" x-cloak @submit.prevent="saveSettings()" class="divide-y divide-gray-100 dark:divide-gray-700">
+            <!-- Enable Host -->
+            <div class="px-6 py-5 flex items-center justify-between">
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.settings.enableHost.label')"></p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" x-text="$store.i18n.t('host.admin.settings.enableHost.description')"></p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" x-model="settings.host_enabled" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+            
+            <!-- Default Commission -->
+            <div class="px-6 py-5">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.settings.defaultCommission.label')"></p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" x-text="$store.i18n.t('host.admin.settings.defaultCommission.description')"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="number" x-model="settings.host_default_commission" min="0" max="100" class="w-24 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <span class="text-gray-500 dark:text-gray-400">%</span>
+                </div>
+            </div>
+            
+            <!-- Min Balance Withdraw -->
+            <div class="px-6 py-5">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.settings.minWithdraw.label')"></p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" x-text="$store.i18n.t('host.admin.settings.minWithdraw.description')"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-500 dark:text-gray-400">¥</span>
+                    <input type="number" x-model="settings.host_min_withdraw" min="0" step="0.01" class="w-32 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+            </div>
+            
+            <!-- Max Channels -->
+            <div class="px-6 py-5">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.settings.maxChannels.label')"></p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" x-text="$store.i18n.t('host.admin.settings.maxChannels.description')"></p>
+                    </div>
+                </div>
+                <input type="number" x-model="settings.host_max_channels" min="1" class="w-24 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            </div>
+            
+            <!-- Max Domains -->
+            <div class="px-6 py-5">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.settings.maxDomains.label')"></p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" x-text="$store.i18n.t('host.admin.settings.maxDomains.description')"></p>
+                    </div>
+                </div>
+                <input type="number" x-model="settings.host_max_domains" min="1" class="w-24 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            </div>
+            
+            <!-- Auto Approve -->
+            <div class="px-6 py-5 flex items-center justify-between">
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.settings.autoApprove.label')"></p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5" x-text="$store.i18n.t('host.admin.settings.autoApprove.description')"></p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" x-model="settings.host_auto_approve" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+            
+            <!-- Submit -->
+            <div class="px-6 py-5 bg-gray-50 dark:bg-gray-700/50">
+                <button type="submit" :disabled="submitting" class="px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium disabled:opacity-50">
+                    <span x-show="!submitting" x-text="$store.i18n.t('host.admin.settings.saveButton')"></span>
+                    <span x-show="submitting" x-text="$store.i18n.t('host.admin.settings.saving')"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function hostSettings() {
+    return {
+        loading: true,
+        submitting: false,
+        settings: {
+            host_enabled: true,
+            host_default_commission: 10,
+            host_min_withdraw: 100,
+            host_max_channels: 10,
+            host_max_domains: 50,
+            host_auto_approve: false
+        },
+        
+        async init() {
+            await this.loadSettings();
+            this.loading = false;
+        },
+        
+        async loadSettings() {
+            try {
+                const res = await fetch('/api/admin/host/settings', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200 && data.data) {
+                    this.settings = { ...this.settings, ...data.data };
+                }
+            } catch (e) {
+                console.error('Load settings failed:', e);
+            }
+        },
+        
+        async saveSettings() {
+            this.submitting = true;
+            try {
+                const res = await fetch('/api/admin/host/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.settings)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    window.$toast?.success(Alpine.store('i18n').t('host.admin.settings.messages.saved'));
+                } else {
+                    window.$toast?.error(data.message || Alpine.store('i18n').t('host.admin.settings.messages.saveFailed'));
+                }
+            } catch (e) {
+                window.$toast?.error(Alpine.store('i18n').t('host.admin.settings.messages.saveFailed'));
+            }
+            this.submitting = false;
+        }
+    }
+}
+</script>
+{% endblock %}

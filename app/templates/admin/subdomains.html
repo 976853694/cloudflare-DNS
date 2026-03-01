@@ -1,0 +1,605 @@
+{% extends "base.html" %}
+
+{% block title %}用户域名管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="subdomainsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="flex items-center gap-4 flex-wrap">
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '用户域名管理' : 'User Domains'"></h1>
+            <div x-show="selectedIds.length > 0" class="flex items-center gap-2">
+                <button @click="showBatchActionModal = true" class="px-3 py-1.5 bg-blue-600 text-white rounded-xl text-sm hover:bg-blue-700 transition-colors">
+                    <span x-text="$store.i18n.locale === 'zh' ? '批量操作' : 'Batch'"></span> (<span x-text="selectedIds.length"></span>)
+                </button>
+                <button @click="confirmBatchDelete()" class="px-3 py-1.5 bg-red-600 text-white rounded-xl text-sm hover:bg-red-700" x-text="$store.i18n.locale === 'zh' ? '批量删除' : 'Batch Delete'"></button>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <select x-model="filters.status" @change="page=1; loadSubdomains()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.locale === 'zh' ? '全部状态' : 'All Status'"></option>
+                <option value="1" x-text="$store.i18n.locale === 'zh' ? '正常' : 'Active'"></option>
+                <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                <option value="2" x-text="$store.i18n.locale === 'zh' ? '待审核' : 'Pending'"></option>
+            </select>
+            <select x-model="filters.expired" @change="page=1; loadSubdomains()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.locale === 'zh' ? '全部域名' : 'All Domains'"></option>
+                <option value="0" x-text="$store.i18n.locale === 'zh' ? '未过期' : 'Not Expired'"></option>
+                <option value="1" x-text="$store.i18n.locale === 'zh' ? '已过期' : 'Expired'"></option>
+            </select>
+            <select x-model="filters.ns_mode" @change="page=1; loadSubdomains()" class="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.locale === 'zh' ? '全部NS' : 'All NS'"></option>
+                <option value="0">Cloudflare NS</option>
+                <option value="1" x-text="$store.i18n.locale === 'zh' ? '已转移NS' : 'Transferred NS'"></option>
+            </select>
+            <input type="text" x-model="search" @keyup.enter="page=1; loadSubdomains()" :placeholder="$store.i18n.locale === 'zh' ? '搜索域名...' : 'Search...'" class="flex-1 sm:w-48 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            <button @click="page=1; loadSubdomains()" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-sm hover:bg-gray-200 dark:hover:bg-gray-600 whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '搜索' : 'Search'"></button>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <!-- 桌面端表格 -->
+        <div x-show="!loading" class="hidden lg:block overflow-visible">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-3 text-left">
+                            <input type="checkbox" @change="toggleSelectAll($event.target.checked)" :checked="isAllSelected" class="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded">
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '用户' : 'User'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '套餐' : 'Plan'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">NS</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '到期时间' : 'Expires'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? 'DNS记录' : 'Records'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="item in subdomains" :key="item.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50" :class="{'bg-blue-50 dark:bg-blue-900/30': selectedIds.includes(item.id)} transition-colors">
+                            <td class="px-4 py-4">
+                                <input type="checkbox" :checked="selectedIds.includes(item.id)" @change="toggleSelect(item.id)" class="w-4 h-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded">
+                            </td>
+                            <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm">#<span x-text="item.id"></span></td>
+                            <td class="px-4 py-4">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="item.user?.username"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="item.user?.email"></p>
+                            </td>
+                            <td class="px-4 py-4 font-mono text-sm text-gray-900 dark:text-white" x-text="item.full_name"></td>
+                            <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="item.plan?.name || '-'"></td>
+                            <td class="px-4 py-4">
+                                <span class="px-2 py-1 text-xs rounded-full" :class="{
+                                    'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': item.status === 1 && !item.is_expired,
+                                    'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': item.status === 0,
+                                    'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': item.status === 2,
+                                    'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': item.is_expired
+                                }" x-text="item.is_expired ? ($store.i18n.locale === 'zh' ? '已过期' : 'Expired') : (item.status === 1 ? ($store.i18n.locale === 'zh' ? '正常' : 'Active') : (item.status === 0 ? ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled') : ($store.i18n.locale === 'zh' ? '待审核' : 'Pending')))"></span>
+                            </td>
+                            <td class="px-4 py-4">
+                                <span class="px-2 py-1 text-xs rounded-full" :class="item.ns_mode === 1 ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' transition-colors" x-text="item.ns_mode === 1 ? ($store.i18n.locale === 'zh' ? '已转移' : 'Transferred') : 'CF'"></span>
+                            </td>
+                            <td class="px-4 py-4 text-sm" :class="item.is_expired ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'">
+                                <span x-text="item.expires_at ? new Date(item.expires_at).toLocaleDateString() : ($store.i18n.locale === 'zh' ? '永久' : 'Forever')"></span>
+                                <span x-show="item.days_remaining !== null && !item.is_expired" class="text-xs text-gray-400 dark:text-gray-500" x-text="'(' + item.days_remaining + ($store.i18n.locale === 'zh' ? '天)' : 'd)')"></span>
+                            </td>
+                            <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="item.records_count + ($store.i18n.locale === 'zh' ? '条' : '')"></td>
+                            <td class="px-4 py-4">
+                                <div class="flex items-center space-x-2">
+                                    <button @click="openRecordsModal(item)" class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '记录' : 'Records'"></button>
+                                    <button @click="openEditModal(item)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                    <div class="relative" x-data="{ open: false }">
+                                        <button @click="open = !open" class="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 text-sm"><span x-text="$store.i18n.locale === 'zh' ? '更多' : 'More'"></span> ▼</button>
+                                        <div x-show="open" @click.away="open = false" class="absolute right-0 mt-1 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-10">
+                                            <button @click="openNsModal(item); open = false" class="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? 'NS设置' : 'NS Settings'"></button>
+                                            <button @click="sendExpiryEmail(item); open = false" class="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '发送提醒' : 'Send Reminder'"></button>
+                                            <button @click="clearDns(item); open = false" class="w-full px-3 py-2 text-left text-sm text-orange-600 dark:text-orange-400 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '清理DNS' : 'Clear DNS'"></button>
+                                            <button @click="confirmDelete(item); open = false" class="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '删除域名' : 'Delete'"></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="subdomains.length === 0">
+                        <td colspan="10" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无域名记录' : 'No domain records'"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 移动端卡片列表 -->
+        <div x-show="!loading" class="lg:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="item in subdomains" :key="item.id">
+                <div class="p-4" :class="{'bg-blue-50 dark:bg-blue-900/30': selectedIds.includes(item.id)} transition-colors">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-start gap-3">
+                            <input type="checkbox" :checked="selectedIds.includes(item.id)" @change="toggleSelect(item.id)" class="w-4 h-4 mt-1 text-blue-600 border-gray-300 dark:border-gray-600 rounded">
+                            <div>
+                                <p class="font-mono text-sm font-medium text-gray-900 dark:text-white" x-text="item.full_name"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="item.user?.username"></p>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full" :class="{
+                            'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': item.status === 1 && !item.is_expired,
+                            'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': item.status === 0,
+                            'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': item.status === 2,
+                            'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300': item.is_expired
+                        }" x-text="item.is_expired ? ($store.i18n.locale === 'zh' ? '已过期' : 'Expired') : (item.status === 1 ? ($store.i18n.locale === 'zh' ? '正常' : 'Active') : (item.status === 0 ? ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled') : ($store.i18n.locale === 'zh' ? '待审核' : 'Pending')))"></span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span x-text="item.plan?.name || '-'"></span>
+                            <span class="text-green-600 dark:text-green-400" x-text="item.records_count + ($store.i18n.locale === 'zh' ? '条记录' : ' records')"></span>
+                        </div>
+                        <span :class="item.is_expired ? 'text-red-500 dark:text-red-400' : ''" x-text="item.expires_at ? new Date(item.expires_at).toLocaleDateString() : ($store.i18n.locale === 'zh' ? '永久' : 'Forever')"></span>
+                    </div>
+                    <div class="flex items-center justify-end space-x-3 mt-3">
+                        <button @click="openRecordsModal(item)" class="text-green-600 dark:text-green-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '记录' : 'Records'"></button>
+                        <button @click="openEditModal(item)" class="text-blue-600 dark:text-blue-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                        <button @click="sendExpiryEmail(item)" class="text-gray-600 dark:text-gray-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '提醒' : 'Remind'"></button>
+                        <button @click="clearDns(item)" class="text-orange-600 dark:text-orange-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '清DNS' : 'Clear'"></button>
+                        <button @click="confirmDelete(item)" class="text-red-600 dark:text-red-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="subdomains.length === 0" class="p-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无域名记录' : 'No domain records'"></div>
+        </div>
+
+        <div x-show="!loading && pagination.pages > 1" class="px-4 sm:px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span class="text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '共 ' : 'Total '"></span><span x-text="pagination.total"></span><span x-text="$store.i18n.locale === 'zh' ? ' 条' : ''"></span></span>
+            <div class="flex items-center space-x-2">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm text-gray-700 dark:text-gray-300 disabled:opacity-50" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <span class="text-sm text-gray-600 dark:text-gray-400" x-text="page + '/' + pagination.pages"></span>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm text-gray-700 dark:text-gray-300 disabled:opacity-50" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑模态框 -->
+    <div x-show="showEditModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showEditModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '编辑域名' : 'Edit Domain'"></h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></label>
+                    <input type="text" :value="editItem?.full_name" disabled class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></label>
+                    <select x-model="editForm.status" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '正常' : 'Active'"></option>
+                        <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        <option value="2" x-text="$store.i18n.locale === 'zh' ? '待审核' : 'Pending'"></option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '到期时间' : 'Expiry Date'"></label>
+                    <input type="date" x-model="editForm.expires_at" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="$store.i18n.locale === 'zh' ? '留空表示永久有效' : 'Leave empty for permanent'"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '延长有效期（天）' : 'Extend Days'"></label>
+                    <input type="number" x-model="editForm.extend_days" min="0" :placeholder="$store.i18n.locale === 'zh' ? '输入天数' : 'Enter days'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="$store.i18n.locale === 'zh' ? '在当前到期时间基础上延长' : 'Extend from current expiry'"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showEditModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveEdit()" :disabled="saving" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作模态框 -->
+    <div x-show="showBatchActionModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showBatchActionModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white"><span x-text="$store.i18n.locale === 'zh' ? '批量操作' : 'Batch Operation'"></span> (<span x-text="selectedIds.length"></span><span x-text="$store.i18n.locale === 'zh' ? '个域名)' : ' domains)'"></span></h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '设置状态' : 'Set Status'"></label>
+                    <select x-model="batchForm.status" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="" x-text="$store.i18n.locale === 'zh' ? '不修改' : 'No change'"></option>
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '正常' : 'Active'"></option>
+                        <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        <option value="2" x-text="$store.i18n.locale === 'zh' ? '待审核' : 'Pending'"></option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '延长有效期（天）' : 'Extend Days'"></label>
+                    <input type="number" x-model="batchForm.extend_days" min="0" :placeholder="$store.i18n.locale === 'zh' ? '输入天数' : 'Enter days'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="$store.i18n.locale === 'zh' ? '在当前到期时间基础上延长' : 'Extend from current expiry'"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showBatchActionModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doBatchUpdate()" :disabled="batchUpdating" class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                    <span x-show="!batchUpdating" x-text="$store.i18n.locale === 'zh' ? '确认' : 'Confirm'"></span>
+                    <span x-show="batchUpdating" x-text="$store.i18n.locale === 'zh' ? '处理中...' : 'Processing...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量删除确认模态框 -->
+    <div x-show="showBatchDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showBatchDeleteModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '确认批量删除' : 'Confirm Batch Delete'"></h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 dark:text-gray-300"><span x-text="$store.i18n.locale === 'zh' ? '确定要删除选中的 ' : 'Delete '"></span><span class="font-bold text-red-600 dark:text-red-400" x-text="selectedIds.length"></span><span x-text="$store.i18n.locale === 'zh' ? ' 个域名吗？' : ' domains?'"></span></p>
+                <p class="text-sm text-red-500 dark:text-red-400 mt-2" x-text="$store.i18n.locale === 'zh' ? '此操作将同时删除所有DNS记录，且无法恢复！' : 'This will delete all DNS records and cannot be undone!'"></p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showBatchDeleteModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doBatchDelete()" :disabled="batchDeleting" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50">
+                    <span x-show="!batchDeleting" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Delete'"></span>
+                    <span x-show="batchDeleting" x-text="$store.i18n.locale === 'zh' ? '删除中...' : 'Deleting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showDeleteModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Confirm Delete'"></h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 dark:text-gray-300"><span x-text="$store.i18n.locale === 'zh' ? '确定要删除域名 ' : 'Delete domain '"></span><span class="font-mono font-medium text-gray-900 dark:text-white" x-text="deleteItem?.full_name"></span><span x-text="$store.i18n.locale === 'zh' ? ' 吗？' : '?'"></span></p>
+                <p class="text-sm text-red-500 dark:text-red-400 mt-2" x-text="$store.i18n.locale === 'zh' ? '此操作将同时删除该域名下的所有DNS记录，且无法恢复！' : 'This will delete all DNS records and cannot be undone!'"></p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showDeleteModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doDelete()" :disabled="deleting" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50">
+                    <span x-show="!deleting" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></span>
+                    <span x-show="deleting" x-text="$store.i18n.locale === 'zh' ? '删除中...' : 'Deleting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS记录模态框 -->
+    <div x-show="showRecordsModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showRecordsModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-4xl mx-4 overflow-hidden max-h-[90vh] flex flex-col hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white"><span x-text="$store.i18n.locale === 'zh' ? 'DNS记录 - ' : 'DNS Records - '"></span><span x-text="recordsItem?.full_name"></span></h3>
+                <button @click="openAddRecordModal()" class="px-3 py-1.5 bg-gray-900 dark:bg-gray-600 text-white rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '添加记录' : 'Add Record'"></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                <div x-show="recordsLoading" class="text-center py-10"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+                <table x-show="!recordsLoading && dnsRecords.length > 0" class="w-full">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '类型' : 'Type'"></th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '名称' : 'Name'"></th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '内容' : 'Content'"></th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">TTL</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '代理' : 'Proxy'"></th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                        <template x-for="record in dnsRecords" :key="record.id">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 transition-colors" x-text="record.type"></span></td>
+                                <td class="px-4 py-3 font-mono text-sm text-gray-900 dark:text-white" x-text="record.name"></td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-xs truncate" x-text="record.content"></td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" x-text="record.ttl === 1 ? 'Auto' : record.ttl"></td>
+                                <td class="px-4 py-3"><span class="px-2 py-1 text-xs rounded" :class="record.proxied ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" x-text="record.proxied ? ($store.i18n.locale === 'zh' ? '是' : 'Yes') : ($store.i18n.locale === 'zh' ? '否' : 'No')"></span></td>
+                                <td class="px-4 py-3">
+                                    <button @click="openEditRecordModal(record)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm mr-2" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                    <button @click="confirmDeleteRecord(record)" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <div x-show="!recordsLoading && dnsRecords.length === 0" class="text-center py-10 text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无DNS记录' : 'No DNS records'"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                <button @click="showRecordsModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Close'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑DNS记录模态框 -->
+    <div x-show="showRecordFormModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showRecordFormModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="editingRecord ? ($store.i18n.locale === 'zh' ? '编辑DNS记录' : 'Edit DNS Record') : ($store.i18n.locale === 'zh' ? '添加DNS记录' : 'Add DNS Record')"></h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '类型' : 'Type'"></label>
+                    <select x-model="recordForm.type" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="A">A</option>
+                        <option value="AAAA">AAAA</option>
+                        <option value="CNAME">CNAME</option>
+                        <option value="TXT">TXT</option>
+                        <option value="MX">MX</option>
+                        <option value="NS">NS</option>
+                        <option value="SRV">SRV</option>
+                        <option value="CAA">CAA</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '名称' : 'Name'"></label>
+                    <input type="text" x-model="recordForm.name" :placeholder="$store.i18n.locale === 'zh' ? '@ 或子域名' : '@ or subdomain'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '内容' : 'Content'"></label>
+                    <input type="text" x-model="recordForm.content" :placeholder="$store.i18n.locale === 'zh' ? 'IP地址或目标' : 'IP or target'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">TTL</label>
+                        <select x-model="recordForm.ttl" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1">Auto</option>
+                            <option value="60">1 min</option>
+                            <option value="300">5 min</option>
+                            <option value="600">10 min</option>
+                            <option value="3600">1 hour</option>
+                            <option value="86400">1 day</option>
+                        </select>
+                    </div>
+                    <div x-show="['A', 'AAAA', 'CNAME'].includes(recordForm.type)">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '代理' : 'Proxy'"></label>
+                        <select x-model="recordForm.proxied" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option :value="false" x-text="$store.i18n.locale === 'zh' ? '否' : 'No'"></option>
+                            <option :value="true" x-text="$store.i18n.locale === 'zh' ? '是' : 'Yes'"></option>
+                        </select>
+                    </div>
+                </div>
+                <div x-show="recordForm.type === 'MX'">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '优先级' : 'Priority'"></label>
+                    <input type="number" x-model="recordForm.priority" min="0" max="65535" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showRecordFormModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveRecord()" :disabled="savingRecord" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!savingRecord" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="savingRecord" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除DNS记录确认模态框 -->
+    <div x-show="showDeleteRecordModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showDeleteRecordModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Confirm Delete'"></h3>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 dark:text-gray-300"><span x-text="$store.i18n.locale === 'zh' ? '确定要删除DNS记录 ' : 'Delete DNS record '"></span><span class="font-mono font-medium text-gray-900 dark:text-white" x-text="deleteRecordItem?.name"></span><span x-text="$store.i18n.locale === 'zh' ? ' 吗？' : '?'"></span></p>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showDeleteRecordModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="doDeleteRecord()" :disabled="deletingRecord" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50">
+                    <span x-show="!deletingRecord" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></span>
+                    <span x-show="deletingRecord" x-text="$store.i18n.locale === 'zh' ? '删除中...' : 'Deleting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NS设置模态框 -->
+    <div x-show="showNsModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showNsModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? 'NS设置' : 'NS Settings'"></h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></label>
+                    <input type="text" :value="nsItem?.full_name" disabled class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? 'NS模式' : 'NS Mode'"></label>
+                    <select x-model="nsForm.ns_mode" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="0">Cloudflare NS</option>
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '已转移NS' : 'Transferred NS'"></option>
+                    </select>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1" x-text="$store.i18n.locale === 'zh' ? '转移NS后将使用自定义NS服务器' : 'Custom NS servers after transfer'"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showNsModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveNs()" :disabled="savingNs" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!savingNs" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="savingNs" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+function subdomainsPage() {
+    return {
+        subdomains: [], loading: true, search: '', page: 1, perPage: 20,
+        pagination: { total: 0, pages: 1 },
+        filters: { status: '', expired: '', ns_mode: '' },
+        selectedIds: [], showEditModal: false, showDeleteModal: false, showBatchActionModal: false, showBatchDeleteModal: false,
+        editItem: null, deleteItem: null, editForm: { status: '', expires_at: '', extend_days: '' },
+        batchForm: { status: '', extend_days: '' },
+        saving: false, deleting: false, batchUpdating: false, batchDeleting: false,
+        // DNS Records
+        showRecordsModal: false, recordsItem: null, dnsRecords: [], recordsLoading: false,
+        showRecordFormModal: false, editingRecord: null, recordForm: { type: 'A', name: '', content: '', ttl: '1', proxied: false, priority: 10 },
+        savingRecord: false, showDeleteRecordModal: false, deleteRecordItem: null, deletingRecord: false,
+        // NS Settings
+        showNsModal: false, nsItem: null, nsForm: { ns_mode: '0' }, savingNs: false,
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        get isAllSelected() { return this.subdomains.length > 0 && this.selectedIds.length === this.subdomains.length; },
+
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadSubdomains();
+        },
+        async loadSubdomains() {
+            this.loading = true;
+            const params = new URLSearchParams({ page: this.page, per_page: this.perPage });
+            if (this.search) params.append('search', this.search);
+            if (this.filters.status) params.append('status', this.filters.status);
+            if (this.filters.expired) params.append('expired', this.filters.expired);
+            if (this.filters.ns_mode) params.append('ns_mode', this.filters.ns_mode);
+            const res = await fetch(`/api/admin/subdomains?${params}`, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.subdomains = data.data.subdomains;
+                this.pagination = data.data.pagination;
+            }
+            this.loading = false;
+        },
+        goPage(p) { if (p >= 1 && p <= this.pagination.pages) { this.page = p; this.loadSubdomains(); } },
+        toggleSelectAll(checked) { this.selectedIds = checked ? this.subdomains.map(s => s.id) : []; },
+        toggleSelect(id) {
+            const idx = this.selectedIds.indexOf(id);
+            if (idx > -1) this.selectedIds.splice(idx, 1); else this.selectedIds.push(id);
+        },
+        openEditModal(item) {
+            this.editItem = item;
+            this.editForm = { status: String(item.status), expires_at: item.expires_at ? item.expires_at.split('T')[0] : '', extend_days: '' };
+            this.showEditModal = true;
+        },
+        async saveEdit() {
+            this.saving = true;
+            const body = { status: parseInt(this.editForm.status) };
+            if (this.editForm.expires_at) body.expires_at = this.editForm.expires_at;
+            if (this.editForm.extend_days) body.extend_days = parseInt(this.editForm.extend_days);
+            const res = await fetch(`/api/admin/subdomains/${this.editItem.id}`, {
+                method: 'PUT', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (data.code === 200) { this.showEditModal = false; await this.loadSubdomains(); }
+            else { alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed')); }
+            this.saving = false;
+        },
+
+        confirmDelete(item) { this.deleteItem = item; this.showDeleteModal = true; },
+        async doDelete() {
+            this.deleting = true;
+            const res = await fetch(`/api/admin/subdomains/${this.deleteItem.id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) { this.showDeleteModal = false; await this.loadSubdomains(); }
+            else { alert(data.message || (this.locale === 'zh' ? '删除失败' : 'Delete failed')); }
+            this.deleting = false;
+        },
+        confirmBatchDelete() { if (this.selectedIds.length > 0) this.showBatchDeleteModal = true; },
+        async doBatchDelete() {
+            this.batchDeleting = true;
+            const res = await fetch('/api/admin/subdomains/batch', {
+                method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: this.selectedIds })
+            });
+            const data = await res.json();
+            if (data.code === 200) { this.showBatchDeleteModal = false; this.selectedIds = []; await this.loadSubdomains(); }
+            else { alert(data.message || (this.locale === 'zh' ? '批量删除失败' : 'Batch delete failed')); }
+            this.batchDeleting = false;
+        },
+        async doBatchUpdate() {
+            this.batchUpdating = true;
+            const body = { ids: this.selectedIds };
+            if (this.batchForm.status) body.status = parseInt(this.batchForm.status);
+            if (this.batchForm.extend_days) body.extend_days = parseInt(this.batchForm.extend_days);
+            const res = await fetch('/api/admin/subdomains/batch', {
+                method: 'PUT', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (data.code === 200) { this.showBatchActionModal = false; this.selectedIds = []; this.batchForm = { status: '', extend_days: '' }; await this.loadSubdomains(); }
+            else { alert(data.message || (this.locale === 'zh' ? '批量操作失败' : 'Batch operation failed')); }
+            this.batchUpdating = false;
+        },
+
+        async sendExpiryEmail(item) {
+            if (!confirm(this.locale === 'zh' ? `确定要向 ${item.user?.email} 发送到期提醒邮件吗？` : `Send expiry reminder to ${item.user?.email}?`)) return;
+            const res = await fetch(`/api/admin/subdomains/${item.id}/send-expiry-email`, { method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            alert(data.message || (data.code === 200 ? (this.locale === 'zh' ? '发送成功' : 'Sent') : (this.locale === 'zh' ? '发送失败' : 'Failed')));
+        },
+        async clearDns(item) {
+            if (!confirm(this.locale === 'zh' ? `确定要清理 ${item.full_name} 的所有DNS记录吗？` : `Clear all DNS records for ${item.full_name}?`)) return;
+            const res = await fetch(`/api/admin/subdomains/${item.id}/clear-dns`, { method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            alert(data.message || (data.code === 200 ? (this.locale === 'zh' ? '清理成功' : 'Cleared') : (this.locale === 'zh' ? '清理失败' : 'Failed')));
+            if (data.code === 200) await this.loadSubdomains();
+        },
+        // DNS Records
+        async openRecordsModal(item) {
+            this.recordsItem = item; this.dnsRecords = []; this.showRecordsModal = true; this.recordsLoading = true;
+            const res = await fetch(`/api/admin/subdomains/${item.id}/records`, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.dnsRecords = data.data.records || [];
+            this.recordsLoading = false;
+        },
+        openAddRecordModal() {
+            this.editingRecord = null;
+            this.recordForm = { type: 'A', name: '', content: '', ttl: '1', proxied: false, priority: 10 };
+            this.showRecordFormModal = true;
+        },
+        openEditRecordModal(record) {
+            this.editingRecord = record;
+            this.recordForm = { type: record.type, name: record.name, content: record.content, ttl: String(record.ttl), proxied: record.proxied, priority: record.priority || 10 };
+            this.showRecordFormModal = true;
+        },
+
+        async saveRecord() {
+            this.savingRecord = true;
+            const body = { type: this.recordForm.type, name: this.recordForm.name, content: this.recordForm.content, ttl: parseInt(this.recordForm.ttl), proxied: this.recordForm.proxied };
+            if (this.recordForm.type === 'MX') body.priority = parseInt(this.recordForm.priority);
+            const url = this.editingRecord ? `/api/admin/subdomains/${this.recordsItem.id}/records/${this.editingRecord.id}` : `/api/admin/subdomains/${this.recordsItem.id}/records`;
+            const method = this.editingRecord ? 'PUT' : 'POST';
+            const res = await fetch(url, { method, headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const data = await res.json();
+            if (data.code === 200 || data.code === 201) { this.showRecordFormModal = false; await this.openRecordsModal(this.recordsItem); await this.loadSubdomains(); }
+            else { alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed')); }
+            this.savingRecord = false;
+        },
+        confirmDeleteRecord(record) { this.deleteRecordItem = record; this.showDeleteRecordModal = true; },
+        async doDeleteRecord() {
+            this.deletingRecord = true;
+            const res = await fetch(`/api/admin/subdomains/${this.recordsItem.id}/records/${this.deleteRecordItem.id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) { this.showDeleteRecordModal = false; await this.openRecordsModal(this.recordsItem); await this.loadSubdomains(); }
+            else { alert(data.message || (this.locale === 'zh' ? '删除失败' : 'Delete failed')); }
+            this.deletingRecord = false;
+        },
+        // NS Settings
+        openNsModal(item) { this.nsItem = item; this.nsForm = { ns_mode: String(item.ns_mode) }; this.showNsModal = true; },
+        async saveNs() {
+            this.savingNs = true;
+            const res = await fetch(`/api/admin/subdomains/${this.nsItem.id}`, {
+                method: 'PUT', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ns_mode: parseInt(this.nsForm.ns_mode) })
+            });
+            const data = await res.json();
+            if (data.code === 200) { this.showNsModal = false; await this.loadSubdomains(); }
+            else { alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed')); }
+            this.savingNs = false;
+        }
+    }
+}
+</script>
+{% endblock %}

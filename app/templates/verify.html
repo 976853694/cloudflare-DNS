@@ -1,0 +1,295 @@
+{% extends "base_public.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center p-4" x-data="verifyPage()" x-init="init()">
+    <div class="w-full max-w-md">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+            <div x-show="loading" class="text-center py-10">
+                <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+                <p class="mt-4 text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '验证中...' : 'Verifying...'"></p>
+            </div>
+            
+            <div x-show="!loading && error" x-cloak class="text-center py-6">
+                <div class="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '验证失败' : 'Verification Failed'"></h2>
+                <p class="text-gray-500 dark:text-gray-400 mb-6" x-text="error"></p>
+                <a href="/login" class="text-blue-600 hover:underline" x-text="$store.i18n.t('common.backToLogin')"></a>
+            </div>
+            
+            <div x-show="!loading && !error && verifyType === 'register'" x-cloak>
+                <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '完成注册' : 'Complete Registration'"></h2>
+                <p class="text-center text-gray-500 dark:text-gray-400 mb-6"><span x-text="$store.i18n.locale === 'zh' ? '邮箱' : 'Email'"></span> <span class="font-medium text-gray-700 dark:text-gray-300" x-text="email"></span> <span x-text="$store.i18n.locale === 'zh' ? '验证成功' : 'verified'"></span></p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.username')"></label>
+                        <input type="text" x-model="username" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" :placeholder="$store.i18n.t('auth.usernameHint')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.password')"></label>
+                        <input type="password" x-model="password" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" :placeholder="$store.i18n.t('auth.passwordHint')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.confirmPassword')"></label>
+                        <input type="password" x-model="confirmPassword" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" :placeholder="$store.i18n.t('auth.confirmPasswordHint')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.inviteCode')"></label>
+                        <div class="relative">
+                            <input type="text" x-model="inviteCode" 
+                                :readonly="inviteCodeReadonly"
+                                :class="inviteCodeReadonly ? 'bg-gray-50 dark:bg-gray-600 cursor-not-allowed' : ''"
+                                class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" 
+                                :placeholder="$store.i18n.t('auth.inviteCodeHint')">
+                            <div x-show="inviteCodeAutoFilled" class="mt-1 flex items-center text-sm text-green-600 dark:text-green-400">
+                                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                </svg>
+                                <span x-text="inviterName ? ($store.i18n.locale === 'zh' ? `已自动填充（来自邀请人：${inviterName}）` : `Auto-filled (from inviter: ${inviterName})`) : ($store.i18n.locale === 'zh' ? '已自动填充' : 'Auto-filled')"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <button @click="completeRegister" :disabled="submitting" class="w-full py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50">
+                        <span x-text="submitting ? ($store.i18n.locale === 'zh' ? '提交中...' : 'Submitting...') : ($store.i18n.locale === 'zh' ? '完成注册' : 'Complete Registration')"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div x-show="!loading && !error && verifyType === 'reset_password'" x-cloak>
+                <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('auth.resetPassword')"></h2>
+                <p class="text-center text-gray-500 dark:text-gray-400 mb-6"><span x-text="$store.i18n.locale === 'zh' ? '为' : 'Set new password for'"></span> <span class="font-medium text-gray-700 dark:text-gray-300" x-text="email"></span> <span x-text="$store.i18n.locale === 'zh' ? '设置新密码' : ''"></span></p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.newPassword')"></label>
+                        <input type="password" x-model="password" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" :placeholder="$store.i18n.t('auth.passwordHint')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.confirmPassword')"></label>
+                        <input type="password" x-model="confirmPassword" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg">
+                    </div>
+                    <button @click="resetPassword" :disabled="submitting" class="w-full py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50">
+                        <span x-text="submitting ? ($store.i18n.locale === 'zh' ? '提交中...' : 'Submitting...') : $store.i18n.t('auth.resetPassword')"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div x-show="!loading && !error && verifyType === 'change_password'" x-cloak>
+                <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('auth.changePassword')"></h2>
+                <p class="text-center text-gray-500 dark:text-gray-400 mb-6"><span x-text="$store.i18n.locale === 'zh' ? '为账户' : 'Set new password for'"></span> <span class="font-medium text-gray-700 dark:text-gray-300" x-text="email"></span> <span x-text="$store.i18n.locale === 'zh' ? '设置新密码' : ''"></span></p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.newPassword')"></label>
+                        <input type="password" x-model="password" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" :placeholder="$store.i18n.t('auth.passwordHint')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('auth.confirmPassword')"></label>
+                        <input type="password" x-model="confirmPassword" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg">
+                    </div>
+                    <button @click="changePassword" :disabled="submitting" class="w-full py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50">
+                        <span x-text="submitting ? ($store.i18n.locale === 'zh' ? '提交中...' : 'Submitting...') : $store.i18n.t('auth.changePassword')"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div x-show="!loading && !error && verifyType === 'change_email'" x-cloak>
+                <div class="text-center py-6">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '邮箱变更成功' : 'Email Changed Successfully'"></h2>
+                    <p class="text-gray-500 dark:text-gray-400 mb-6"><span x-text="$store.i18n.locale === 'zh' ? '您的邮箱已更新为' : 'Your email has been updated to'"></span> <span class="font-medium text-gray-700 dark:text-gray-300" x-text="email"></span></p>
+                    <a href="/user" class="text-blue-600 hover:underline" x-text="$store.i18n.locale === 'zh' ? '返回用户中心' : 'Back to User Center'"></a>
+                </div>
+            </div>
+            
+            <!-- 沉睡账户激活 -->
+            <div x-show="!loading && !error && verifyType === 'reactivate'" x-cloak>
+                <div class="text-center py-6">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '账户激活' : 'Account Reactivation'"></h2>
+                    <p class="text-gray-500 dark:text-gray-400 mb-6"><span x-text="$store.i18n.locale === 'zh' ? '您的账户' : 'Your account'"></span> <span class="font-medium text-gray-700 dark:text-gray-300" x-text="email"></span> <span x-text="$store.i18n.locale === 'zh' ? '处于沉睡状态，点击下方按钮激活' : 'is dormant, click below to reactivate'"></span></p>
+                    <button @click="reactivateAccount" :disabled="submitting" class="px-6 py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50">
+                        <span x-text="submitting ? ($store.i18n.locale === 'zh' ? '激活中...' : 'Activating...') : ($store.i18n.locale === 'zh' ? '激活账户' : 'Activate Account')"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 修改邮箱：验证原邮箱后输入新邮箱 -->
+            <div x-show="!loading && !error && verifyType === 'change_email_verify'" x-cloak>
+                <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('auth.changeEmail')"></h2>
+                <p class="text-center text-gray-500 dark:text-gray-400 mb-6"><span x-text="$store.i18n.locale === 'zh' ? '原邮箱' : 'Original email'"></span> <span class="font-medium text-gray-700 dark:text-gray-300" x-text="email"></span> <span x-text="$store.i18n.locale === 'zh' ? '验证成功，请输入新邮箱' : 'verified, please enter new email'"></span></p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '新邮箱地址' : 'New Email Address'"></label>
+                        <input type="email" x-model="newEmail" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg" :placeholder="$store.i18n.locale === 'zh' ? '请输入新邮箱' : 'Enter new email'">
+                    </div>
+                    <button @click="submitNewEmail" :disabled="submitting" class="w-full py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50">
+                        <span x-text="submitting ? ($store.i18n.locale === 'zh' ? '提交中...' : 'Submitting...') : ($store.i18n.locale === 'zh' ? '确认修改' : 'Confirm Change')"></span>
+                    </button>
+                </div>
+            </div>
+            
+            <div x-show="!loading && success" x-cloak class="text-center py-6">
+                <div class="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2" x-text="successTitle"></h2>
+                <p class="text-gray-500 dark:text-gray-400 mb-6" x-text="successMsg"></p>
+                <a :href="successLink" class="px-6 py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 inline-block" x-text="successBtn"></a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function verifyPage() {
+    return {
+        loading: true, error: '', email: '', verifyType: '',
+        username: '', password: '', confirmPassword: '', newEmail: '', inviteCode: '', submitting: false,
+        success: false, successTitle: '', successMsg: '', successLink: '/login', successBtn: '去登录',
+        token: new URLSearchParams(location.search).get('token'),
+        inviteCodeReadonly: false, inviteCodeAutoFilled: false, inviterName: '',
+        async init() {
+            if (!this.token) { this.error = '无效的验证链接'; this.loading = false; return; }
+            
+            // 混合方案：优先从 URL 读取邀请码
+            const urlParams = new URLSearchParams(location.search);
+            const urlInviteCode = urlParams.get('invite_code');
+            
+            // 调用 API 验证 token
+            const res = await fetch(`/api/auth/verify?token=${this.token}`);
+            const data = await res.json();
+            if (data.code === 200) {
+                this.email = data.data.email;
+                this.verifyType = data.data.type;
+                
+                // 处理邀请码自动填充（仅注册场景）
+                if (this.verifyType === 'register') {
+                    if (urlInviteCode) {
+                        // 方案1：URL 中有邀请码，直接使用
+                        this.inviteCode = urlInviteCode.toUpperCase();
+                        this.inviteCodeReadonly = true;
+                        this.inviteCodeAutoFilled = true;
+                        // 尝试获取邀请人信息
+                        if (data.data.inviter_name) {
+                            this.inviterName = data.data.inviter_name;
+                        }
+                    } else if (data.data.invite_code) {
+                        // 方案2：URL 中没有，但 API 返回了邀请码
+                        this.inviteCode = data.data.invite_code;
+                        this.inviteCodeReadonly = true;
+                        this.inviteCodeAutoFilled = true;
+                        if (data.data.inviter_name) {
+                            this.inviterName = data.data.inviter_name;
+                        }
+                    }
+                    // 否则：两者都没有，保持可编辑状态
+                }
+                
+                if (this.verifyType === 'change_email') { await this.confirmEmailChange(); }
+            } else { this.error = data.message; }
+            this.loading = false;
+        },
+        async completeRegister() {
+            if (!this.username.trim()) { alert('请输入用户名'); return; }
+            if (this.password.length < 6) { alert('密码至少6个字符'); return; }
+            if (this.password !== this.confirmPassword) { alert('两次密码不一致'); return; }
+            this.submitting = true;
+            const res = await fetch('/api/auth/register/complete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: this.token, username: this.username, password: this.password, invite_code: this.inviteCode.trim() })
+            });
+            const data = await res.json();
+            if (data.code === 201) {
+                localStorage.setItem('token', data.data.access_token);
+                this.success = true; this.successTitle = '注册成功'; this.successMsg = '欢迎加入！';
+                this.successLink = '/user'; this.successBtn = '进入用户中心';
+            } else { alert(data.message); }
+            this.submitting = false;
+        },
+        async resetPassword() {
+            if (this.password.length < 6) { alert('密码至少6个字符'); return; }
+            if (this.password !== this.confirmPassword) { alert('两次密码不一致'); return; }
+            this.submitting = true;
+            const res = await fetch('/api/auth/reset-password', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: this.token, password: this.password })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.success = true; this.successTitle = '密码重置成功'; this.successMsg = '请使用新密码登录';
+            } else { alert(data.message); }
+            this.submitting = false;
+        },
+        async confirmEmailChange() {
+            const res = await fetch('/api/auth/change-email/confirm', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: this.token })
+            });
+            const data = await res.json();
+            if (data.code !== 200) { this.error = data.message; this.verifyType = ''; }
+        },
+        async changePassword() {
+            if (this.password.length < 6) { alert('密码至少6个字符'); return; }
+            if (this.password !== this.confirmPassword) { alert('两次密码不一致'); return; }
+            this.submitting = true;
+            const res = await fetch('/api/auth/change-password/confirm', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: this.token, password: this.password })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.success = true; this.successTitle = '密码修改成功'; this.successMsg = '您的密码已更新';
+                this.successLink = '/user/profile'; this.successBtn = '返回个人中心';
+            } else { alert(data.message); }
+            this.submitting = false;
+        },
+        async submitNewEmail() {
+            if (!this.newEmail.trim() || !this.newEmail.includes('@')) { alert('请输入有效的邮箱地址'); return; }
+            this.submitting = true;
+            const res = await fetch('/api/auth/change-email/verify', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: this.token, new_email: this.newEmail.trim() })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.success = true; this.successTitle = '邮箱修改成功'; this.successMsg = '您的邮箱已更新为 ' + this.newEmail;
+                this.successLink = '/user/profile'; this.successBtn = '返回个人中心';
+            } else { alert(data.message); }
+            this.submitting = false;
+        },
+        async reactivateAccount() {
+            this.submitting = true;
+            const res = await fetch('/api/auth/reactivate/confirm', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: this.token })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.success = true; 
+                this.successTitle = this.$store.i18n.locale === 'zh' ? '账户激活成功' : 'Account Activated';
+                this.successMsg = this.$store.i18n.locale === 'zh' ? '您的账户已恢复正常，请重新登录' : 'Your account has been reactivated, please login again';
+                this.successLink = '/login';
+                this.successBtn = this.$store.i18n.locale === 'zh' ? '去登录' : 'Go to Login';
+            } else { alert(data.message); }
+            this.submitting = false;
+        }
+    }
+}
+</script>
+{% endblock %}

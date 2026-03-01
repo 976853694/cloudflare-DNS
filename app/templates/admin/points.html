@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}积分记录 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="pointsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('admin.pointRecords')"></h1>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('admin.totalIssued')"></div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400 mt-1" x-text="stats.total_issued"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('admin.totalConsumed')"></div>
+            <div class="text-2xl font-bold text-red-600 dark:text-red-400 mt-1" x-text="stats.total_consumed"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('admin.signinIssued')"></div>
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1" x-text="stats.signin_issued"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('admin.inviteIssued')"></div>
+            <div class="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1" x-text="stats.invite_issued"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('admin.exchangeConsumed')"></div>
+            <div class="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1" x-text="stats.exchange_consumed"></div>
+        </div>
+    </div>
+
+    <!-- 搜索和筛选 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-6 hover:shadow-lg transition-shadow">
+        <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex-1">
+                <input type="text" x-model="search" @keyup.enter="loadRecords()" 
+                    class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    :placeholder="$store.i18n.t('admin.searchUser')">
+            </div>
+            <select x-model="typeFilter" @change="loadRecords()" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <option value="" x-text="$store.i18n.t('admin.allTypes')"></option>
+                <option value="signin" x-text="$store.i18n.t('admin.typeSignin')"></option>
+                <option value="signin_bonus" x-text="$store.i18n.t('admin.typeSigninBonus')"></option>
+                <option value="invite" x-text="$store.i18n.t('admin.typeInvite')"></option>
+                <option value="invite_recharge" x-text="$store.i18n.t('admin.typeInviteRecharge')"></option>
+                <option value="exchange" x-text="$store.i18n.t('admin.typeExchange')"></option>
+                <option value="admin" x-text="$store.i18n.t('admin.typeAdmin')"></option>
+            </select>
+            <button @click="loadRecords()" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500">
+                <span x-text="$store.i18n.t('common.search')"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 记录列表 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        
+        <div x-show="!loading && records.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400">
+            <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p x-text="$store.i18n.t('admin.noPointRecords')"></p>
+        </div>
+
+        <div x-show="!loading && records.length > 0" class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ID</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('admin.user')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('admin.type')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('admin.pointsChange')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('admin.afterBalance')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('admin.description')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('common.time')"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="record in records" :key="record.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-white" x-text="record.id"></td>
+                            <td class="px-4 py-3">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="record.username"></div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400" x-text="record.email"></div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 text-xs rounded-full" 
+                                    :class="{
+                                        'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400': record.type === 'signin' || record.type === 'signin_bonus',
+                                        'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400': record.type === 'invite' || record.type === 'invite_recharge',
+                                        'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400': record.type === 'exchange',
+                                        'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300': record.type === 'admin'
+                                    } transition-colors"
+                                    x-text="record.type_text"></span>
+                            </td>
+                            <td class="px-4 py-3 text-sm font-medium" :class="record.points > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                <span x-text="record.points > 0 ? '+' + record.points : record.points"></span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-900 dark:text-white" x-text="record.balance"></td>
+                            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400" x-text="record.description || '-'"></td>
+                            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400" x-text="record.created_at"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        <div x-show="!loading && pages > 1" class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+                <span x-text="$store.i18n.t('common.total')"></span> <span x-text="total"></span> <span x-text="$store.i18n.t('common.records')"></span>
+            </div>
+            <div class="flex gap-2">
+                <button @click="page > 1 && (page--, loadRecords())" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    <span x-text="$store.i18n.t('common.prev')"></span>
+                </button>
+                <span class="px-3 py-1 text-sm text-gray-700 dark:text-gray-300" x-text="page + ' / ' + pages"></span>
+                <button @click="page < pages && (page++, loadRecords())" :disabled="page >= pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    <span x-text="$store.i18n.t('common.next')"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pointsPage() {
+    return {
+        records: [],
+        stats: { total_issued: 0, total_consumed: 0, signin_issued: 0, invite_issued: 0, exchange_consumed: 0 },
+        loading: true,
+        search: '',
+        typeFilter: '',
+        page: 1,
+        pages: 1,
+        total: 0,
+        
+        get token() { return localStorage.getItem('token'); },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await Promise.all([this.loadRecords(), this.loadStats()]);
+        },
+        
+        async loadRecords() {
+            this.loading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.page,
+                    per_page: 20,
+                    search: this.search,
+                    type: this.typeFilter
+                });
+                const res = await fetch(`/api/admin/points?${params}`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                console.log('[Points] API response:', data);
+                if (data.code === 200) {
+                    this.records = data.data.records || [];
+                    this.total = data.data.total || 0;
+                    this.pages = data.data.pages || 1;
+                    console.log('[Points] Loaded records:', this.records.length);
+                } else {
+                    console.error('[Points] API error:', data.message);
+                    this.records = [];
+                }
+            } catch (e) {
+                console.error('[Points] Load failed:', e);
+                this.records = [];
+            }
+            this.loading = false;
+        },
+        
+        async loadStats() {
+            try {
+                const res = await fetch('/api/admin/points/stats', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.stats = data.data;
+                }
+            } catch (e) {
+                console.error('Load stats failed:', e);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

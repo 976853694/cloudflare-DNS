@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}申请成为托管商 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 max-w-2xl mx-auto" x-data="hostApply()" x-init="init()">
+    <div class="mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">申请成为托管商</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm">成为托管商后，您可以将自己的域名托管到平台供其他用户购买</p>
+    </div>
+
+    <!-- Status Card -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
+        <template x-if="status.host_status === 'none' || status.host_status === 'rejected' || status.host_status === 'revoked'">
+            <div>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-gray-900 dark:text-white">提交申请</h3>
+                        <p class="text-sm text-gray-500" x-text="status.host_status === 'rejected' ? '您的上次申请已被拒绝，可以重新申请' : (status.host_status === 'revoked' ? '您的托管权限已被撤销，可以重新申请' : '填写申请理由，等待管理员审核')"></p>
+                    </div>
+                </div>
+                
+                <template x-if="status.latest_application && status.latest_application.status === 'rejected'">
+                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                        <p class="text-sm text-red-600 dark:text-red-400 font-medium">上次申请被拒绝</p>
+                        <p class="text-sm text-red-500 mt-1" x-text="'原因: ' + (status.latest_application.admin_remark || '未说明')"></p>
+                    </div>
+                </template>
+                
+                <template x-if="status.host_status === 'revoked'">
+                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                        <p class="text-sm text-red-600 dark:text-red-400 font-medium">托管权限已被撤销</p>
+                        <p class="text-sm text-red-500 mt-1" x-text="'原因: ' + (status.host_suspended_reason || '未说明')"></p>
+                    </div>
+                </template>
+                
+                <form @submit.prevent="submitApply">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">申请理由</label>
+                        <textarea x-model="reason" rows="4" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all" placeholder="请详细说明您申请成为托管商的理由，至少10个字符..."></textarea>
+                        <p class="text-xs text-gray-500 mt-1" x-text="'已输入 ' + reason.length + ' 个字符'"></p>
+                    </div>
+                    <button type="submit" :disabled="submitting || reason.length < 10" class="w-full px-4 py-3 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all duration-200">
+                        <span x-show="!submitting">提交申请</span>
+                        <span x-show="submitting">提交中...</span>
+                    </button>
+                </form>
+            </div>
+        </template>
+        
+        <template x-if="status.host_status === 'pending'">
+            <div class="text-center py-8">
+                <div class="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">申请审核中</h3>
+                <p class="text-gray-500">您的申请正在等待管理员审核，请耐心等待</p>
+                <p class="text-sm text-gray-400 mt-2" x-text="'提交时间: ' + (status.latest_application?.created_at?.split('T')[0] || '')"></p>
+            </div>
+        </template>
+        
+        <template x-if="status.host_status === 'approved'">
+            <div class="text-center py-8">
+                <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">您已是托管商</h3>
+                <p class="text-gray-500 mb-4">您的托管商申请已通过，可以开始托管域名了</p>
+                <a href="/host" class="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">进入托管商面板</a>
+            </div>
+        </template>
+        
+        <template x-if="status.host_status === 'suspended'">
+            <div class="text-center py-8">
+                <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">托管权限已暂停</h3>
+                <p class="text-gray-500">您的托管商权限已被暂停，如有疑问请联系管理员</p>
+            </div>
+        </template>
+    </div>
+
+    <!-- Benefits -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+        <h3 class="font-semibold text-gray-900 dark:text-white mb-4">成为托管商的好处</h3>
+        <div class="space-y-3">
+            <div class="flex items-start gap-3">
+                <div class="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white">域名变现</p>
+                    <p class="text-sm text-gray-500">将闲置域名托管到平台，获得持续收益</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <div class="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white">自主定价</p>
+                    <p class="text-sm text-gray-500">自由设置套餐价格和时长</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3">
+                <div class="w-6 h-6 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white">平台流量</p>
+                    <p class="text-sm text-gray-500">借助平台用户流量，快速销售域名</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function hostApply() {
+    return {
+        loading: true,
+        submitting: false,
+        status: {},
+        reason: '',
+        
+        async init() {
+            await this.loadStatus();
+            this.loading = false;
+        },
+        
+        async loadStatus() {
+            try {
+                const res = await fetch('/api/host/status', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.status = data.data;
+                    console.log('托管状态已更新:', this.status);
+                } else {
+                    console.error('获取托管状态失败:', data.message);
+                    window.$toast?.error('获取状态失败: ' + (data.message || '未知错误'));
+                }
+            } catch (e) {
+                console.error('加载状态失败:', e);
+                window.$toast?.error('网络错误，无法加载状态');
+            }
+        },
+        
+        async submitApply() {
+            if (this.reason.length < 10) {
+                window.$toast?.error('申请理由至少需要10个字符');
+                return;
+            }
+            
+            this.submitting = true;
+            try {
+                const res = await fetch('/api/host/apply', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify({ reason: this.reason })
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    window.$toast?.success('申请已提交，请等待审核');
+                    // 清空输入框
+                    this.reason = '';
+                    // 立即刷新状态，显示"审核中"
+                    await this.loadStatus();
+                } else {
+                    // 显示具体的错误信息
+                    const errorMsg = data.message || '提交失败';
+                    console.error('申请失败:', errorMsg);
+                    window.$toast?.error(errorMsg);
+                }
+            } catch (e) {
+                console.error('提交申请时发生错误:', e);
+                window.$toast?.error('网络错误，请检查连接');
+            } finally {
+                this.submitting = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

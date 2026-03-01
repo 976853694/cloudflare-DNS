@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="announcementsPage()" x-init="init()">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.t('nav.announcements')"></h1>
+
+    <div x-show="loading" class="text-center py-10">
+        <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+    </div>
+
+    <div x-show="!loading" class="space-y-4">
+        <template x-for="ann in announcements" :key="ann.id">
+            <div @click="openAnnouncement(ann)" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden cursor-pointer hover:shadow-md transition-shadow" :class="{'border-l-4': true, 'border-l-blue-500': ann.type === 'info', 'border-l-green-500': ann.type === 'success', 'border-l-yellow-500': ann.type === 'warning', 'border-l-red-500': ann.type === 'error'}">
+                <div class="p-5">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center space-x-2">
+                            <span x-show="ann.is_pinned" class="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded text-xs" x-text="$store.i18n.locale === 'zh' ? '置顶' : 'Pinned'"></span>
+                            <span class="px-2 py-0.5 rounded text-xs" :class="typeClass(ann.type)" x-text="ann.type_text"></span>
+                            <span x-show="!ann.is_read" class="w-2 h-2 bg-red-500 rounded-full"></span>
+                        </div>
+                        <span class="text-xs text-gray-400" x-text="formatDate(ann.created_at)"></span>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2" x-text="ann.title"></h3>
+                    <div class="text-gray-600 dark:text-gray-400 text-sm line-clamp-2" x-text="ann.content"></div>
+                </div>
+            </div>
+        </template>
+        
+        <div x-show="announcements.length === 0" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-10 text-center">
+            <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
+            </svg>
+            <p class="text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无公告' : 'No announcements'"></p>
+        </div>
+    </div>
+
+    <!-- 公告详情模态框 -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span x-show="currentAnn && currentAnn.is_pinned" class="px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded text-xs" x-text="$store.i18n.locale === 'zh' ? '置顶' : 'Pinned'"></span>
+                    <span x-show="currentAnn" class="px-2 py-0.5 rounded text-xs" :class="typeClass(currentAnn?.type)" x-text="currentAnn?.type_text"></span>
+                </div>
+                <button @click="showModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6">
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4" x-text="currentAnn?.title"></h2>
+                <div class="text-sm text-gray-400 mb-4" x-text="currentAnn ? formatDate(currentAnn.created_at) : ''"></div>
+                <div class="text-gray-600 dark:text-gray-400 whitespace-pre-wrap" x-text="currentAnn?.content"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                <button @click="showModal = false" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Close'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function announcementsPage() {
+    return {
+        announcements: [], 
+        loading: true,
+        showModal: false,
+        currentAnn: null,
+        
+        typeClass(type) {
+            const classes = { 
+                info: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300', 
+                success: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300', 
+                warning: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300', 
+                error: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' 
+            };
+            return classes[type] || classes.info;
+        },
+        
+        formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+            if (diff < 60000) return this.$store.i18n.locale === 'zh' ? '刚刚' : 'Just now';
+            if (diff < 3600000) return Math.floor(diff / 60000) + (this.$store.i18n.locale === 'zh' ? '分钟前' : ' minutes ago');
+            if (diff < 86400000) return Math.floor(diff / 3600000) + (this.$store.i18n.locale === 'zh' ? '小时前' : ' hours ago');
+            if (diff < 604800000) return Math.floor(diff / 86400000) + (this.$store.i18n.locale === 'zh' ? '天前' : ' days ago');
+            return date.toLocaleDateString();
+        },
+        
+        async openAnnouncement(ann) {
+            this.currentAnn = ann;
+            this.showModal = true;
+            
+            // 如果未读，标记为已读
+            if (!ann.is_read) {
+                await this.markAsRead(ann.id);
+                ann.is_read = true;
+                
+                // 更新全局未读数
+                if (this.$store.announcements) {
+                    this.$store.announcements.unreadCount = Math.max(0, this.$store.announcements.unreadCount - 1);
+                }
+            }
+        },
+        
+        async markAsRead(annId) {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                await fetch(`/api/announcements/${annId}/read`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+            } catch (e) {
+                console.error('Mark as read failed:', e);
+            }
+        },
+        
+        async init() {
+            this.loading = true;
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+            
+            const res = await fetch('/api/announcements', { headers });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.announcements = data.data.announcements;
+            }
+            this.loading = false;
+        }
+    }
+}
+</script>
+{% endblock %}

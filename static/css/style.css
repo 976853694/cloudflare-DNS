@@ -1,0 +1,1158 @@
+/* Custom styles for DNS System */
+
+/* ==================== CSS Variables ==================== */
+:root {
+    /* 主色调 */
+    --color-primary: #3B82F6;
+    --color-primary-dark: #2563EB;
+    --color-primary-light: #60A5FA;
+    
+    /* 辅助色 */
+    --color-secondary: #8B5CF6;
+    --color-success: #10B981;
+    --color-warning: #F59E0B;
+    --color-danger: #EF4444;
+    
+    /* 渐变色 */
+    --gradient-blue-purple: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+    --gradient-orange-pink: linear-gradient(135deg, #F59E0B 0%, #EC4899 100%);
+    --gradient-green-cyan: linear-gradient(135deg, #10B981 0%, #06B6D4 100%);
+    --gradient-blue: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    --gradient-green: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    --gradient-purple: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+    --gradient-orange: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    
+    /* 阴影 */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    
+    /* 圆角 */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+    
+    /* 间距 */
+    --spacing-xs: 8px;
+    --spacing-sm: 12px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+}
+
+/* 防止移动端横向滚动 */
+html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+}
+
+/* 确保所有元素不超出视口 */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* Smooth transitions */
+* {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-track {
+    background: #374151;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+/* Focus styles */
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #e5e7eb;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus,
+.dark button:focus {
+    box-shadow: 0 0 0 2px #4b5563;
+}
+
+/* ==================== Dark Mode Global Styles ==================== */
+
+/* 卡片和容器 */
+.dark .bg-white {
+    background-color: #1f2937 !important;
+}
+
+.dark .bg-gray-50 {
+    background-color: #111827 !important;
+}
+
+.dark .bg-gray-100 {
+    background-color: #1f2937 !important;
+}
+
+/* 文字颜色 */
+.dark .text-gray-900 {
+    color: #f9fafb !important;
+}
+
+.dark .text-gray-800 {
+    color: #f3f4f6 !important;
+}
+
+.dark .text-gray-700 {
+    color: #e5e7eb !important;
+}
+
+.dark .text-gray-600 {
+    color: #d1d5db !important;
+}
+
+.dark .text-gray-500 {
+    color: #9ca3af !important;
+}
+
+.dark .text-gray-400 {
+    color: #9ca3af !important;
+}
+
+/* 边框颜色 */
+.dark .border-gray-200 {
+    border-color: #374151 !important;
+}
+
+.dark .border-gray-100 {
+    border-color: #374151 !important;
+}
+
+.dark .border-gray-300 {
+    border-color: #4b5563 !important;
+}
+
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #374151 !important;
+}
+
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #374151 !important;
+}
+
+/* 表单输入框 */
+.dark input,
+.dark select,
+.dark textarea {
+    background-color: #374151 !important;
+    border-color: #4b5563 !important;
+    color: #f3f4f6 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+    color: #9ca3af !important;
+}
+
+.dark input:disabled,
+.dark select:disabled,
+.dark textarea:disabled {
+    background-color: #1f2937 !important;
+    color: #6b7280 !important;
+}
+
+/* 表格 */
+.dark table {
+    background-color: #1f2937;
+}
+
+.dark thead {
+    background-color: #374151 !important;
+}
+
+.dark th {
+    color: #e5e7eb !important;
+    border-color: #4b5563 !important;
+}
+
+.dark td {
+    color: #d1d5db !important;
+    border-color: #374151 !important;
+}
+
+.dark tbody tr:hover {
+    background-color: #374151 !important;
+}
+
+.dark .hover\:bg-gray-50:hover {
+    background-color: #374151 !important;
+}
+
+/* 按钮 */
+.dark .bg-gray-900 {
+    background-color: #4b5563 !important;
+}
+
+.dark .hover\:bg-gray-800:hover {
+    background-color: #374151 !important;
+}
+
+.dark .bg-gray-200 {
+    background-color: #4b5563 !important;
+}
+
+.dark .hover\:bg-gray-100:hover {
+    background-color: #374151 !important;
+}
+
+/* 徽章和标签 */
+.dark .bg-green-100 {
+    background-color: rgba(34, 197, 94, 0.2) !important;
+}
+
+.dark .bg-red-100 {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.dark .bg-yellow-100 {
+    background-color: rgba(234, 179, 8, 0.2) !important;
+}
+
+.dark .bg-blue-100 {
+    background-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+.dark .bg-purple-100 {
+    background-color: rgba(168, 85, 247, 0.2) !important;
+}
+
+.dark .bg-indigo-100 {
+    background-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+/* 阴影 */
+.dark .shadow,
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* 环形边框 */
+.dark .ring-1 {
+    --tw-ring-color: #374151 !important;
+}
+
+/* 分割线 */
+.dark hr {
+    border-color: #374151 !important;
+}
+
+/* 代码块 */
+.dark code {
+    background-color: #374151 !important;
+    color: #f3f4f6 !important;
+}
+
+.dark pre {
+    background-color: #1f2937 !important;
+    color: #f3f4f6 !important;
+}
+
+/* 弹窗/模态框 */
+.dark [class*="modal"],
+.dark [x-show*="show"] .bg-white {
+    background-color: #1f2937 !important;
+}
+
+/* 下拉菜单 */
+.dark [x-show] ul,
+.dark [x-show] .bg-white {
+    background-color: #1f2937 !important;
+}
+
+/* 选中状态 */
+.dark ::selection {
+    background-color: #4b5563;
+    color: #f9fafb;
+}
+
+/* ==================== End Dark Mode ==================== */
+
+/* Table styles */
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+/* Loading spinner */
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+}
+
+/* Button hover effects */
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Card hover effects */
+.card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Form input placeholder */
+::placeholder {
+    color: #9ca3af;
+}
+
+/* Selection color */
+::selection {
+    background-color: #e5e7eb;
+    color: #111827;
+}
+
+/* Hide elements with x-cloak before Alpine.js loads */
+[x-cloak] {
+    display: none !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* 表格在移动端可横向滚动 */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* 防止长文本溢出 */
+    .truncate-mobile {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    /* 移动端表单输入框 */
+    input, select, textarea {
+        max-width: 100%;
+    }
+    
+    /* 移动端按钮组 */
+    .btn-group-mobile {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+}
+
+/* ==================== Enhanced Button Styles ==================== */
+
+/* 主要按钮 - 渐变蓝色 */
+.btn-primary-gradient {
+    background: var(--gradient-blue);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary-gradient:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-xl);
+}
+
+.btn-primary-gradient:active {
+    transform: translateY(0);
+}
+
+.btn-primary-gradient:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 次要按钮 - 白色边框 */
+.btn-secondary-outline {
+    background: white;
+    color: var(--color-primary);
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    border: 2px solid var(--color-primary);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.btn-secondary-outline:hover {
+    background: var(--color-primary);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.dark .btn-secondary-outline {
+    background: transparent;
+    color: var(--color-primary-light);
+    border-color: var(--color-primary-light);
+}
+
+.dark .btn-secondary-outline:hover {
+    background: var(--color-primary);
+    color: white;
+}
+
+/* 危险按钮 - 红色 */
+.btn-danger-solid {
+    background: var(--color-danger);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-danger-solid:hover {
+    background: #DC2626;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-xl);
+}
+
+/* 图标按钮 */
+.btn-icon {
+    padding: 0.5rem;
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover {
+    background: rgba(59, 130, 246, 0.1);
+    transform: scale(1.1);
+}
+
+/* ==================== Enhanced Card Styles ==================== */
+
+/* 统计卡片 - 渐变背景 */
+.stat-card-gradient {
+    border-radius: var(--radius-xl);
+    padding: 1.5rem;
+    color: white;
+    box-shadow: var(--shadow-lg);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.stat-card-gradient:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
+}
+
+.stat-card-blue {
+    background: var(--gradient-blue);
+}
+
+.stat-card-green {
+    background: var(--gradient-green);
+}
+
+.stat-card-purple {
+    background: var(--gradient-purple);
+}
+
+.stat-card-orange {
+    background: var(--gradient-orange);
+}
+
+/* 内容卡片 - 增强版 */
+.content-card-enhanced {
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.content-card-enhanced:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.dark .content-card-enhanced {
+    background: #1f2937;
+    border-color: #374151;
+}
+
+/* 图标容器 - 半透明背景 */
+.icon-container {
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ==================== Enhanced Input Styles ==================== */
+
+/* 输入框增强 */
+.input-enhanced {
+    padding: 1rem 1rem 1rem 3rem;
+    border-radius: var(--radius-lg);
+    border: 2px solid #e5e7eb;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.input-enhanced:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.dark .input-enhanced {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f3f4f6;
+}
+
+.dark .input-enhanced:focus {
+    border-color: var(--color-primary-light);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+}
+
+/* 输入框组 - 带图标 */
+.input-group-enhanced {
+    position: relative;
+}
+
+.input-group-enhanced .input-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    pointer-events: none;
+}
+
+.input-group-enhanced input {
+    padding-left: 3rem;
+}
+
+/* ==================== Enhanced Table Styles ==================== */
+
+/* 表格增强 */
+.table-enhanced {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-enhanced thead {
+    background: #f9fafb;
+}
+
+.dark .table-enhanced thead {
+    background: #374151;
+}
+
+.table-enhanced th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 700;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.dark .table-enhanced th {
+    color: #d1d5db;
+    border-bottom-color: #4b5563;
+}
+
+.table-enhanced tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.table-enhanced tbody tr:hover {
+    background: #f9fafb;
+}
+
+.dark .table-enhanced tbody tr:hover {
+    background: #374151;
+}
+
+.table-enhanced tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.dark .table-enhanced tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.table-enhanced td {
+    padding: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.dark .table-enhanced td {
+    border-bottom-color: #374151;
+}
+
+/* ==================== Enhanced Badge Styles ==================== */
+
+/* 徽章增强 */
+.badge-enhanced {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.badge-success {
+    background: rgba(34, 197, 94, 0.1);
+    color: #059669;
+}
+
+.badge-warning {
+    background: rgba(234, 179, 8, 0.1);
+    color: #D97706;
+}
+
+.badge-danger {
+    background: rgba(239, 68, 68, 0.1);
+    color: #DC2626;
+}
+
+.badge-info {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563EB;
+}
+
+.dark .badge-success {
+    background: rgba(34, 197, 94, 0.2);
+    color: #34D399;
+}
+
+.dark .badge-warning {
+    background: rgba(234, 179, 8, 0.2);
+    color: #FBBF24;
+}
+
+.dark .badge-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #F87171;
+}
+
+.dark .badge-info {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60A5FA;
+}
+
+/* ==================== Animation Keyframes ==================== */
+
+/* Animation for fade in */
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Slide up animation */
+.slide-up {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Scale in animation */
+.scale-in {
+    animation: scaleIn 0.3s ease-out;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Slide in from left */
+.slide-in-left {
+    animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Slide in from right */
+.slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Pulse animation */
+.pulse-slow {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Bounce animation */
+.bounce-subtle {
+    animation: bounceSubtle 1s ease-in-out infinite;
+}
+
+@keyframes bounceSubtle {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+/* ==================== Utility Classes ==================== */
+
+/* Hover lift effect */
+.hover-lift {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
+}
+
+/* Glassmorphism effect */
+.glass-effect {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-effect {
+    background: rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Gradient text */
+.gradient-text {
+    background: var(--gradient-blue-purple);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Skeleton loading */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton {
+    background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+    background-size: 200% 100%;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Smooth scroll */
+.smooth-scroll {
+    scroll-behavior: smooth;
+}
+
+/* No select */
+.no-select {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+
+/* ==================== UI Optimization - Enhanced Styles ==================== */
+
+/* 增强淡入动画 - 用于首页元素 */
+.animate-fade-in {
+    animation: animateFadeIn 0.5s ease-out forwards;
+    opacity: 0;
+}
+
+@keyframes animateFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 玻璃态卡片效果 */
+.glass-card {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+}
+
+.dark .glass-card {
+    background: rgba(31, 41, 55, 0.8);
+    border-color: rgba(75, 85, 99, 0.5);
+}
+
+/* 主按钮样式 - 渐变 */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    color: white;
+    border-radius: var(--radius-lg);
+    font-weight: 700;
+    font-size: 1.125rem;
+    box-shadow: var(--shadow-lg);
+    transition: all 0.2s ease-out;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+    box-shadow: var(--shadow-xl);
+    transform: scale(1.02);
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 次按钮样式 - 透明边框 */
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 2rem;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #1E293B;
+    border: 2px solid #E2E8F0;
+    border-radius: var(--radius-lg);
+    font-weight: 700;
+    font-size: 1.125rem;
+    transition: all 0.2s ease-out;
+    cursor: pointer;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.4);
+    border-color: #3B82F6;
+}
+
+.dark .btn-secondary {
+    background: rgba(55, 65, 81, 0.3);
+    color: #F8FAFC;
+    border-color: #4B5563;
+}
+
+.dark .btn-secondary:hover {
+    background: rgba(55, 65, 81, 0.5);
+    border-color: #3B82F6;
+}
+
+/* 特性卡片样式 */
+.feature-card {
+    background: white;
+    border: 2px solid #E2E8F0;
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.2s ease-out;
+    cursor: pointer;
+}
+
+.feature-card:hover {
+    border-color: #3B82F6;
+    box-shadow: var(--shadow-xl);
+    transform: scale(1.02);
+}
+
+.dark .feature-card {
+    background: #1F2937;
+    border-color: #374151;
+}
+
+.dark .feature-card:hover {
+    border-color: #3B82F6;
+}
+
+/* 特性卡片图标容器 */
+.feature-icon {
+    width: 4rem;
+    height: 4rem;
+    margin: 0 auto 1.5rem;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-md);
+}
+
+.feature-icon-blue {
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+}
+
+.feature-icon-green {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+}
+
+.feature-icon-purple {
+    background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+}
+
+.feature-icon-orange {
+    background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+}
+
+/* 统计数字渐变文字 */
+.stat-gradient-blue {
+    background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stat-gradient-green {
+    background: linear-gradient(135deg, #10B981 0%, #3B82F6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.stat-gradient-purple {
+    background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* 统计项悬停效果 - 使用 transform 避免布局偏移 */
+.stat-item {
+    transition: transform 0.2s ease-out;
+    cursor: pointer;
+}
+
+.stat-item:hover {
+    transform: scale(1.05);
+}
+
+/* Hero 背景装饰 */
+.hero-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(64px);
+    mix-blend-mode: multiply;
+    pointer-events: none;
+}
+
+.dark .hero-blob {
+    mix-blend-mode: screen;
+}
+
+/* ==================== Reduced Motion Support ==================== */
+
+@media (prefers-reduced-motion: reduce) {
+    /* 禁用所有动画 */
+    .animate-fade-in,
+    .fade-in,
+    .slide-up,
+    .scale-in,
+    .slide-in-left,
+    .slide-in-right,
+    .pulse-slow,
+    .bounce-subtle,
+    .animate-pulse {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+    
+    /* 减少过渡时间 */
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+    
+    /* 禁用悬停变换 */
+    .hover-lift:hover,
+    .btn-primary:hover,
+    .btn-secondary:hover,
+    .feature-card:hover,
+    .stat-item:hover {
+        transform: none !important;
+    }
+}
+
+/* ==================== Accessibility Enhancements ==================== */
+
+/* 确保焦点状态可见 */
+.input-enhanced:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+a:focus-visible,
+button:focus-visible {
+    outline: 2px solid #3B82F6;
+    outline-offset: 2px;
+}
+
+/* 确保所有交互元素有 cursor-pointer */
+a,
+button,
+[role="button"],
+input[type="submit"],
+input[type="button"],
+.cursor-pointer {
+    cursor: pointer;
+}
+
+/* 禁用状态的光标 */
+[disabled],
+.disabled {
+    cursor: not-allowed !important;
+}

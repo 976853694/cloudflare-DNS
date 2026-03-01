@@ -1,0 +1,662 @@
+{% extends "base.html" %}
+
+{% block title %}用户活跃度 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="userActivityPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('userActivity.title')"></h1>
+        <button @click="manualCheck()" :disabled="checking" class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-colors">
+            <svg x-show="checking" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span x-text="checking ? ($store.i18n.locale === 'zh' ? '检测中...' : 'Checking...') : $store.i18n.t('userActivity.manualCheck')"></span>
+        </button>
+    </div>
+
+    <!-- 手动检测结果弹窗 -->
+    <div x-show="showCheckResult" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showCheckResult = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <div class="p-6">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('userActivity.checkResult')"></h2>
+                    <button @click="showCheckResult = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div x-show="checkResult" class="space-y-4">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        <span x-text="$store.i18n.locale === 'zh' ? '检测时间: ' : 'Check Time: '"></span>
+                        <span x-text="checkResult?.check_time"></span>
+                    </p>
+                    
+                    <!-- 统计摘要 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div class="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="checkResult?.summary?.high || 0"></div>
+                            <div class="text-xs text-green-700 dark:text-green-300" x-text="$store.i18n.t('userActivity.highActivity')"></div>
+                        </div>
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-center transition-colors">
+                            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" x-text="checkResult?.summary?.medium || 0"></div>
+                            <div class="text-xs text-blue-700 dark:text-blue-300" x-text="$store.i18n.t('userActivity.mediumActivity')"></div>
+                        </div>
+                        <div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-yellow-600 dark:text-yellow-400" x-text="checkResult?.summary?.low || 0"></div>
+                            <div class="text-xs text-yellow-700 dark:text-yellow-300" x-text="$store.i18n.t('userActivity.lowActivity')"></div>
+                        </div>
+                        <div class="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-orange-600 dark:text-orange-400" x-text="checkResult?.summary?.dormant || 0"></div>
+                            <div class="text-xs text-orange-700 dark:text-orange-300" x-text="$store.i18n.t('userActivity.dormant')"></div>
+                        </div>
+                        <div class="p-3 bg-red-50 dark:bg-red-900/20 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="checkResult?.summary?.lost || 0"></div>
+                            <div class="text-xs text-red-700 dark:text-red-300" x-text="$store.i18n.t('userActivity.lost')"></div>
+                        </div>
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-xl text-center">
+                            <div class="text-2xl font-bold text-gray-600 dark:text-gray-400" x-text="checkResult?.summary?.total || 0"></div>
+                            <div class="text-xs text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '总用户' : 'Total'"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- 最近活跃用户 -->
+                    <div x-show="checkResult?.recent_active?.length > 0">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '最近活跃用户 (前10)' : 'Recent Active Users (Top 10)'"></h3>
+                        <div class="space-y-1 max-h-32 overflow-y-auto">
+                            <template x-for="user in checkResult?.recent_active" :key="user.id">
+                                <div class="flex justify-between text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                                    <span class="text-gray-900 dark:text-white" x-text="user.username"></span>
+                                    <span class="text-gray-500 dark:text-gray-400" x-text="user.last_activity_at"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- 流失用户 -->
+                    <div x-show="checkResult?.lost_users?.length > 0">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '流失用户 (前10)' : 'Lost Users (Top 10)'"></h3>
+                        <div class="space-y-1 max-h-32 overflow-y-auto">
+                            <template x-for="user in checkResult?.lost_users" :key="user.id">
+                                <div class="flex justify-between text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                                    <span class="text-gray-900 dark:text-white" x-text="user.username"></span>
+                                    <span class="text-gray-500 dark:text-gray-400" x-text="user.last_activity_at || user.created_at"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.t('userActivity.highActivity')"></div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="stats.high || 0"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.t('userActivity.mediumActivity')"></div>
+            <div class="text-2xl font-bold text-blue-600 dark:text-blue-400" x-text="stats.medium || 0"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.t('userActivity.lowActivity')"></div>
+            <div class="text-2xl font-bold text-yellow-600 dark:text-yellow-400" x-text="stats.low || 0"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.t('userActivity.dormant')"></div>
+            <div class="text-2xl font-bold text-orange-600 dark:text-orange-400" x-text="stats.dormant || 0"></div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+            <div class="text-sm text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.t('userActivity.lost')"></div>
+            <div class="text-2xl font-bold text-red-600 dark:text-red-400" x-text="stats.lost || 0"></div>
+        </div>
+    </div>
+
+    <!-- 筛选器 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-6 hover:shadow-lg transition-shadow">
+        <div class="flex flex-col sm:flex-row gap-4">
+            <div class="flex-1">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('userActivity.activityLevel')"></label>
+                <select x-model="filter.level" @change="loadUsers()" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.t('common.all')"></option>
+                    <option value="high" x-text="$store.i18n.t('userActivity.highActivity')"></option>
+                    <option value="medium" x-text="$store.i18n.t('userActivity.mediumActivity')"></option>
+                    <option value="low" x-text="$store.i18n.t('userActivity.lowActivity')"></option>
+                    <option value="dormant" x-text="$store.i18n.t('userActivity.dormant')"></option>
+                    <option value="lost" x-text="$store.i18n.t('userActivity.lost')"></option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('common.search')"></label>
+                <input type="text" x-model="filter.search" @input="loadUsers()" :placeholder="$store.i18n.t('userActivity.searchPlaceholder')" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作栏 -->
+    <div x-show="selectedUsers.length > 0" class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors">
+        <div class="text-sm text-blue-700 dark:text-blue-300">
+            <span x-text="$store.i18n.locale === 'zh' ? '已选中 ' : 'Selected '"></span>
+            <span class="font-bold" x-text="selectedUsers.length"></span>
+            <span x-text="$store.i18n.locale === 'zh' ? ' 个用户' : ' users'"></span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button @click="openBatchModal('ban')" class="px-3 py-1.5 bg-orange-500 text-white rounded-xl text-sm hover:bg-orange-600 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                <span x-text="$store.i18n.locale === 'zh' ? '批量封禁' : 'Batch Ban'"></span>
+            </button>
+            <button @click="openBatchModal('sleep')" class="px-3 py-1.5 bg-yellow-500 text-white rounded-xl text-sm hover:bg-yellow-600 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                <span x-text="$store.i18n.locale === 'zh' ? '批量沉睡' : 'Batch Sleep'"></span>
+            </button>
+            <button @click="openBatchModal('delete')" class="px-3 py-1.5 bg-red-500 text-white rounded-xl text-sm hover:bg-red-600 flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span x-text="$store.i18n.locale === 'zh' ? '批量删除' : 'Batch Delete'"></span>
+            </button>
+            <button @click="clearSelection()" class="px-3 py-1.5 bg-gray-500 text-white rounded-xl text-sm hover:bg-gray-600">
+                <span x-text="$store.i18n.locale === 'zh' ? '取消选择' : 'Clear'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 用户列表 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <!-- 桌面端表格 -->
+        <div class="hidden sm:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                    <tr>
+                        <th class="px-4 py-3 text-left">
+                            <input type="checkbox" x-model="selectAll" @change="toggleSelectAll()" class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('common.username')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('userActivity.activityLevel')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('userActivity.totalScore')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('userActivity.lastLoginDays')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('userActivity.domainCount')"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('userActivity.loginFrequency')"></th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('common.actions')"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="user in users" :key="user.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3">
+                                <input type="checkbox" :value="user.id" x-model="selectedUsers" :disabled="user.role === 'admin'" class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50">
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="user.username"></div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400" x-text="user.email"></div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="px-2 py-1 rounded text-xs" :class="{
+                                    'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': user.activity_level === 'high',
+                                    'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': user.activity_level === 'medium',
+                                    'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': user.activity_level === 'low',
+                                    'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300': user.activity_level === 'dormant',
+                                    'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': user.activity_level === 'lost'
+                                } transition-colors" x-text="getLevelText(user.activity_level)"></span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-16 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                        <div class="h-full rounded-full" :class="{
+                                            'bg-green-500': user.activity_total_score >= 70,
+                                            'bg-blue-500': user.activity_total_score >= 50 && user.activity_total_score < 70,
+                                            'bg-yellow-500': user.activity_total_score >= 30 && user.activity_total_score < 50,
+                                            'bg-orange-500': user.activity_total_score >= 10 && user.activity_total_score < 30,
+                                            'bg-red-500': user.activity_total_score < 10
+                                        } transition-colors" :style="'width: ' + user.activity_total_score + '%'"></div>
+                                    </div>
+                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="user.activity_total_score"></span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                                <span x-text="user.last_login_days !== null ? user.last_login_days + ($store.i18n.locale === 'zh' ? '天前' : 'd ago') : '-'"></span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400" x-text="user.domain_count || 0"></td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                                <span x-text="user.login_frequency ? user.login_frequency.toFixed(2) : '0.00'"></span>
+                                <span class="text-xs text-gray-400" x-text="$store.i18n.locale === 'zh' ? '次/天' : '/day'"></span>
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <button @click="viewDetails(user)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.t('common.details')"></button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="users.length === 0">
+                        <td colspan="8" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.noData')"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 移动端卡片视图 -->
+        <div class="sm:hidden divide-y divide-gray-200 dark:divide-gray-700">
+            <!-- 全选 -->
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 flex items-center gap-3">
+                <input type="checkbox" x-model="selectAll" @change="toggleSelectAll()" class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600">
+                <span class="text-sm text-gray-600 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '全选' : 'Select All'"></span>
+            </div>
+            <template x-for="user in users" :key="user.id">
+                <div class="p-4">
+                    <div class="flex items-start gap-3 mb-3">
+                        <input type="checkbox" :value="user.id" x-model="selectedUsers" :disabled="user.role === 'admin'" class="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 disabled:opacity-50">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="font-medium text-gray-900 dark:text-white truncate" x-text="user.username"></p>
+                                <span class="px-2 py-0.5 rounded text-xs flex-shrink-0" :class="{
+                                    'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': user.activity_level === 'high',
+                                    'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': user.activity_level === 'medium',
+                                    'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': user.activity_level === 'low',
+                                    'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300': user.activity_level === 'dormant',
+                                    'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': user.activity_level === 'lost'
+                                } transition-colors" x-text="getLevelText(user.activity_level)"></span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 truncate" x-text="user.email"></p>
+                        </div>
+                    </div>
+                    <!-- 评分进度条 -->
+                    <div class="flex items-center gap-2 mb-3 ml-7">
+                        <div class="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full" :class="{
+                                'bg-green-500': user.activity_total_score >= 70,
+                                'bg-blue-500': user.activity_total_score >= 50 && user.activity_total_score < 70,
+                                'bg-yellow-500': user.activity_total_score >= 30 && user.activity_total_score < 50,
+                                'bg-orange-500': user.activity_total_score >= 10 && user.activity_total_score < 30,
+                                'bg-red-500': user.activity_total_score < 10
+                            } transition-colors" :style="'width: ' + user.activity_total_score + '%'"></div>
+                        </div>
+                        <span class="text-sm font-medium text-gray-600 dark:text-gray-400 w-8" x-text="user.activity_total_score"></span>
+                    </div>
+                    <!-- 统计信息 -->
+                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3 ml-7">
+                        <span x-text="(user.last_login_days !== null ? user.last_login_days : '-') + ($store.i18n.locale === 'zh' ? '天前登录' : 'd ago')"></span>
+                        <span x-text="(user.domain_count || 0) + ($store.i18n.locale === 'zh' ? '个域名' : ' domains')"></span>
+                        <span x-text="(user.login_frequency ? user.login_frequency.toFixed(2) : '0.00') + ($store.i18n.locale === 'zh' ? '次/天' : '/day')"></span>
+                    </div>
+                    <!-- 操作按钮 -->
+                    <div class="flex items-center justify-end ml-7">
+                        <button @click="viewDetails(user)" class="text-blue-600 dark:text-blue-400 text-sm" x-text="$store.i18n.t('common.details')"></button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="users.length === 0" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.noData')"></div>
+        </div>
+    </div>
+
+    <!-- 用户详情弹窗 -->
+    <div x-show="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="closeModal()">
+        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <div class="p-6">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('userActivity.activityDetails')"></h2>
+                    <button @click="closeModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div x-show="selectedUser" class="space-y-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.username')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white" x-text="selectedUser?.username"></div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('userActivity.activityLevel')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white" x-text="getLevelText(selectedUser?.activity_level)"></div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('userActivity.totalScore')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white" x-text="selectedUser?.activity_total_score || 0"></div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('userActivity.lastLoginDays')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white" x-text="selectedUser?.last_login_days !== null ? selectedUser?.last_login_days + ($store.i18n.locale === 'zh' ? '天' : ' days') : '-'"></div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('userActivity.domainCount')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white" x-text="selectedUser?.domain_count || 0"></div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('userActivity.loginFrequency')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white">
+                                <span x-text="selectedUser?.login_frequency ? selectedUser?.login_frequency.toFixed(2) : '0.00'"></span>
+                                <span class="text-xs text-gray-400" x-text="$store.i18n.locale === 'zh' ? '次/天' : '/day'"></span>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('userActivity.loginCount')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white" x-text="selectedUser?.login_count || 0"></div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('userActivity.registerDays')"></div>
+                            <div class="font-medium text-gray-900 dark:text-white" x-text="selectedUser?.days_since_register ? selectedUser?.days_since_register + ($store.i18n.locale === 'zh' ? '天' : ' days') : '-'"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3" x-text="$store.i18n.t('userActivity.recentActivities')"></h3>
+                        <div class="space-y-2">
+                            <template x-for="activity in activities" :key="activity.id">
+                                <div class="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                                    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center" :class="{
+                                        'bg-blue-100 dark:bg-blue-900/50': activity.activity_type === 'login',
+                                        'bg-green-100 dark:bg-green-900/50': activity.activity_type === 'domain_create',
+                                        'bg-purple-100 dark:bg-purple-900/50': activity.activity_type === 'record_update',
+                                        'bg-yellow-100 dark:bg-yellow-900/50': activity.activity_type === 'balance_recharge'
+                                    } transition-colors">
+                                        <svg class="w-4 h-4" :class="{
+                                            'text-blue-600 dark:text-blue-400': activity.activity_type === 'login',
+                                            'text-green-600 dark:text-green-400': activity.activity_type === 'domain_create',
+                                            'text-purple-600 dark:text-purple-400': activity.activity_type === 'record_update',
+                                            'text-yellow-600 dark:text-yellow-400': activity.activity_type === 'balance_recharge'
+                                        }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="getActivityTypeText(activity.activity_type)"></div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400" x-text="activity.created_at ? activity.created_at.slice(0,19).replace('T', ' ') : ''"></div>
+                                    </div>
+                                </div>
+                            </template>
+                            <div x-show="activities.length === 0" class="text-center py-4 text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.noData')"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作确认弹窗 -->
+    <div x-show="showBatchModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" @click.self="showBatchModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full hover:shadow-lg transition-shadow">
+            <div class="p-6">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white" x-text="getBatchModalTitle()"></h2>
+                    <button @click="showBatchModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="mb-6">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" :class="{
+                        'bg-orange-100 dark:bg-orange-900/30': batchAction === 'ban',
+                        'bg-yellow-100 dark:bg-yellow-900/30': batchAction === 'sleep',
+                        'bg-red-100 dark:bg-red-900/30': batchAction === 'delete'
+                    }">
+                        <svg x-show="batchAction === 'ban'" class="w-8 h-8 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                        <svg x-show="batchAction === 'sleep'" class="w-8 h-8 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                        <svg x-show="batchAction === 'delete'" class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </div>
+                    <p class="text-center text-gray-600 dark:text-gray-400" x-text="getBatchModalMessage()"></p>
+                    <p x-show="batchAction === 'delete'" class="text-center text-red-500 dark:text-red-400 text-sm mt-2" x-text="$store.i18n.locale === 'zh' ? '此操作将删除用户的所有域名和DNS记录，且不可恢复！' : 'This will delete all domains and DNS records. Cannot be undone!'"></p>
+                </div>
+                
+                <div class="flex justify-end gap-3">
+                    <button @click="showBatchModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                        <span x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></span>
+                    </button>
+                    <button @click="executeBatchOperation()" :disabled="batchProcessing" class="px-4 py-2 text-white rounded-xl disabled:opacity-50" :class="{
+                        'bg-orange-500 hover:bg-orange-600': batchAction === 'ban',
+                        'bg-yellow-500 hover:bg-yellow-600': batchAction === 'sleep',
+                        'bg-red-500 hover:bg-red-600': batchAction === 'delete'
+                    }">
+                        <span x-show="!batchProcessing" x-text="$store.i18n.locale === 'zh' ? '确认' : 'Confirm'"></span>
+                        <span x-show="batchProcessing" x-text="$store.i18n.locale === 'zh' ? '处理中...' : 'Processing...'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div x-show="toast.show" x-transition class="fixed bottom-6 right-6 z-50">
+        <div :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" class="text-white px-4 py-2 rounded-xl shadow-lg text-sm" x-text="toast.message"></div>
+    </div>
+</div>
+
+<script>
+function userActivityPage() {
+    return {
+        stats: {},
+        users: [],
+        activities: [],
+        pagination: {
+            total: 0,
+            page: 1,
+            per_page: 20,
+            pages: 0
+        },
+        filter: {
+            level: '',
+            search: ''
+        },
+        showModal: false,
+        selectedUser: null,
+        checking: false,
+        showCheckResult: false,
+        checkResult: null,
+        // 批量操作相关
+        selectedUsers: [],
+        selectAll: false,
+        showBatchModal: false,
+        batchAction: '',
+        batchProcessing: false,
+        toast: { show: false, message: '', type: '' },
+
+        async init() {
+            await this.loadStats();
+            await this.loadUsers();
+        },
+
+        async loadStats() {
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch('/api/admin/user-activity/stats', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.stats = data.data;
+                }
+            } catch (e) {
+                console.error('Load stats failed:', e);
+            }
+        },
+
+        async loadUsers() {
+            try {
+                const token = localStorage.getItem('token');
+                const params = new URLSearchParams();
+                if (this.filter.level) params.append('level', this.filter.level);
+                if (this.filter.search) params.append('search', this.filter.search);
+                
+                const res = await fetch('/api/admin/user-activity/users?' + params.toString(), {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.users = data.data.users;
+                    this.pagination = {
+                        total: data.data.total,
+                        page: data.data.page,
+                        per_page: data.data.per_page,
+                        pages: data.data.pages
+                    };
+                }
+            } catch (e) {
+                console.error('Load users failed:', e);
+            }
+        },
+
+        async manualCheck() {
+            this.checking = true;
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch('/api/admin/user-activity/manual-check', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.checkResult = data.data;
+                    this.showCheckResult = true;
+                    // 刷新统计数据
+                    await this.loadStats();
+                } else {
+                    alert(data.message || (this.$store.i18n.locale === 'zh' ? '检测失败' : 'Check failed'));
+                }
+            } catch (e) {
+                console.error('Manual check failed:', e);
+                alert(this.$store.i18n.locale === 'zh' ? '检测失败' : 'Check failed');
+            }
+            this.checking = false;
+        },
+
+        async viewDetails(user) {
+            this.selectedUser = user;
+            this.showModal = true;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`/api/admin/user-activity/${user.id}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.activities = data.data.activities || [];
+                }
+            } catch (e) {
+                console.error('Load activities failed:', e);
+            }
+        },
+
+        closeModal() {
+            this.showModal = false;
+            this.selectedUser = null;
+            this.activities = [];
+        },
+
+        getLevelText(level) {
+            const texts = {
+                'high': this.$store.i18n.t('userActivity.highActivity'),
+                'medium': this.$store.i18n.t('userActivity.mediumActivity'),
+                'low': this.$store.i18n.t('userActivity.lowActivity'),
+                'dormant': this.$store.i18n.t('userActivity.dormant'),
+                'lost': this.$store.i18n.t('userActivity.lost')
+            };
+            return texts[level] || level;
+        },
+
+        getActivityTypeText(type) {
+            const texts = {
+                'login': this.$store.i18n.t('userActivity.activityTypes.login'),
+                'domain_create': this.$store.i18n.t('userActivity.activityTypes.domainCreate'),
+                'record_update': this.$store.i18n.t('userActivity.activityTypes.recordUpdate'),
+                'balance_recharge': this.$store.i18n.t('userActivity.activityTypes.balanceRecharge')
+            };
+            return texts[type] || type;
+        },
+
+        // 批量操作方法
+        toggleSelectAll() {
+            if (this.selectAll) {
+                // 选中所有非管理员用户
+                this.selectedUsers = this.users.filter(u => u.role !== 'admin').map(u => u.id);
+            } else {
+                this.selectedUsers = [];
+            }
+        },
+
+        clearSelection() {
+            this.selectedUsers = [];
+            this.selectAll = false;
+        },
+
+        openBatchModal(action) {
+            this.batchAction = action;
+            this.showBatchModal = true;
+        },
+
+        getBatchModalTitle() {
+            const titles = {
+                'ban': this.$store.i18n.locale === 'zh' ? '批量封禁' : 'Batch Ban',
+                'sleep': this.$store.i18n.locale === 'zh' ? '批量沉睡' : 'Batch Sleep',
+                'delete': this.$store.i18n.locale === 'zh' ? '批量删除' : 'Batch Delete'
+            };
+            return titles[this.batchAction] || '';
+        },
+
+        getBatchModalMessage() {
+            const count = this.selectedUsers.length;
+            const messages = {
+                'ban': this.$store.i18n.locale === 'zh' 
+                    ? `确定要封禁选中的 ${count} 个用户吗？封禁后用户将无法登录。`
+                    : `Are you sure you want to ban ${count} selected users? They will not be able to login.`,
+                'sleep': this.$store.i18n.locale === 'zh'
+                    ? `确定要将选中的 ${count} 个用户设为沉睡状态吗？沉睡用户需要重新验证邮箱才能登录。`
+                    : `Are you sure you want to set ${count} selected users to dormant? They need to re-verify email to login.`,
+                'delete': this.$store.i18n.locale === 'zh'
+                    ? `确定要删除选中的 ${count} 个用户吗？`
+                    : `Are you sure you want to delete ${count} selected users?`
+            };
+            return messages[this.batchAction] || '';
+        },
+
+        async executeBatchOperation() {
+            if (this.selectedUsers.length === 0) {
+                this.showToast(this.$store.i18n.locale === 'zh' ? '请选择要操作的用户' : 'Please select users', 'error');
+                return;
+            }
+
+            this.batchProcessing = true;
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch('/api/admin/user-activity/batch', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: this.batchAction,
+                        user_ids: this.selectedUsers
+                    })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast(this.$store.i18n.locale === 'zh' ? '批量操作成功' : 'Batch operation successful', 'success');
+                    this.showBatchModal = false;
+                    this.clearSelection();
+                    await this.loadUsers();
+                    await this.loadStats();
+                } else {
+                    this.showToast(data.message || (this.$store.i18n.locale === 'zh' ? '操作失败' : 'Operation failed'), 'error');
+                }
+            } catch (e) {
+                console.error('Batch operation failed:', e);
+                this.showToast(this.$store.i18n.locale === 'zh' ? '操作失败' : 'Operation failed', 'error');
+            }
+            this.batchProcessing = false;
+        },
+
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => {
+                this.toast.show = false;
+            }, 3000);
+        }
+    };
+}
+</script>
+{% endblock %}

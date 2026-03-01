@@ -1,0 +1,804 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }} - 管理后台{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="adminDashboard()" x-init="init()">
+    <!-- 强制更新遮罩层 -->
+    <div x-show="showForceUpdateBlocker" x-cloak class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"></div>
+
+    <!-- 版本更新弹窗 -->
+    <div x-show="showUpdateModal" x-cloak 
+         x-init="$watch('showUpdateModal', value => { document.body.style.overflow = value ? 'hidden' : '' })"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" 
+         @click.self="!updateInfo.force_update && (showUpdateModal = false)">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-lg w-full mx-4 overflow-hidden" @click.stop>
+            <!-- 头部 -->
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    <span x-text="$store.i18n.locale === 'zh' ? '发现新版本' : 'New Version Available'"></span>
+                </h3>
+                <button x-show="!updateInfo.force_update" @click="showUpdateModal = false" class="text-white/80 hover:text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="p-6">
+                <!-- 强制更新警告 -->
+                <div x-show="updateInfo.force_update" class="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div class="flex items-center text-red-600 dark:text-red-400">
+                        <svg class="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                        <span class="font-medium" x-text="$store.i18n.locale === 'zh' ? '此版本为强制更新，请立即升级后才能继续使用' : 'This is a mandatory update. Please upgrade immediately to continue.'"></span>
+                    </div>
+                </div>
+
+                <!-- 版本信息 -->
+                <div class="mb-4 space-y-2">
+                    <div class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '当前版本' : 'Current Version'"></span>
+                        <span class="font-medium text-gray-700 dark:text-gray-300" x-text="'v' + currentVersion"></span>
+                    </div>
+                    <div class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '最新版本' : 'Latest Version'"></span>
+                        <span class="font-semibold text-blue-600" x-text="'v' + updateInfo.latest_version"></span>
+                    </div>
+                    <div x-show="updateInfo.created_at" class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
+                        <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '发布时间' : 'Release Date'"></span>
+                        <span class="text-gray-600 dark:text-gray-300" x-text="formatDate(updateInfo.created_at)"></span>
+                    </div>
+                </div>
+
+                <!-- 更新日志 -->
+                <div x-show="updateInfo.changelog_html" class="mb-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '更新日志' : 'Changelog'"></h4>
+                    <div class="max-h-48 overflow-y-auto p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-sm text-gray-600 dark:text-gray-300 prose prose-sm dark:prose-invert prose-ul:my-1 prose-li:my-0" 
+                         x-html="updateInfo.changelog_html"></div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="flex space-x-3">
+                    <a x-show="updateInfo.download_url && updateInfo.download_url.trim() !== ''" 
+                       :href="updateInfo.download_url" target="_blank"
+                       class="flex-1 px-4 py-2.5 bg-blue-600 text-white text-center rounded-lg hover:bg-blue-700 transition font-medium cursor-pointer">
+                        <span x-text="$store.i18n.locale === 'zh' ? '立即更新' : 'Update Now'"></span>
+                    </a>
+                    <button x-show="!updateInfo.download_url || updateInfo.download_url.trim() === ''" disabled
+                            class="flex-1 px-4 py-2.5 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 text-center rounded-lg cursor-not-allowed font-medium">
+                        <span x-text="$store.i18n.locale === 'zh' ? '暂无下载地址' : 'No Download URL'"></span>
+                    </button>
+                    <button x-show="!updateInfo.force_update" @click="showUpdateModal = false"
+                            class="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition font-medium">
+                        <span x-text="$store.i18n.locale === 'zh' ? '稍后提醒' : 'Remind Later'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 开源声明 - 精简版顶部通知条 -->
+    <div x-data="{ showBanner: true }" x-show="showBanner" x-cloak class="mb-4 bg-gradient-to-r from-red-500 to-orange-500 rounded-lg p-3 shadow-md">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2 text-white">
+                <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                </svg>
+                <span class="text-sm font-medium">🎉 本项目完全免费开源</span>
+                <a href="https://github.com/976853694/cloudflare-DNS" target="_blank" class="text-white/90 hover:text-white underline text-sm">GitHub</a>
+                <a href="https://976853694.github.io/dns-docs/#/zh/guide/index" target="_blank" class="text-white/90 hover:text-white underline text-sm">文档</a>
+                <a href="https://qm.qq.com/q/nMNgw1CB7q" target="_blank" class="text-white/90 hover:text-white underline text-sm">QQ群</a>
+            </div>
+            <button @click="showBanner = false" class="text-white/80 hover:text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 页面标题和版本 -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('nav.admin')"></h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '欢迎回来，管理员' : 'Welcome back, Admin'"></p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span class="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">v{{ config.APP_VERSION }}</span>
+            <button @click="loadData()" class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="刷新数据">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 核心指标卡片 -->
+    <div class="mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- 用户总数 -->
+            <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-lg hover:shadow-xl transition cursor-pointer" @click="window.location.href='/admin/users'">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs bg-white/20 px-2 py-1 rounded" x-text="$store.i18n.locale === 'zh' ? '用户' : 'Users'"></span>
+                </div>
+                <div class="text-3xl font-bold mb-1" x-text="stats.users_count || 0"></div>
+                <div class="flex items-center text-sm text-white/80">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                    <span x-text="$store.i18n.locale === 'zh' ? '今日' : 'Today'"></span>
+                    <span class="ml-1 font-semibold" x-text="'+' + (stats.today_new_users || 0)"></span>
+                </div>
+            </div>
+
+            <!-- 域名总数 -->
+            <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-5 text-white shadow-lg hover:shadow-xl transition cursor-pointer" @click="window.location.href='/admin/subdomains'">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs bg-white/20 px-2 py-1 rounded" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domains'"></span>
+                </div>
+                <div class="text-3xl font-bold mb-1" x-text="stats.subdomains_count || 0"></div>
+                <div class="flex items-center text-sm text-white/80">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                    <span x-text="$store.i18n.locale === 'zh' ? '今日' : 'Today'"></span>
+                    <span class="ml-1 font-semibold" x-text="'+' + (stats.today_new_subdomains || 0)"></span>
+                </div>
+            </div>
+
+            <!-- DNS记录数 -->
+            <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-5 text-white shadow-lg hover:shadow-xl transition cursor-pointer" @click="window.location.href='/admin/dns-records'">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs bg-white/20 px-2 py-1 rounded" x-text="$store.i18n.locale === 'zh' ? '记录' : 'Records'"></span>
+                </div>
+                <div class="text-3xl font-bold mb-1" x-text="stats.records_count || 0"></div>
+                <div class="flex items-center text-sm text-white/80">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span x-text="$store.i18n.locale === 'zh' ? 'DNS解析' : 'DNS Records'"></span>
+                </div>
+            </div>
+
+            <!-- 今日登录 -->
+            <div class="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-5 text-white shadow-lg hover:shadow-xl transition cursor-pointer" @click="window.location.href='/admin/logs'">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs bg-white/20 px-2 py-1 rounded" x-text="$store.i18n.locale === 'zh' ? '活跃' : 'Active'"></span>
+                </div>
+                <div class="text-3xl font-bold mb-1" x-text="stats.today_logins || 0"></div>
+                <div class="flex items-center text-sm text-white/80">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span x-text="$store.i18n.locale === 'zh' ? '今日登录' : 'Today Logins'"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要内容区 - 趋势图和待办事项 -->
+    <div class="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 趋势图 (占2/3) -->
+        <div class="lg:col-span-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '7日数据趋势' : '7-Day Trend'"></h3>
+                <div class="flex items-center space-x-2">
+                    <button @click="chartDays = 7; loadCharts()" :class="chartDays === 7 ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'" class="px-3 py-1 rounded text-xs font-medium transition">7天</button>
+                    <button @click="chartDays = 30; loadCharts()" :class="chartDays === 30 ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'" class="px-3 py-1 rounded text-xs font-medium transition">30天</button>
+                </div>
+            </div>
+            <div id="trendChart" class="h-80"></div>
+        </div>
+
+        <!-- 待办事项 (占1/3) -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-900 dark:text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                    </svg>
+                    <span x-text="$store.i18n.locale === 'zh' ? '待办事项' : 'Pending Tasks'"></span>
+                </h3>
+                <span class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '需要处理' : 'Need Action'"></span>
+            </div>
+            <div class="space-y-3">
+                <!-- 免费套餐申请 -->
+                <a href="/admin/free-plan-applications" class="block p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition" :class="pendingTasks.free_plan_pending > 0 ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-gray-50 dark:bg-gray-700/50'">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center" :class="pendingTasks.free_plan_pending > 0 ? 'bg-red-100 dark:bg-red-900' : 'bg-gray-200 dark:bg-gray-600'">
+                                <svg class="w-4 h-4" :class="pendingTasks.free_plan_pending > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '免费套餐申请' : 'Free Plan Apps'"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '待审核' : 'Pending'"></p>
+                            </div>
+                        </div>
+                        <span class="text-lg font-bold" :class="pendingTasks.free_plan_pending > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'" x-text="pendingTasks.free_plan_pending || 0"></span>
+                    </div>
+                </a>
+
+                <!-- 即将到期域名 -->
+                <a href="/admin/subdomains?expired=0&days=7" class="block p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition" :class="pendingTasks.expiring_soon > 0 ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800' : 'bg-gray-50 dark:bg-gray-700/50'">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center" :class="pendingTasks.expiring_soon > 0 ? 'bg-orange-100 dark:bg-orange-900' : 'bg-gray-200 dark:bg-gray-600'">
+                                <svg class="w-4 h-4" :class="pendingTasks.expiring_soon > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '即将到期域名' : 'Expiring Domains'"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '7天内' : 'Within 7 days'"></p>
+                            </div>
+                        </div>
+                        <span class="text-lg font-bold" :class="pendingTasks.expiring_soon > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-gray-500'" x-text="pendingTasks.expiring_soon || 0"></span>
+                    </div>
+                </a>
+
+                <!-- 待回复工单 -->
+                <a href="/admin/tickets?status=open" class="block p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition" :class="pendingTasks.pending_tickets > 0 ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800' : 'bg-gray-50 dark:bg-gray-700/50'">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center" :class="pendingTasks.pending_tickets > 0 ? 'bg-yellow-100 dark:bg-yellow-900' : 'bg-gray-200 dark:bg-gray-600'">
+                                <svg class="w-4 h-4" :class="pendingTasks.pending_tickets > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500 dark:text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '待回复工单' : 'Pending Tickets'"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '需要处理' : 'Need Reply'"></p>
+                            </div>
+                        </div>
+                        <span class="text-lg font-bold" :class="pendingTasks.pending_tickets > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-500'" x-text="pendingTasks.pending_tickets || 0"></span>
+                    </div>
+                </a>
+
+                <!-- 托管商申请 -->
+                <a href="/admin/host/applications?status=pending" class="block p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition" :class="pendingTasks.host_pending > 0 ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' : 'bg-gray-50 dark:bg-gray-700/50'">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center" :class="pendingTasks.host_pending > 0 ? 'bg-blue-100 dark:bg-blue-900' : 'bg-gray-200 dark:bg-gray-600'">
+                                <svg class="w-4 h-4" :class="pendingTasks.host_pending > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '托管商申请' : 'Host Apps'"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '待审核' : 'Pending'"></p>
+                            </div>
+                        </div>
+                        <span class="text-lg font-bold" :class="pendingTasks.host_pending > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'" x-text="pendingTasks.host_pending || 0"></span>
+                    </div>
+                </a>
+            </div>
+
+            <!-- 快速操作 -->
+            <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-3" x-text="$store.i18n.locale === 'zh' ? '快速操作' : 'Quick Actions'"></p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <a href="/admin/domains" class="flex items-center justify-center px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition text-xs font-medium">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span x-text="$store.i18n.locale === 'zh' ? '添加域名' : 'Add Domain'"></span>
+                    </a>
+                    <a href="/admin/redeem-codes" class="flex items-center justify-center px-3 py-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition text-xs font-medium">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
+                        </svg>
+                        <span x-text="$store.i18n.locale === 'zh' ? '生成卡密' : 'Gen Codes'"></span>
+                    </a>
+                    <a href="/admin/announcements" class="flex items-center justify-center px-3 py-2 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition text-xs font-medium">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
+                        </svg>
+                        <span x-text="$store.i18n.locale === 'zh' ? '发布公告' : 'Announce'"></span>
+                    </a>
+                    <a href="/admin/settings" class="flex items-center justify-center px-3 py-2 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition text-xs font-medium">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        <span x-text="$store.i18n.locale === 'zh' ? '系统设置' : 'Settings'"></span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 次要统计指标 (可折叠) -->
+    <div class="mb-6" x-data="{ showDetails: false }">
+        <button @click="showDetails = !showDetails" class="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm hover:shadow-md transition flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                <span class="font-medium text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '详细统计' : 'Detailed Statistics'"></span>
+            </div>
+            <svg class="w-5 h-5 text-gray-400 transition-transform" :class="{ 'rotate-180': showDetails }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+        </button>
+        
+        <div x-show="showDetails" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 transform scale-100" x-transition:leave-end="opacity-0 transform scale-95" class="mt-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '卡密总数' : 'Redeem Codes'"></p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.redeem_codes_total || 0"></p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="$store.i18n.locale === 'zh' ? '未使用' : 'Unused'"></span>: <span x-text="stats.redeem_codes_unused || 0"></span>
+                    </p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '主域名数' : 'Root Domains'"></p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.domains_count || 0"></p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? 'DNS渠道' : 'DNS Channels'"></p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.channels_count || 0"></p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '套餐数量' : 'Plans'"></p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.plans_count || 0"></p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '即将到期' : 'Expiring Soon'"></p>
+                    <p class="text-2xl font-bold" :class="stats.expiring_soon > 0 ? 'text-orange-500' : 'text-gray-900 dark:text-white'" x-text="stats.expiring_soon || 0"></p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '7天内' : 'Within 7d'"></p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '今日新增' : 'Today New'"></p>
+                    <p class="text-2xl font-bold text-green-600 dark:text-green-400" x-text="(stats.today_new_users || 0) + (stats.today_new_subdomains || 0)"></p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="stats.today_new_users || 0"></span>U + <span x-text="stats.today_new_subdomains || 0"></span>D
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 功能快捷入口 (分类) -->
+    <div class="mb-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+            </svg>
+            <span x-text="$store.i18n.locale === 'zh' ? '功能模块' : 'Function Modules'"></span>
+        </h3>
+
+        <!-- 核心管理 -->
+        <div class="mb-4">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center">
+                <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                <span x-text="$store.i18n.locale === 'zh' ? '核心管理' : 'Core Management'"></span>
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <a href="/admin/channels" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-700 transition group">
+                    <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition" x-text="$store.i18n.locale === 'zh' ? 'DNS渠道' : 'DNS Channels'"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="stats.channels_count || 0"></span> <span x-text="$store.i18n.locale === 'zh' ? '个渠道' : 'channels'"></span>
+                    </p>
+                </a>
+                <a href="/admin/domains" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-green-300 dark:hover:border-green-700 transition group">
+                    <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-green-600 dark:group-hover:text-green-400 transition" x-text="$store.i18n.t('nav.domainManage')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="stats.domains_count || 0"></span> <span x-text="$store.i18n.locale === 'zh' ? '个主域名' : 'domains'"></span>
+                    </p>
+                </a>
+                <a href="/admin/users" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-700 transition group">
+                    <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition" x-text="$store.i18n.t('nav.userManage')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="stats.users_count || 0"></span> <span x-text="$store.i18n.locale === 'zh' ? '个用户' : 'users'"></span>
+                    </p>
+                </a>
+                <a href="/admin/plans" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-700 transition group">
+                    <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition" x-text="$store.i18n.t('nav.planManage')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="stats.plans_count || 0"></span> <span x-text="$store.i18n.locale === 'zh' ? '个套餐' : 'plans'"></span>
+                    </p>
+                </a>
+            </div>
+        </div>
+
+        <!-- 业务管理 -->
+        <div class="mb-4">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center">
+                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                <span x-text="$store.i18n.locale === 'zh' ? '业务管理' : 'Business Management'"></span>
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <a href="/admin/redeem-codes" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-pink-300 dark:hover:border-pink-700 transition group">
+                    <div class="w-10 h-10 bg-pink-100 dark:bg-pink-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-pink-600 dark:group-hover:text-pink-400 transition" x-text="$store.i18n.t('nav.redeemManage')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="stats.redeem_codes_unused || 0"></span> <span x-text="$store.i18n.locale === 'zh' ? '未使用' : 'unused'"></span>
+                    </p>
+                </a>
+                <a href="/admin/coupons" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-yellow-300 dark:hover:border-yellow-700 transition group">
+                    <div class="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-yellow-600 dark:group-hover:text-yellow-400 transition" x-text="$store.i18n.t('nav.coupons')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '优惠券管理' : 'Manage coupons'"></p>
+                </a>
+                <a href="/admin/orders" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-teal-300 dark:hover:border-teal-700 transition group">
+                    <div class="w-10 h-10 bg-teal-100 dark:bg-teal-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition" x-text="$store.i18n.locale === 'zh' ? '订单管理' : 'Orders'"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '查看订单' : 'View orders'"></p>
+                </a>
+                <a href="/admin/tickets" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-700 transition group">
+                    <div class="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-orange-600 dark:group-hover:text-orange-400 transition" x-text="$store.i18n.locale === 'zh' ? '工单管理' : 'Tickets'"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="pendingTasks.pending_tickets || 0"></span> <span x-text="$store.i18n.locale === 'zh' ? '待处理' : 'pending'"></span>
+                    </p>
+                </a>
+            </div>
+        </div>
+
+        <!-- 系统设置 -->
+        <div>
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center">
+                <span class="w-2 h-2 bg-gray-500 rounded-full mr-2"></span>
+                <span x-text="$store.i18n.locale === 'zh' ? '系统设置' : 'System Settings'"></span>
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <a href="/admin/settings" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-gray-400 dark:hover:border-gray-600 transition group">
+                    <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-gray-700 dark:group-hover:text-gray-300 transition" x-text="$store.i18n.t('nav.systemSettings')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '系统配置' : 'System config'"></p>
+                </a>
+                <a href="/admin/email-templates" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-cyan-300 dark:hover:border-cyan-700 transition group">
+                    <div class="w-10 h-10 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition" x-text="$store.i18n.t('nav.emailTemplates')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '邮件模板' : 'Email templates'"></p>
+                </a>
+                <a href="/admin/logs" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-red-300 dark:hover:border-red-700 transition group">
+                    <div class="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-red-600 dark:group-hover:text-red-400 transition" x-text="$store.i18n.t('nav.operationLogs')"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '操作日志' : 'Operation logs'"></p>
+                </a>
+                <a href="/admin/backup" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg hover:border-emerald-300 dark:hover:border-emerald-700 transition group">
+                    <div class="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition">
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition" x-text="$store.i18n.locale === 'zh' ? '数据备份' : 'Backup'"></h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '备份管理' : 'Backup management'"></p>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最近活动 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900 dark:text-white flex items-center">
+                <svg class="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span x-text="$store.i18n.locale === 'zh' ? '最近活动' : 'Recent Activities'"></span>
+            </h3>
+            <a href="/admin/logs" class="text-xs text-blue-600 dark:text-blue-400 hover:underline" x-text="$store.i18n.locale === 'zh' ? '查看全部' : 'View All'"></a>
+        </div>
+        <div class="space-y-3">
+            <template x-if="activities.length === 0">
+                <p class="text-sm text-gray-500 dark:text-gray-400 text-center py-4" x-text="$store.i18n.locale === 'zh' ? '暂无活动记录' : 'No recent activities'"></p>
+            </template>
+            <template x-for="activity in activities" :key="activity.id">
+                <div class="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                    <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm text-gray-900 dark:text-white">
+                            <span class="font-medium" x-text="activity.username"></span>
+                            <span class="text-gray-600 dark:text-gray-400" x-text="activity.detail"></span>
+                        </p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="formatDate(activity.created_at)"></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function adminDashboard() {
+    return {
+        stats: {},
+        pendingTasks: {},
+        activities: [],
+        chartDays: 7,
+        showUpdateModal: false,
+        showForceUpdateBlocker: false,
+        updateInfo: {},
+        currentVersion: '{{ config.APP_VERSION }}',
+        token: localStorage.getItem('token'),
+        
+        async init() {
+            await this.loadData();
+            await this.checkUpdate();
+        },
+        
+        async loadData() {
+            try {
+                const headers = { 'Authorization': 'Bearer ' + this.token };
+                
+                // 加载统计数据
+                const statsRes = await fetch('/api/admin/stats', { headers });
+                const statsData = await statsRes.json();
+                if (statsData.code === 200) {
+                    this.stats = statsData.data;
+                }
+                
+                // 加载待办事项
+                const tasksRes = await fetch('/api/admin/pending-tasks', { headers });
+                const tasksData = await tasksRes.json();
+                if (tasksData.code === 200) {
+                    this.pendingTasks = tasksData.data;
+                }
+                
+                // 加载最近活动
+                const activitiesRes = await fetch('/api/admin/recent-activities?limit=10', { headers });
+                const activitiesData = await activitiesRes.json();
+                if (activitiesData.code === 200) {
+                    this.activities = activitiesData.data.activities;
+                }
+                
+                // 加载图表
+                await this.loadCharts();
+            } catch (error) {
+                console.error('加载数据失败:', error);
+            }
+        },
+        
+        async loadCharts() {
+            try {
+                const headers = { 'Authorization': 'Bearer ' + this.token };
+                const res = await fetch(`/api/admin/charts/overview?days=${this.chartDays}`, { headers });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.renderTrendChart(data.data);
+                }
+            } catch (error) {
+                console.error('加载图表失败:', error);
+            }
+        },
+        
+        renderTrendChart(data) {
+            const chartDom = document.getElementById('trendChart');
+            if (!chartDom) return;
+            
+            const myChart = echarts.init(chartDom);
+            const isDark = document.documentElement.classList.contains('dark');
+            
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: isDark ? '#1f2937' : '#ffffff',
+                    borderColor: isDark ? '#374151' : '#e5e7eb',
+                    textStyle: {
+                        color: isDark ? '#f3f4f6' : '#111827'
+                    }
+                },
+                legend: {
+                    data: [
+                        this.$store.i18n.locale === 'zh' ? '新增用户' : 'New Users',
+                        this.$store.i18n.locale === 'zh' ? '新增域名' : 'New Domains',
+                        this.$store.i18n.locale === 'zh' ? '收入' : 'Income'
+                    ],
+                    textStyle: {
+                        color: isDark ? '#9ca3af' : '#6b7280'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: data.dates,
+                    axisLine: {
+                        lineStyle: {
+                            color: isDark ? '#374151' : '#e5e7eb'
+                        }
+                    },
+                    axisLabel: {
+                        color: isDark ? '#9ca3af' : '#6b7280'
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: {
+                        lineStyle: {
+                            color: isDark ? '#374151' : '#e5e7eb'
+                        }
+                    },
+                    axisLabel: {
+                        color: isDark ? '#9ca3af' : '#6b7280'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: isDark ? '#374151' : '#f3f4f6'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: this.$store.i18n.locale === 'zh' ? '新增用户' : 'New Users',
+                        type: 'line',
+                        smooth: true,
+                        data: data.users,
+                        itemStyle: {
+                            color: '#3b82f6'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                                { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+                            ])
+                        }
+                    },
+                    {
+                        name: this.$store.i18n.locale === 'zh' ? '新增域名' : 'New Domains',
+                        type: 'line',
+                        smooth: true,
+                        data: data.subdomains,
+                        itemStyle: {
+                            color: '#10b981'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
+                                { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+                            ])
+                        }
+                    },
+                    {
+                        name: this.$store.i18n.locale === 'zh' ? '收入' : 'Income',
+                        type: 'line',
+                        smooth: true,
+                        data: data.income,
+                        itemStyle: {
+                            color: '#f59e0b'
+                        },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(245, 158, 11, 0.3)' },
+                                { offset: 1, color: 'rgba(245, 158, 11, 0.05)' }
+                            ])
+                        }
+                    }
+                ]
+            };
+            
+            myChart.setOption(option);
+            
+            // 响应式
+            window.addEventListener('resize', () => {
+                myChart.resize();
+            });
+        },
+        
+        async checkUpdate() {
+            try {
+                const headers = { 'Authorization': 'Bearer ' + this.token };
+                const res = await fetch('/api/admin/check-update', { headers });
+                const data = await res.json();
+                if (data.code === 200 && data.data.has_update) {
+                    this.updateInfo = data.data;
+                    this.showUpdateModal = true;
+                    if (data.data.force_update) {
+                        this.showForceUpdateBlocker = true;
+                    }
+                }
+            } catch (error) {
+                console.error('检查更新失败:', error);
+            }
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return this.$store.i18n.locale === 'zh' ? '刚刚' : 'Just now';
+            if (minutes < 60) return `${minutes}${this.$store.i18n.locale === 'zh' ? '分钟前' : ' min ago'}`;
+            if (hours < 24) return `${hours}${this.$store.i18n.locale === 'zh' ? '小时前' : ' hours ago'}`;
+            if (days < 7) return `${days}${this.$store.i18n.locale === 'zh' ? '天前' : ' days ago'}`;
+            
+            return date.toLocaleDateString(this.$store.i18n.locale === 'zh' ? 'zh-CN' : 'en-US');
+        }
+    };
+}
+</script>
+
+<!-- 引入 ECharts -->
+<script src="/static/js/echarts.min.js"></script>
+{% endblock %}

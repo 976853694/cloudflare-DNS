@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }} - 定时任务管理{% endblock %}
+
+{% block content %}
+<div class="pt-14 lg:pt-0 min-h-screen">
+    <div class="p-4 sm:p-6" x-data="cronManager()" x-init="init()">
+        <!-- 页面标题 -->
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('cron.title')"></h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('cron.description')"></p>
+        </div>
+
+        <!-- 外部触发URL配置 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow mb-6 p-4 hover:shadow-lg transition-shadow">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3" x-text="$store.i18n.t('cron.externalUrl')"></h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3" x-text="$store.i18n.t('cron.externalUrlDesc')"></p>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex-1 relative">
+                    <input type="text" readonly :value="externalUrl" 
+                        class="w-full px-3 py-2 pr-20 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-mono overflow-x-auto">
+                    <button @click="copyUrl()" class="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                        <span x-text="$store.i18n.t('cron.copyUrl')"></span>
+                    </button>
+                </div>
+                <button @click="regenerateKey()" class="px-4 py-2 text-sm bg-yellow-500 text-white rounded-xl hover:bg-yellow-600">
+                    <span x-text="$store.i18n.t('cron.regenerateKey')"></span>
+                </button>
+            </div>
+            <p class="mt-2 text-xs text-gray-400">
+                curl -X POST "<span x-text="externalUrl"></span>"
+            </p>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="flex flex-wrap gap-2 mb-6">
+            <button @click="runAllTasks()" :disabled="runningAll" 
+                class="px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 disabled:opacity-50 flex items-center gap-2">
+                <svg x-show="runningAll" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span x-text="runningAll ? $store.i18n.t('cron.running') : $store.i18n.t('cron.runAll')"></span>
+            </button>
+            <button @click="clearOldLogs()" class="px-4 py-2 bg-gray-500 text-white rounded-xl hover:bg-gray-600">
+                <span x-text="$store.i18n.t('cron.clearLogs')"></span>
+            </button>
+        </div>
+
+        <!-- 任务列表 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow mb-6 hover:shadow-lg transition-shadow">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('cron.taskList')"></h3>
+            </div>
+            <div class="hidden lg:block overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.taskName')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.schedule')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.lastRun')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.status')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('common.actions')"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="task in tasks" :key="task.id">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-4 py-3">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('cron.tasks.' + task.id) || task.name"></div>
+                                    <div class="text-xs text-gray-500" x-text="task.id"></div>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400" x-text="task.schedule"></td>
+                                <td class="px-4 py-3">
+                                    <div x-show="task.last_run" class="text-sm text-gray-500 dark:text-gray-400" x-text="task.last_run"></div>
+                                    <div x-show="!task.last_run" class="text-sm text-gray-400">-</div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span x-show="task.last_status === 'success'" class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" x-text="$store.i18n.t('cron.success')"></span>
+                                    <span x-show="task.last_status === 'failed'" class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" x-text="$store.i18n.t('cron.failed')"></span>
+                                    <span x-show="task.last_status === 'running'" class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" x-text="$store.i18n.t('cron.running')"></span>
+                                    <span x-show="!task.last_status" class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300" x-text="$store.i18n.t('cron.pending')"></span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="flex gap-2">
+                                        <button @click="runTask(task.id)" :disabled="runningTasks[task.id]"
+                                            class="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 transition-colors">
+                                            <span x-show="!runningTasks[task.id]" x-text="$store.i18n.t('cron.runNow')"></span>
+                                            <span x-show="runningTasks[task.id]">...</span>
+                                        </button>
+                                        <button @click="viewLogs(task.id)" class="px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600">
+                                            <span x-text="$store.i18n.t('cron.viewLogs')"></span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 执行日志 -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-lg transition-shadow">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('cron.executionLogs')"></h3>
+                <select x-model="logFilter" @change="loadLogs()" class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="">全部任务</option>
+                    <template x-for="task in tasks" :key="task.id">
+                        <option :value="task.id" x-text="$store.i18n.t('cron.tasks.' + task.id) || task.name"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="hidden lg:block overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.taskName')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.executionTime')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.triggeredBy')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.status')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.duration')"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('cron.result')"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-if="logs.length === 0">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('cron.noLogs')"></td>
+                            </tr>
+                        </template>
+                        <template x-for="log in logs" :key="log.id">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white" x-text="$store.i18n.t('cron.tasks.' + log.task_id) || log.task_name"></td>
+                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400" x-text="log.started_at"></td>
+                                <td class="px-4 py-3">
+                                    <span x-show="log.triggered_by === 'scheduler'" class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 transition-colors" x-text="$store.i18n.t('cron.triggerScheduler')"></span>
+                                    <span x-show="log.triggered_by === 'manual'" class="px-2 py-1 text-xs rounded bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" x-text="$store.i18n.t('cron.triggerManual')"></span>
+                                    <span x-show="log.triggered_by === 'external'" class="px-2 py-1 text-xs rounded bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" x-text="$store.i18n.t('cron.triggerExternal')"></span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span x-show="log.status === 'success'" class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" x-text="$store.i18n.t('cron.success')"></span>
+                                    <span x-show="log.status === 'failed'" class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" x-text="$store.i18n.t('cron.failed')"></span>
+                                    <span x-show="log.status === 'running'" class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" x-text="$store.i18n.t('cron.running')"></span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                    <span x-show="log.duration !== null" x-text="log.duration + 's'"></span>
+                                    <span x-show="log.duration === null">-</span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate" :title="log.error_message || log.result">
+                                    <span x-show="log.status === 'failed'" class="text-red-500" x-text="log.error_message"></span>
+                                    <span x-show="log.status !== 'failed'" x-text="log.result || '-'"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <!-- 分页 -->
+            <div x-show="totalPages > 1" class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <div class="text-sm text-gray-500 dark:text-gray-400">
+                    共 <span x-text="totalLogs"></span> 条
+                </div>
+                <div class="flex gap-2">
+                    <button @click="currentPage--; loadLogs()" :disabled="currentPage <= 1" class="px-3 py-1 text-sm border rounded disabled:opacity-50">上一页</button>
+                    <span class="px-3 py-1 text-sm" x-text="currentPage + '/' + totalPages"></span>
+                    <button @click="currentPage++; loadLogs()" :disabled="currentPage >= totalPages" class="px-3 py-1 text-sm border rounded disabled:opacity-50">下一页</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast 提示 -->
+        <div x-show="toast.show" x-transition class="fixed bottom-4 right-4 px-4 py-2 rounded-xl text-white" :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'">
+            <span x-text="toast.message"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+function cronManager() {
+    return {
+        tasks: [],
+        logs: [],
+        externalUrl: '',
+        runningTasks: {},
+        runningAll: false,
+        logFilter: '',
+        currentPage: 1,
+        totalPages: 1,
+        totalLogs: 0,
+        toast: { show: false, message: '', type: 'success' },
+
+        async init() {
+            await this.loadTasks();
+            await this.loadLogs();
+        },
+
+        async loadTasks() {
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/admin/cron/tasks', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.tasks = data.data.tasks;
+                    this.externalUrl = data.data.external_url;
+                }
+            } catch (e) {
+                console.error('Load tasks failed:', e);
+            }
+        },
+
+        async loadLogs() {
+            const token = localStorage.getItem('token');
+            try {
+                let url = `/api/admin/cron/logs?page=${this.currentPage}&per_page=20`;
+                if (this.logFilter) url += `&task_id=${this.logFilter}`;
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.logs = data.data.logs;
+                    this.totalPages = data.data.total_pages;
+                    this.totalLogs = data.data.total;
+                }
+            } catch (e) {
+                console.error('Load logs failed:', e);
+            }
+        },
+
+        async runTask(taskId) {
+            this.runningTasks[taskId] = true;
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`/api/admin/cron/tasks/${taskId}/run`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    // 显示简化的结果：任务名 - 执行完成
+                    this.showToast(data.message, 'success');
+                    await this.loadTasks();
+                    await this.loadLogs();
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast('执行失败', 'error');
+            }
+            this.runningTasks[taskId] = false;
+        },
+
+        async runAllTasks() {
+            this.runningAll = true;
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/admin/cron/run-all', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    // 显示简化的结果
+                    const summary = data.data.summary || [];
+                    const msg = summary.length > 0 ? summary.join('\n') : data.message;
+                    this.showToast(msg, 'success');
+                    await this.loadTasks();
+                    await this.loadLogs();
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast('执行失败', 'error');
+            }
+            this.runningAll = false;
+        },
+
+        viewLogs(taskId) {
+            this.logFilter = taskId;
+            this.currentPage = 1;
+            this.loadLogs();
+        },
+
+        async copyUrl() {
+            try {
+                // 优先使用现代 Clipboard API（需要 HTTPS 或 localhost）
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(this.externalUrl);
+                    this.showToast(Alpine.store('i18n').t('common.copied'), 'success');
+                    return;
+                }
+                
+                // 备用方案：创建临时 textarea 并使用 execCommand
+                const textArea = document.createElement('textarea');
+                textArea.value = this.externalUrl;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-9999px';
+                textArea.style.top = '0';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                if (successful) {
+                    this.showToast(Alpine.store('i18n').t('common.copied'), 'success');
+                } else {
+                    throw new Error('execCommand failed');
+                }
+            } catch (e) {
+                // 最终备用：选中输入框内容供手动复制
+                const input = document.querySelector('input[readonly]');
+                if (input) {
+                    input.select();
+                    input.setSelectionRange(0, 99999); // 移动端兼容
+                    this.showToast('请按 Ctrl+C 复制', 'info');
+                } else {
+                    this.showToast('复制失败', 'error');
+                }
+            }
+        },
+
+        async regenerateKey() {
+            if (!confirm(Alpine.store('i18n').t('cron.regenerateConfirm'))) return;
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/admin/cron/regenerate-key', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.externalUrl = data.data.external_url;
+                    this.showToast(Alpine.store('i18n').t('common.success'), 'success');
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast('操作失败', 'error');
+            }
+        },
+
+        async clearOldLogs() {
+            if (!confirm(Alpine.store('i18n').t('cron.clearLogsConfirm'))) return;
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch('/api/admin/cron/logs/clear', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast(Alpine.store('i18n').t('cron.clearLogsSuccess'), 'success');
+                    await this.loadLogs();
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast('操作失败', 'error');
+            }
+        },
+
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => { this.toast.show = false; }, 3000);
+        }
+    };
+}
+</script>
+{% endblock %}

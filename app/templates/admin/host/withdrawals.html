@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}提现管理 - 管理后台{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="adminWithdrawals()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">提现管理</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm">审核和管理托管商提现申请</p>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs">待审核</p>
+            <p class="text-2xl font-bold text-yellow-600 mt-1" x-text="stats.pending || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs">待打款</p>
+            <p class="text-2xl font-bold text-blue-600 mt-1" x-text="stats.approved || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs">待处理金额</p>
+            <p class="text-2xl font-bold text-orange-600 mt-1" x-text="'¥' + (stats.pending_amount || 0).toFixed(2)"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs">已完成</p>
+            <p class="text-2xl font-bold text-green-600 mt-1" x-text="'¥' + (stats.completed || 0).toFixed(2)"></p>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div class="border-b border-gray-200 dark:border-gray-700 px-4">
+            <nav class="flex -mb-px space-x-6">
+                <button @click="currentStatus = ''; loadWithdrawals()" 
+                    :class="currentStatus === '' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                    class="py-3 border-b-2 font-medium text-sm">全部</button>
+                <button @click="currentStatus = 'pending'; loadWithdrawals()" 
+                    :class="currentStatus === 'pending' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                    class="py-3 border-b-2 font-medium text-sm">待审核</button>
+                <button @click="currentStatus = 'approved'; loadWithdrawals()" 
+                    :class="currentStatus === 'approved' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                    class="py-3 border-b-2 font-medium text-sm">待打款</button>
+                <button @click="currentStatus = 'completed'; loadWithdrawals()" 
+                    :class="currentStatus === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                    class="py-3 border-b-2 font-medium text-sm">已完成</button>
+                <button @click="currentStatus = 'rejected'; loadWithdrawals()" 
+                    :class="currentStatus === 'rejected' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                    class="py-3 border-b-2 font-medium text-sm">已拒绝</button>
+            </nav>
+        </div>
+
+        <!-- List -->
+        <div x-show="loading" class="p-8 text-center">
+            <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <div x-show="!loading && withdrawals.length === 0" x-cloak class="p-8 text-center">
+            <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <p class="text-gray-400">暂无提现记录</p>
+        </div>
+        
+        <div x-show="!loading && withdrawals.length > 0" x-cloak>
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700/50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">托管商</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">金额</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">收款方式</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">状态</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">申请时间</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="w in withdrawals" :key="w.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                            <td class="px-4 py-3">
+                                <p class="font-medium text-gray-900 dark:text-white" x-text="w.host?.username || '-'"></p>
+                                <p class="text-xs text-gray-500" x-text="w.host?.email || ''"></p>
+                            </td>
+                            <td class="px-4 py-3">
+                                <p class="font-bold text-green-600" x-text="'¥' + w.amount.toFixed(2)"></p>
+                            </td>
+                            <td class="px-4 py-3">
+                                <p class="text-gray-900 dark:text-white" x-text="getPaymentMethodText(w.payment_method)"></p>
+                                <p class="text-xs text-gray-500" x-text="w.payment_account"></p>
+                                <p class="text-xs text-gray-400" x-text="w.payment_name"></p>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span :class="{
+                                    'bg-yellow-100 text-yellow-800': w.status === 'pending',
+                                    'bg-blue-100 text-blue-800': w.status === 'approved',
+                                    'bg-red-100 text-red-800': w.status === 'rejected',
+                                    'bg-green-100 text-green-800': w.status === 'completed'
+                                }" class="px-2 py-1 rounded text-xs font-medium" x-text="w.status_text"></span>
+                                <p x-show="w.admin_remark" class="text-xs text-gray-500 mt-1" x-text="w.admin_remark"></p>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500" x-text="w.created_at?.split('T')[0]"></td>
+                            <td class="px-4 py-3 text-right">
+                                <div class="flex items-center justify-end gap-2">
+                                    <button x-show="w.status === 'pending'" @click="openApproveModal(w)"
+                                        class="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">通过</button>
+                                    <button x-show="w.status === 'pending'" @click="openRejectModal(w)"
+                                        class="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">拒绝</button>
+                                    <button x-show="w.status === 'approved'" @click="completeWithdrawal(w.id)"
+                                        class="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">完成打款</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            
+            <!-- Pagination -->
+            <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <p class="text-sm text-gray-500">共 <span x-text="total"></span> 条</p>
+                <div class="flex gap-2">
+                    <button @click="page--; loadWithdrawals()" :disabled="page <= 1"
+                        class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50">上一页</button>
+                    <button @click="page++; loadWithdrawals()" :disabled="page >= pages"
+                        class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Approve Modal -->
+    <div x-show="showApproveModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="showApproveModal = false"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">审核通过</h3>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400">确认通过以下提现申请？</p>
+                    <div class="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="'金额: ¥' + (selectedWithdrawal?.amount || 0).toFixed(2)"></p>
+                        <p class="text-sm text-gray-500 mt-1" x-text="'托管商: ' + (selectedWithdrawal?.host?.username || '-')"></p>
+                        <p class="text-sm text-gray-500" x-text="getPaymentMethodText(selectedWithdrawal?.payment_method) + ': ' + (selectedWithdrawal?.payment_account || '')"></p>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">备注 (可选)</label>
+                    <input type="text" x-model="approveRemark" placeholder="审核备注..."
+                        class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div class="flex gap-3">
+                    <button @click="showApproveModal = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">取消</button>
+                    <button @click="approveWithdrawal" :disabled="processing" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                        <span x-show="!processing">确认通过</span>
+                        <span x-show="processing">处理中...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reject Modal -->
+    <div x-show="showRejectModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black/50" @click="showRejectModal = false"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">拒绝提现</h3>
+                <div class="mb-4">
+                    <p class="text-gray-600 dark:text-gray-400">拒绝后金额将返还到托管商余额</p>
+                    <div class="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="'金额: ¥' + (selectedWithdrawal?.amount || 0).toFixed(2)"></p>
+                        <p class="text-sm text-gray-500 mt-1" x-text="'托管商: ' + (selectedWithdrawal?.host?.username || '-')"></p>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">拒绝原因 <span class="text-red-500">*</span></label>
+                    <textarea x-model="rejectRemark" rows="3" placeholder="请填写拒绝原因..."
+                        class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></textarea>
+                </div>
+                <div class="flex gap-3">
+                    <button @click="showRejectModal = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">取消</button>
+                    <button @click="rejectWithdrawal" :disabled="processing || !rejectRemark" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
+                        <span x-show="!processing">确认拒绝</span>
+                        <span x-show="processing">处理中...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+function adminWithdrawals() {
+    return {
+        loading: true,
+        processing: false,
+        currentStatus: 'pending',
+        withdrawals: [],
+        stats: {},
+        page: 1,
+        total: 0,
+        pages: 1,
+        selectedWithdrawal: null,
+        showApproveModal: false,
+        showRejectModal: false,
+        approveRemark: '',
+        rejectRemark: '',
+        
+        async init() {
+            await Promise.all([this.loadWithdrawals(), this.loadStats()]);
+        },
+        
+        async loadWithdrawals() {
+            this.loading = true;
+            try {
+                let url = `/api/admin/host/withdrawals?page=${this.page}&per_page=20`;
+                if (this.currentStatus) url += `&status=${this.currentStatus}`;
+                
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.withdrawals = data.data.items || [];
+                    this.total = data.data.total || 0;
+                    this.pages = data.data.pages || 1;
+                }
+            } catch (e) {
+                console.error('Load withdrawals failed:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async loadStats() {
+            try {
+                const res = await fetch('/api/admin/host/stats', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.stats = {
+                        pending: data.data.pending_withdrawals || 0,
+                        approved: data.data.approved_withdrawals || 0,
+                        pending_amount: data.data.pending_withdrawal_amount || 0,
+                        completed: data.data.total_withdrawn || 0
+                    };
+                }
+            } catch (e) {
+                console.error('Load stats failed:', e);
+            }
+        },
+        
+        getPaymentMethodText(method) {
+            const methods = { 'alipay': '支付宝', 'wechat': '微信', 'bank': '银行卡' };
+            return methods[method] || method || '-';
+        },
+        
+        openApproveModal(w) {
+            this.selectedWithdrawal = w;
+            this.approveRemark = '';
+            this.showApproveModal = true;
+        },
+        
+        openRejectModal(w) {
+            this.selectedWithdrawal = w;
+            this.rejectRemark = '';
+            this.showRejectModal = true;
+        },
+        
+        async approveWithdrawal() {
+            if (!this.selectedWithdrawal) return;
+            this.processing = true;
+            try {
+                const res = await fetch(`/api/admin/host/withdrawals/${this.selectedWithdrawal.id}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify({ remark: this.approveRemark })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    Alpine.store('toast').show('审核通过', 'success');
+                    this.showApproveModal = false;
+                    await this.loadWithdrawals();
+                    await this.loadStats();
+                } else {
+                    Alpine.store('toast').show(data.message || '操作失败', 'error');
+                }
+            } catch (e) {
+                Alpine.store('toast').show('网络错误', 'error');
+            } finally {
+                this.processing = false;
+            }
+        },
+        
+        async rejectWithdrawal() {
+            if (!this.selectedWithdrawal || !this.rejectRemark) return;
+            this.processing = true;
+            try {
+                const res = await fetch(`/api/admin/host/withdrawals/${this.selectedWithdrawal.id}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify({ remark: this.rejectRemark })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    Alpine.store('toast').show('已拒绝，金额已返还', 'success');
+                    this.showRejectModal = false;
+                    await this.loadWithdrawals();
+                    await this.loadStats();
+                } else {
+                    Alpine.store('toast').show(data.message || '操作失败', 'error');
+                }
+            } catch (e) {
+                Alpine.store('toast').show('网络错误', 'error');
+            } finally {
+                this.processing = false;
+            }
+        },
+        
+        async completeWithdrawal(id) {
+            if (!confirm('确认已完成打款？')) return;
+            try {
+                const res = await fetch(`/api/admin/host/withdrawals/${id}/complete`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    Alpine.store('toast').show('已标记为完成', 'success');
+                    await this.loadWithdrawals();
+                    await this.loadStats();
+                } else {
+                    Alpine.store('toast').show(data.message || '操作失败', 'error');
+                }
+            } catch (e) {
+                Alpine.store('toast').show('网络错误', 'error');
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

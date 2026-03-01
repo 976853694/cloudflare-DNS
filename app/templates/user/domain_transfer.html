@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block title %}域名转移 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="domainTransfer()" x-init="init()">
+    <!-- 返回按钮 -->
+    <div class="mb-4">
+        <a :href="'/user/domains/' + subdomainId" class="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white text-sm">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            <span x-text="$store.i18n.t('common.back')"></span>
+        </a>
+    </div>
+
+    <!-- 标题 -->
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.t('transfer.title')"></h1>
+
+    <!-- 加载中 -->
+    <template x-if="loading">
+        <div class="flex justify-center py-12">
+            <div class="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-blue-500 rounded-full animate-spin"></div>
+        </div>
+    </template>
+
+    <!-- 主内容 -->
+    <template x-if="!loading && subdomain">
+        <div class="max-w-2xl">
+            <!-- 域名信息卡片 -->
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 mb-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('transfer.domainInfo')"></h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('domain.fullDomain')"></span>
+                        <span class="font-medium text-gray-900 dark:text-white" x-text="subdomain.full_name"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('domain.expireTime')"></span>
+                        <span class="font-medium text-gray-900 dark:text-white" x-text="subdomain.expires_at ? subdomain.expires_at.split('T')[0] : $store.i18n.t('common.permanent')"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 转移表单 -->
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                <!-- 步骤1：填写信息 -->
+                <template x-if="step === 1">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('transfer.step1Title')"></h2>
+                        
+                        <!-- 目标用户名 -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('transfer.toUsername')"></label>
+                            <input type="text" x-model="toUsername" 
+                                :placeholder="$store.i18n.t('transfer.toUsernamePlaceholder')"
+                                class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+
+                        <!-- 备注 -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('transfer.remark')"></label>
+                            <input type="text" x-model="remark" 
+                                :placeholder="$store.i18n.t('transfer.remarkPlaceholder')"
+                                class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        </div>
+
+                        <!-- 费用信息 -->
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
+                            <div class="flex justify-between mb-2">
+                                <span class="text-gray-600 dark:text-gray-400" x-text="$store.i18n.t('transfer.fee')"></span>
+                                <span class="font-medium text-gray-900 dark:text-white"><span x-text="config.fee"></span> <span x-text="$store.i18n.t('transfer.points')"></span></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400" x-text="$store.i18n.t('transfer.currentPoints')"></span>
+                                <span class="font-medium" :class="userPoints >= config.fee ? 'text-green-600' : 'text-red-600'" x-text="userPoints + ' ' + $store.i18n.t('transfer.points')"></span>
+                            </div>
+                        </div>
+
+                        <!-- 提交按钮 -->
+                        <button @click="initiateTransfer()" :disabled="submitting || !toUsername.trim()"
+                            class="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition">
+                            <span x-show="!submitting" x-text="$store.i18n.t('transfer.sendCode')"></span>
+                            <span x-show="submitting" x-text="$store.i18n.t('common.loading')"></span>
+                        </button>
+                    </div>
+                </template>
+
+                <!-- 步骤2：验证码确认 -->
+                <template x-if="step === 2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('transfer.step2Title')"></h2>
+                        
+                        <p class="text-gray-600 dark:text-gray-400 mb-4" x-text="$store.i18n.t('transfer.codeSentHint')"></p>
+
+                        <!-- 验证码输入 -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('transfer.verifyCode')"></label>
+                            <input type="text" x-model="verifyCode" maxlength="6"
+                                :placeholder="$store.i18n.t('transfer.verifyCodePlaceholder')"
+                                class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-2xl tracking-widest">
+                        </div>
+
+                        <!-- 倒计时 -->
+                        <div class="text-center text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            <span x-text="$store.i18n.t('transfer.codeExpireIn')"></span>
+                            <span class="font-medium text-blue-600" x-text="formatTime(expiresIn)"></span>
+                        </div>
+
+                        <!-- 重发验证码 -->
+                        <div class="text-center mb-6">
+                            <button @click="resendCode()" :disabled="resendCooldown > 0 || submitting"
+                                class="text-blue-600 hover:text-blue-800 disabled:text-gray-400 text-sm">
+                                <span x-show="resendCooldown <= 0" x-text="$store.i18n.t('transfer.resendCode')"></span>
+                                <span x-show="resendCooldown > 0" x-text="$store.i18n.t('transfer.resendIn') + ' ' + resendCooldown + 's'"></span>
+                            </button>
+                        </div>
+
+                        <!-- 按钮组 -->
+                        <div class="flex space-x-4">
+                            <button @click="cancelTransfer()" :disabled="submitting"
+                                class="flex-1 py-3 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition">
+                                <span x-text="$store.i18n.t('transfer.cancelTransfer')"></span>
+                            </button>
+                            <button @click="verifyTransfer()" :disabled="submitting || verifyCode.length !== 6"
+                                class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition">
+                                <span x-show="!submitting" x-text="$store.i18n.t('transfer.confirmTransfer')"></span>
+                                <span x-show="submitting" x-text="$store.i18n.t('common.loading')"></span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 步骤3：转移成功 -->
+                <template x-if="step === 3">
+                    <div class="text-center py-8">
+                        <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('transfer.success')"></h2>
+                        <p class="text-gray-600 dark:text-gray-400 mb-6" x-text="$store.i18n.t('transfer.successHint')"></p>
+                        <a href="/user/domains" class="inline-block px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition" x-text="$store.i18n.t('transfer.backToList')"></a>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <!-- 错误提示 -->
+    <template x-if="!loading && !subdomain">
+        <div class="text-center py-12">
+            <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('transfer.domainNotFound')"></p>
+        </div>
+    </template>
+</div>
+
+<script>
+function domainTransfer() {
+    return {
+        subdomainId: null,
+        subdomain: null,
+        config: { enabled: false, fee: 0, cooldown: 24, daily_limit: 5, verify_expire: 10 },
+        userPoints: 0,
+        loading: true,
+        submitting: false,
+        step: 1,
+        toUsername: '',
+        remark: '',
+        verifyCode: '',
+        transferId: null,
+        expiresIn: 0,
+        resendCooldown: 0,
+        expiryTimer: null,
+        resendTimer: null,
+
+        async init() {
+            // 从 URL 获取 subdomain_id
+            const path = window.location.pathname;
+            const match = path.match(/\/user\/domain\/(\d+)\/transfer/);
+            if (match) {
+                this.subdomainId = parseInt(match[1]);
+            }
+
+            await this.loadData();
+        },
+
+        async loadData() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            try {
+                // 并行加载数据
+                const [configRes, domainRes, pointsRes] = await Promise.all([
+                    fetch('/api/domain/transfer/config', { headers: { 'Authorization': 'Bearer ' + token } }),
+                    fetch(`/api/subdomains/${this.subdomainId}`, { headers: { 'Authorization': 'Bearer ' + token } }),
+                    fetch('/api/points', { headers: { 'Authorization': 'Bearer ' + token } })
+                ]);
+
+                const configData = await configRes.json();
+                const domainData = await domainRes.json();
+                const pointsData = await pointsRes.json();
+
+                if (configData.code === 200) {
+                    this.config = configData.data;
+                }
+
+                if (domainData.code === 200) {
+                    this.subdomain = domainData.data.subdomain;
+                }
+
+                if (pointsData.code === 200) {
+                    this.userPoints = pointsData.data.points || 0;
+                }
+            } catch (e) {
+                console.error('Load data failed:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async initiateTransfer() {
+            if (!this.toUsername.trim()) return;
+            
+            this.submitting = true;
+            const token = localStorage.getItem('token');
+
+            try {
+                const res = await fetch('/api/domain/transfer/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        subdomain_id: this.subdomainId,
+                        to_username: this.toUsername.trim(),
+                        remark: this.remark.trim() || null
+                    })
+                });
+
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.transferId = data.data.transfer_id;
+                    this.expiresIn = data.data.expires_in;
+                    this.step = 2;
+                    this.startExpiryTimer();
+                    this.resendCooldown = 60;
+                    this.startResendTimer();
+                } else {
+                    alert(data.message || '发起转移失败');
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                this.submitting = false;
+            }
+        },
+
+        async verifyTransfer() {
+            if (this.verifyCode.length !== 6) return;
+
+            this.submitting = true;
+            const token = localStorage.getItem('token');
+
+            try {
+                const res = await fetch('/api/domain/transfer/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        transfer_id: this.transferId,
+                        verify_code: this.verifyCode
+                    })
+                });
+
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.step = 3;
+                    this.clearTimers();
+                } else {
+                    alert(data.message || '验证失败');
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                this.submitting = false;
+            }
+        },
+
+        async cancelTransfer() {
+            if (!confirm(this.$store.i18n.t('transfer.confirmCancel'))) return;
+
+            this.submitting = true;
+            const token = localStorage.getItem('token');
+
+            try {
+                const res = await fetch('/api/domain/transfer/cancel', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ transfer_id: this.transferId })
+                });
+
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.step = 1;
+                    this.verifyCode = '';
+                    this.transferId = null;
+                    this.clearTimers();
+                } else {
+                    alert(data.message || '取消失败');
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                this.submitting = false;
+            }
+        },
+
+        async resendCode() {
+            if (this.resendCooldown > 0) return;
+
+            this.submitting = true;
+            const token = localStorage.getItem('token');
+
+            try {
+                const res = await fetch('/api/domain/transfer/resend', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ transfer_id: this.transferId })
+                });
+
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.expiresIn = data.data.expires_in;
+                    this.resendCooldown = 60;
+                    this.startResendTimer();
+                    alert(this.$store.i18n.t('transfer.codeResent'));
+                } else {
+                    alert(data.message || '重发失败');
+                }
+            } catch (e) {
+                alert('网络错误');
+            } finally {
+                this.submitting = false;
+            }
+        },
+
+        startExpiryTimer() {
+            this.clearTimers();
+            this.expiryTimer = setInterval(() => {
+                if (this.expiresIn > 0) {
+                    this.expiresIn--;
+                } else {
+                    clearInterval(this.expiryTimer);
+                }
+            }, 1000);
+        },
+
+        startResendTimer() {
+            if (this.resendTimer) clearInterval(this.resendTimer);
+            this.resendTimer = setInterval(() => {
+                if (this.resendCooldown > 0) {
+                    this.resendCooldown--;
+                } else {
+                    clearInterval(this.resendTimer);
+                }
+            }, 1000);
+        },
+
+        clearTimers() {
+            if (this.expiryTimer) clearInterval(this.expiryTimer);
+            if (this.resendTimer) clearInterval(this.resendTimer);
+        },
+
+        formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m}:${s.toString().padStart(2, '0')}`;
+        }
+    };
+}
+</script>
+{% endblock %}

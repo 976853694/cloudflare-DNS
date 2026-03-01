@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="userDomains()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                </svg>
+                <span x-text="$store.i18n.t('nav.myDomains')"></span>
+            </h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm" x-text="$store.i18n.locale === 'zh' ? '管理您的所有域名和DNS记录' : 'Manage all your domains and DNS records'"></p>
+        </div>
+        <a href="/user/domains/new" class="group bg-gradient-to-br from-blue-500 to-blue-600 text-white px-6 py-3 rounded-xl text-sm font-medium hover:from-blue-600 hover:to-blue-700 hover:shadow-xl hover:scale-105 transition-all duration-200 text-center flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            <span x-text="$store.i18n.locale === 'zh' ? '申请域名' : 'Apply Domain'"></span>
+            <svg class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+            </svg>
+        </a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm">
+        <div x-show="loading" class="p-10 text-center">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <div x-show="!loading && subdomains.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+            </svg>
+            <p class="text-lg font-medium mb-2" x-text="$store.i18n.t('domain.noDomains')"></p>
+            <a href="/user/domains/new" class="mt-4 inline-block px-6 py-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 hover:shadow-lg transition-all" x-text="$store.i18n.t('domain.applyNow')"></a>
+        </div>
+        <div x-show="!loading && subdomains.length > 0" class="divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="sub in subdomains" :key="sub.id">
+                <div class="group relative p-5 hover:bg-gradient-to-r hover:from-blue-50 hover:to-transparent dark:hover:from-blue-900/10 border-l-4 transition-all duration-200 cursor-pointer"
+                     :class="sub.is_expired ? 'border-red-500' : (sub.days_remaining && sub.days_remaining <= 7 ? 'border-orange-500' : (!sub.expires_at ? 'border-purple-500' : 'border-transparent hover:border-blue-500'))">
+                    <div class="flex items-center gap-4">
+                        <!-- 域名图标 -->
+                        <div class="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"
+                             :class="sub.is_expired ? 'bg-red-100 dark:bg-red-900/30' : (sub.days_remaining && sub.days_remaining <= 7 ? 'bg-orange-100 dark:bg-orange-900/30' : (!sub.expires_at ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'))">
+                            <svg class="w-6 h-6" :class="sub.is_expired ? 'text-red-600' : (sub.days_remaining && sub.days_remaining <= 7 ? 'text-orange-600' : 'text-white')" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                            </svg>
+                        </div>
+                        
+                        <!-- 域名信息 -->
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate mb-1" x-text="sub.name + '.' + sub.domain.name"></h3>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <span class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <span x-text="sub.records_count + ($store.i18n.locale === 'zh' ? ' 条记录' : ' records')"></span>
+                                </span>
+                                <template x-if="sub.expires_at">
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full" :class="sub.is_expired ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : (sub.days_remaining <= 7 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400' : 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400')">
+                                        <span x-show="sub.is_expired" x-text="$store.i18n.locale === 'zh' ? '已过期' : 'Expired'"></span>
+                                        <span x-show="!sub.is_expired" x-text="sub.days_remaining + ($store.i18n.locale === 'zh' ? '天后到期' : ' days left')"></span>
+                                    </span>
+                                </template>
+                                <template x-if="!sub.expires_at">
+                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" x-text="$store.i18n.t('plan.forever')"></span>
+                                </template>
+                            </div>
+                        </div>
+                        
+                        <!-- 操作按钮 -->
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <a :href="'/user/domains/' + sub.id" 
+                               class="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors text-sm font-medium flex items-center gap-1.5"
+                               title="管理域名">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                </svg>
+                                <span x-text="$store.i18n.locale === 'zh' ? '管理' : 'Manage'"></span>
+                            </a>
+                            <button @click="confirmDelete(sub)" 
+                                    class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    :title="$store.i18n.t('common.delete')">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- 2FA验证弹窗 -->
+    <div x-show="show2faModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="show2faModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-sm mx-4 p-6">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('auth.twoFactorCode')"></h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4" x-text="$store.i18n.t('auth.twoFactorHint')"></p>
+            <input type="text" x-model="totp2faCode" maxlength="9" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-center text-xl font-mono tracking-widest mb-4" placeholder="000000">
+            <div class="flex space-x-3">
+                <button @click="show2faModal = false; totp2faCode = ''" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.t('common.cancel')"></button>
+                <button @click="doDeleteWith2fa()" class="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700" x-text="$store.i18n.locale === 'zh' ? '确认删除' : 'Confirm Delete'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function userDomains() {
+    return {
+        subdomains: [],
+        loading: true,
+        show2faModal: false,
+        totp2faCode: '',
+        pendingDeleteSub: null,
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.load();
+        },
+        async load() {
+            this.loading = true;
+            const res = await fetch('/api/subdomains', {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.subdomains = data.data.subdomains;
+            }
+            this.loading = false;
+        },
+        async confirmDelete(sub) {
+            if (!confirm(`确定删除 ${sub.name}.${sub.domain.name}？所有DNS记录将被删除！`)) return;
+            this.pendingDeleteSub = sub;
+            await this.doDelete();
+        },
+        async doDelete(totpCode = '') {
+            let url = `/api/subdomains/${this.pendingDeleteSub.id}`;
+            if (totpCode) url += `?totp_code=${encodeURIComponent(totpCode)}`;
+            const res = await fetch(url, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.show2faModal = false;
+                await this.load();
+            } else if (data.require_2fa) {
+                if (totpCode) {
+                    alert(data.message || '验证码错误，请重新输入');
+                } else {
+                    this.show2faModal = true;
+                }
+            } else {
+                this.show2faModal = false;
+                alert(data.message || '删除失败');
+            }
+        },
+        async doDeleteWith2fa() {
+            if (!this.totp2faCode || (this.totp2faCode.length < 6 && this.totp2faCode.length !== 9)) {
+                alert('请输入6位验证码');
+                return;
+            }
+            await this.doDelete(this.totp2faCode);
+            this.totp2faCode = '';
+        }
+    }
+}
+</script>
+{% endblock %}

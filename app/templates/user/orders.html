@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="ordersPage()" x-init="init()">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.t('nav.orderHistory')"></h1>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <div x-show="!loading && records.length > 0" class="divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="record in records" :key="record.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <p class="font-mono text-gray-900 dark:text-white font-medium" x-text="record.subdomain_name"></p>
+                            <div class="flex items-center space-x-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                <span x-text="record.plan_name"></span>
+                                <span>·</span>
+                                <span :class="{'text-purple-600': record.duration_days === -1}" x-text="record.duration_text"></span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-medium" :class="record.price == 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'" x-text="record.price_text"></p>
+                            <p class="text-xs text-gray-400 mt-1" x-text="new Date(record.created_at).toLocaleString()"></p>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        
+        <div x-show="!loading && records.length === 0" class="p-10 text-center">
+            <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+            <p class="text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无购买记录' : 'No purchase records'"></p>
+            <a href="/user/domains/new" class="inline-block mt-4 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-800 dark:hover:bg-gray-600" x-text="$store.i18n.t('nav.buyDomain')"></a>
+        </div>
+        
+        <div x-show="!loading && pagination.pages > 1" class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+            <span class="text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '共' : 'Total'"></span> <span x-text="pagination.total"></span> <span x-text="$store.i18n.locale === 'zh' ? '条' : ''"></span></span>
+            <div class="flex items-center space-x-2">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border dark:border-gray-600 rounded text-sm disabled:opacity-50 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <span class="text-sm text-gray-600 dark:text-gray-400" x-text="page + '/' + pagination.pages"></span>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border dark:border-gray-600 rounded text-sm disabled:opacity-50 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function ordersPage() {
+    return {
+        records: [], loading: true, page: 1,
+        pagination: { pages: 1, total: 0 },
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadRecords();
+        },
+        async loadRecords() {
+            this.loading = true;
+            const res = await fetch(`/api/purchase-records?page=${this.page}&per_page=20`, { 
+                headers: { 'Authorization': 'Bearer ' + this.token } 
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.records = data.data.records;
+                this.pagination = data.data.pagination;
+            }
+            this.loading = false;
+        },
+        async goPage(newPage) {
+            if (newPage < 1 || newPage > this.pagination.pages || newPage === this.page) return;
+            this.page = newPage;
+            await this.loadRecords();
+        }
+    }
+}
+</script>
+{% endblock %}

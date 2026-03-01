@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}免费套餐申请审核 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="hostApplicationsPage()" x-init="init()">
+    <!-- 页面标题 -->
+    <div class="mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('host.freePlanApplications.title')"></h1>
+        <p class="text-sm text-gray-600 dark:text-gray-400" x-text="$store.i18n.t('host.freePlanApplications.description')"></p>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <p class="text-sm text-gray-600 dark:text-gray-400" x-text="$store.i18n.t('host.freePlanApplications.stats.total')"></p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="stats.total"></p>
+        </div>
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+            <p class="text-sm text-yellow-700 dark:text-yellow-400" x-text="$store.i18n.t('host.freePlanApplications.stats.pending')"></p>
+            <p class="text-2xl font-bold text-yellow-900 dark:text-yellow-300" x-text="stats.pending"></p>
+        </div>
+        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <p class="text-sm text-green-700 dark:text-green-400" x-text="$store.i18n.t('host.freePlanApplications.stats.approved')"></p>
+            <p class="text-2xl font-bold text-green-900 dark:text-green-300" x-text="stats.approved"></p>
+        </div>
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p class="text-sm text-red-700 dark:text-red-400" x-text="$store.i18n.t('host.freePlanApplications.stats.rejected')"></p>
+            <p class="text-2xl font-bold text-red-900 dark:text-red-300" x-text="stats.rejected"></p>
+        </div>
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <p class="text-sm text-blue-700 dark:text-blue-400" x-text="$store.i18n.t('host.freePlanApplications.stats.used')"></p>
+            <p class="text-2xl font-bold text-blue-900 dark:text-blue-300" x-text="stats.used"></p>
+        </div>
+    </div>
+
+    <!-- 标签页 -->
+    <div class="mb-6 border-b border-gray-200 dark:border-gray-700">
+        <nav class="flex space-x-4">
+            <button @click="statusFilter = ''; loadApplications()" 
+                    :class="statusFilter === '' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                    class="py-2 px-1 border-b-2 font-medium text-sm" x-text="$store.i18n.t('host.freePlanApplications.tabs.all')"></button>
+            <button @click="statusFilter = 'pending'; loadApplications()" 
+                    :class="statusFilter === 'pending' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                    class="py-2 px-1 border-b-2 font-medium text-sm" x-text="$store.i18n.t('host.freePlanApplications.tabs.pending')"></button>
+            <button @click="statusFilter = 'approved'; loadApplications()" 
+                    :class="statusFilter === 'approved' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                    class="py-2 px-1 border-b-2 font-medium text-sm" x-text="$store.i18n.t('host.freePlanApplications.tabs.approved')"></button>
+            <button @click="statusFilter = 'rejected'; loadApplications()" 
+                    :class="statusFilter === 'rejected' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'"
+                    class="py-2 px-1 border-b-2 font-medium text-sm" x-text="$store.i18n.t('host.freePlanApplications.tabs.rejected')"></button>
+        </nav>
+    </div>
+
+    <!-- 加载中 -->
+    <div x-show="loading" class="flex justify-center py-20">
+        <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+    </div>
+
+    <!-- 申请列表 -->
+    <div x-show="!loading" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <!-- 桌面端表格 -->
+        <table class="w-full hidden lg:table">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.id')"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.user')"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.plan')"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.domainPrefix')"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.myReview')"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.adminReview')"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.status')"></th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('host.freePlanApplications.table.actions')"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="app in applications" :key="app.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-4 py-4 text-sm text-gray-900 dark:text-white" x-text="app.id"></td>
+                        <td class="px-4 py-4">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white" x-text="app.user?.username"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="app.user?.email"></p>
+                            </div>
+                        </td>
+                        <td class="px-4 py-4 text-gray-900 dark:text-white" x-text="app.plan?.name"></td>
+                        <td class="px-4 py-4">
+                            <span class="text-gray-900 dark:text-white" x-text="app.subdomain_name"></span>
+                            <span class="text-gray-500 dark:text-gray-400">.</span>
+                            <span class="text-gray-500 dark:text-gray-400" x-text="app.domain?.name"></span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span :class="getReviewStatusClass(app.host_review_status)" class="px-2 py-1 rounded text-xs" x-text="getReviewStatusText(app.host_review_status)"></span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span :class="getReviewStatusClass(app.admin_review_status)" class="px-2 py-1 rounded text-xs" x-text="getReviewStatusText(app.admin_review_status)"></span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <span :class="getStatusClass(app.status)" class="px-2 py-1 rounded text-xs" x-text="app.status_text"></span>
+                        </td>
+                        <td class="px-4 py-4">
+                            <button @click="viewDetail(app.id)" class="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.t('host.freePlanApplications.viewDetail')"></button>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="applications.length === 0">
+                    <td colspan="8" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.t('host.freePlanApplications.noRecords')"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 移动端卡片 -->
+        <div class="lg:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="app in applications" :key="app.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <div>
+                            <p class="font-medium text-gray-900 dark:text-white" x-text="app.user?.username"></p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400" x-text="app.plan?.name"></p>
+                        </div>
+                        <span :class="getStatusClass(app.status)" class="px-2 py-1 rounded text-xs" x-text="app.status_text"></span>
+                    </div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        <span x-text="app.subdomain_name"></span>.<span x-text="app.domain?.name"></span>
+                    </p>
+                    <div class="flex items-center gap-2 mb-3 text-xs">
+                        <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('host.freePlanApplications.table.myReview') + ':'"></span>
+                        <span :class="getReviewStatusClass(app.host_review_status)" class="px-2 py-0.5 rounded" x-text="getReviewStatusText(app.host_review_status)"></span>
+                    </div>
+                    <button @click="viewDetail(app.id)" class="text-blue-500 dark:text-blue-400 text-sm" x-text="$store.i18n.t('host.freePlanApplications.viewDetail')"></button>
+                </div>
+            </template>
+            <div x-show="applications.length === 0" class="p-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.t('host.freePlanApplications.noRecords')"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function hostApplicationsPage() {
+    return {
+        applications: [],
+        stats: { total: 0, pending: 0, approved: 0, rejected: 0, used: 0 },
+        loading: true,
+        statusFilter: '',
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await this.loadApplications();
+        },
+        
+        async loadApplications() {
+            this.loading = true;
+            try {
+                let url = '/api/host/free-plan-applications?';
+                if (this.statusFilter) url += 'host_review_status=' + this.statusFilter;
+                
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.applications = data.data.applications;
+                    this.stats = data.data.stats;
+                }
+            } catch (e) {
+                console.error('加载失败:', e);
+            }
+            this.loading = false;
+        },
+        
+        viewDetail(id) {
+            window.location.href = `/host/free-plan-applications/${id}`;
+        },
+        
+        getReviewStatusText(status) {
+            const key = `host.freePlanApplications.reviewStatus.${status || 'pending'}`;
+            return Alpine.store('i18n').t(key);
+        },
+        
+        getReviewStatusClass(status) {
+            const classes = {
+                'pending': 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                'approved': 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                'rejected': 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'
+            };
+            return classes[status] || classes['pending'];
+        },
+        
+        getStatusClass(status) {
+            const classes = {
+                'pending': 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                'approved': 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                'rejected': 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                'cancelled': 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
+                'used': 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+            };
+            return classes[status] || '';
+        }
+    }
+}
+</script>
+{% endblock %}

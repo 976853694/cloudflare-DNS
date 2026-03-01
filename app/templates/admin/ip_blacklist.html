@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}IP黑名单 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="ipBlacklist()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? 'IP黑名单' : 'IP Blacklist'"></h1>
+        <button @click="showAddModal = true" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 text-sm" x-text="$store.i18n.locale === 'zh' ? '添加IP' : 'Add IP'"></button>
+    </div>
+
+    <!-- 搜索 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-6 hover:shadow-lg transition-shadow">
+        <div class="flex gap-3">
+            <input type="text" x-model="search" @input.debounce.300ms="loadList()" :placeholder="$store.i18n.locale === 'zh' ? '搜索IP地址...' : 'Search IP address...'" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+        </div>
+    </div>
+
+    <!-- 列表 -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div class="hidden lg:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? 'IP地址' : 'IP Address'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '封禁原因' : 'Reason'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '到期时间' : 'Expires'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '添加时间' : 'Created'"></th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="item in list" :key="item.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3 font-mono text-sm text-gray-900 dark:text-white" x-text="item.ip_address"></td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300" x-text="item.reason || '-'"></td>
+                            <td class="px-4 py-3 text-sm">
+                                <span x-show="item.is_permanent" class="text-purple-600 dark:text-purple-400" x-text="$store.i18n.locale === 'zh' ? '永久' : 'Permanent'"></span>
+                                <span x-show="!item.is_permanent" class="text-gray-600 dark:text-gray-300" x-text="item.expires_at ? item.expires_at.slice(0,16).replace('T',' ') : '-'"></span>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400" x-text="item.created_at ? item.created_at.slice(0,16).replace('T',' ') : '-'"></td>
+                            <td class="px-4 py-3 text-right">
+                                <button @click="remove(item)" class="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '解封' : 'Unban'"></button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="list.length === 0">
+                        <td colspan="5" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无数据' : 'No data'"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- 分页 -->
+        <div x-show="pagination.pages > 1" class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <p class="text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '共 ' : 'Total '"></span><span x-text="pagination.total"></span><span x-text="$store.i18n.locale === 'zh' ? ' 条' : ' items'"></span></p>
+            <div class="flex gap-1">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加弹窗 -->
+    <div x-show="showAddModal" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showAddModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-md p-6 hover:shadow-lg transition-shadow">
+            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '添加IP到黑名单' : 'Add IP to Blacklist'"></h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? 'IP地址' : 'IP Address'"></label>
+                    <input type="text" x-model="form.ip_address" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="192.168.1.1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '封禁原因' : 'Reason'"></label>
+                    <input type="text" x-model="form.reason" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '可选' : 'Optional'">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '封禁时长' : 'Duration'"></label>
+                    <select x-model="form.duration_days" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-blue-400 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="" x-text="$store.i18n.locale === 'zh' ? '永久' : 'Permanent'"></option>
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '1天' : '1 Day'"></option>
+                        <option value="7" x-text="$store.i18n.locale === 'zh' ? '7天' : '7 Days'"></option>
+                        <option value="30" x-text="$store.i18n.locale === 'zh' ? '30天' : '30 Days'"></option>
+                        <option value="90" x-text="$store.i18n.locale === 'zh' ? '90天' : '90 Days'"></option>
+                        <option value="365" x-text="$store.i18n.locale === 'zh' ? '1年' : '1 Year'"></option>
+                    </select>
+                </div>
+            </div>
+            <div x-show="error" class="mt-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="error"></div>
+            <div class="flex gap-3 mt-6">
+                <button @click="showAddModal = false" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="add()" :disabled="submitting" class="flex-1 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!submitting" x-text="$store.i18n.locale === 'zh' ? '确定' : 'Confirm'"></span>
+                    <span x-show="submitting" x-text="$store.i18n.locale === 'zh' ? '提交中...' : 'Submitting...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function ipBlacklist() {
+    return {
+        list: [], pagination: {}, page: 1, search: '',
+        showAddModal: false, submitting: false, error: '',
+        form: { ip_address: '', reason: '', duration_days: '' },
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            this.loadList();
+        },
+        async loadList() {
+            const params = new URLSearchParams({ page: this.page, per_page: 20 });
+            if (this.search) params.append('search', this.search);
+            const res = await fetch('/api/admin/ip-blacklist?' + params, {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.list = data.data.items;
+                this.pagination = data.data.pagination;
+            }
+        },
+        async add() {
+            this.error = '';
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            if (!this.form.ip_address.trim()) { this.error = isZh ? '请输入IP地址' : 'Please enter IP address'; return; }
+            this.submitting = true;
+            const res = await fetch('/api/admin/ip-blacklist', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ip_address: this.form.ip_address.trim(),
+                    reason: this.form.reason.trim(),
+                    duration_days: this.form.duration_days ? parseInt(this.form.duration_days) : null
+                })
+            });
+            const data = await res.json();
+            if (data.code === 201) {
+                this.showAddModal = false;
+                this.form = { ip_address: '', reason: '', duration_days: '' };
+                this.loadList();
+            } else {
+                this.error = data.message;
+            }
+            this.submitting = false;
+        },
+        async remove(item) {
+            const isZh = Alpine.store('i18n').locale === 'zh';
+            const msg = isZh ? `确定解除对 ${item.ip_address} 的封禁吗？` : `Are you sure to unban ${item.ip_address}?`;
+            if (!confirm(msg)) return;
+            const res = await fetch(`/api/admin/ip-blacklist/${item.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.loadList();
+            } else {
+                alert(data.message);
+            }
+        },
+        async goPage(newPage) {
+            if (newPage < 1 || newPage > this.pagination.pages || newPage === this.page) return;
+            this.page = newPage;
+            await this.loadList();
+        }
+    }
+}
+</script>
+{% endblock %}

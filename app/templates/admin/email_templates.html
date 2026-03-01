@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}邮件模板管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+{% block content %}
+<div class="p-4 sm:p-6" x-data="emailTemplatesApp()" x-init="load()">
+    <!-- 页面标题 -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '邮件模板管理' : 'Email Templates'"></h1>
+    </div>
+
+    <!-- 模板列表 -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow">
+        <div class="hidden lg:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '模板名称' : 'Template Name'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '模板代码' : 'Template Code'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '邮件主题' : 'Subject'"></th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <template x-for="item in templates" :key="item.code">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="font-medium text-gray-900 dark:text-white" x-text="item.name"></span>
+                                <span x-show="item.is_default" class="ml-2 text-xs text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '(默认)' : '(default)'"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <code class="text-sm bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-300 px-2 py-1 rounded" x-text="item.code"></code>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="text-sm text-gray-600 dark:text-gray-300 truncate block max-w-xs" x-text="item.subject"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span x-show="item.status === 1" class="px-2 py-1 text-xs rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></span>
+                                <span x-show="item.status === 0" class="px-2 py-1 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <button @click="editTemplate(item)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm mr-3" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                <button @click="testTemplate(item.code)" class="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-sm mr-3" x-text="$store.i18n.locale === 'zh' ? '测试' : 'Test'"></button>
+                                <button x-show="!item.is_default" @click="resetTemplate(item.code)" class="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '重置' : 'Reset'"></button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 编辑弹窗 -->
+    <div x-show="showEditModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showEditModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden flex flex-col hover:shadow-lg transition-shadow">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white"><span x-text="$store.i18n.locale === 'zh' ? '编辑邮件模板 - ' : 'Edit Email Template - '"></span><span x-text="editingTemplate?.name"></span></h3>
+                <button @click="showEditModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <!-- 可用变量 -->
+                <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-xl transition-colors">
+                    <p class="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2"><span x-text="$store.i18n.locale === 'zh' ? '可用变量（使用 ' : 'Available variables (use '"></span><code class="bg-blue-100 dark:bg-blue-800 px-1 rounded transition-colors">{<!-- -->{variable}}</code><span x-text="$store.i18n.locale === 'zh' ? ' 格式）：' : ' format):'"></span></p>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="(desc, key) in editingTemplate?.variables || {}" :key="key">
+                            <span class="text-xs bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-1 rounded transition-colors">
+                                <code x-text="'{{' + key + '}}'"></code> - <span x-text="desc"></span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 邮件主题 -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '邮件主题' : 'Email Subject'"></label>
+                    <input type="text" x-model="editForm.subject" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+
+                <!-- 邮件内容 -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '邮件内容 (HTML)' : 'Email Content (HTML)'"></label>
+                    <textarea x-model="editForm.content" rows="12" class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></textarea>
+                </div>
+
+                <!-- 状态 -->
+                <div class="mb-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" x-model="editForm.status" :true-value="1" :false-value="0" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                        <span class="text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '启用此模板' : 'Enable this template'"></span>
+                    </label>
+                </div>
+
+            </div>
+            <div class="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 flex justify-end">
+                <div class="flex gap-3">
+                    <button @click="showEditModal = false" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                    <button @click="saveTemplate" :disabled="saving" class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                        <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                        <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function emailTemplatesApp() {
+    return {
+        templates: [],
+        loading: false,
+        showEditModal: false,
+        editingTemplate: null,
+        editForm: {
+            subject: '',
+            content: '',
+            status: 1
+        },
+        saving: false,
+        
+        get locale() { return Alpine.store('i18n').locale; },
+
+        async load() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/admin/email-templates', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.templates = data.data.list;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+            this.loading = false;
+        },
+
+        editTemplate(item) {
+            this.editingTemplate = item;
+            this.editForm = {
+                subject: item.subject,
+                content: item.content,
+                status: item.status
+            };
+            this.showEditModal = true;
+        },
+
+        async saveTemplate() {
+            if (!this.editingTemplate) return;
+            this.saving = true;
+            try {
+                const res = await fetch(`/api/admin/email-templates/${this.editingTemplate.code}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('token')
+                    },
+                    body: JSON.stringify(this.editForm)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '保存成功' : 'Saved successfully');
+                    this.showEditModal = false;
+                    await this.load();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '保存失败' : 'Save failed');
+            }
+            this.saving = false;
+        },
+
+        async testTemplate(code) {
+            const confirmMsg = this.locale === 'zh' ? '将发送测试邮件到您的管理员邮箱，确定吗？' : 'Send test email to your admin email?';
+            if (!confirm(confirmMsg)) return;
+            try {
+                const res = await fetch(`/api/admin/email-templates/${code}/test`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                alert(data.message);
+            } catch (e) {
+                alert(this.locale === 'zh' ? '发送失败' : 'Send failed');
+            }
+        },
+
+        async resetTemplate(code) {
+            const confirmMsg = this.locale === 'zh' ? '确定要重置此模板为默认内容吗？' : 'Reset this template to default?';
+            if (!confirm(confirmMsg)) return;
+            try {
+                const res = await fetch(`/api/admin/email-templates/${code}/reset`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '已重置为默认模板' : 'Reset to default template');
+                    await this.load();
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '重置失败' : 'Reset failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '重置失败' : 'Reset failed');
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

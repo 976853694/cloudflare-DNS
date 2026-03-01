@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}积分系统设置 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="pointsSettingsPage()" x-init="init()">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.locale === 'zh' ? '积分系统设置' : 'Points System Settings'"></h1>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <!-- 演示用户禁止访问提示 -->
+        <div x-show="!loading && forbidden" class="p-10 text-center">
+            <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <p class="text-gray-500 dark:text-gray-400 text-lg" x-text="$store.i18n.locale === 'zh' ? '演示用户无权查看系统设置' : 'Demo users cannot view system settings'"></p>
+            <p class="text-gray-400 dark:text-gray-500 text-sm mt-2" x-text="$store.i18n.locale === 'zh' ? '如需体验完整功能，请联系管理员' : 'Contact admin for full access'"></p>
+        </div>
+        
+        <div x-show="!loading && !forbidden" class="p-4 sm:p-6 space-y-6">
+            <!-- 签到奖励设置 -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '签到奖励' : 'Sign-in Rewards'"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '配置每日签到和连续签到的积分奖励' : 'Configure daily and streak sign-in rewards'"></p>
+                
+                <div class="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                    <!-- 每日签到积分 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '每日签到积分' : 'Daily Sign-in Points'"></label>
+                        <input type="number" x-model="form.points_signin_base" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="10">
+                    </div>
+                    <!-- 连续3天奖励 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '连续3天额外奖励' : '3-Day Streak Bonus'"></label>
+                        <input type="number" x-model="form.points_signin_bonus_3" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="5">
+                    </div>
+                    <!-- 连续7天奖励 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '连续7天额外奖励' : '7-Day Streak Bonus'"></label>
+                        <input type="number" x-model="form.points_signin_bonus_7" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="20">
+                    </div>
+                    <!-- 连续30天奖励 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '连续30天额外奖励' : '30-Day Streak Bonus'"></label>
+                        <input type="number" x-model="form.points_signin_bonus_30" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="100">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 邀请奖励设置 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '邀请奖励' : 'Invite Rewards'"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '配置邀请好友注册和首充的积分奖励' : 'Configure invite registration and recharge rewards'"></p>
+                
+                <div class="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                    <!-- 邀请注册奖励 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '邀请注册奖励' : 'Invite Register Reward'"></label>
+                        <input type="number" x-model="form.points_invite_register" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="50">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '被邀请用户注册成功后奖励邀请人' : 'Reward inviter when invitee registers'"></p>
+                    </div>
+                    <!-- 被邀请人奖励 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '被邀请人奖励' : 'Invitee Reward'"></label>
+                        <input type="number" x-model="form.points_invitee_reward" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="30">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '通过邀请码注册的新用户获得的奖励' : 'Reward for new users who register with invite code'"></p>
+                    </div>
+                    <!-- 邀请首充奖励 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '邀请首充奖励' : 'Invite Recharge Reward'"></label>
+                        <input type="number" x-model="form.points_invite_recharge" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="100">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '被邀请用户首次充值后额外奖励邀请人' : 'Extra reward when invitee makes first recharge'"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 积分兑换设置 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2" x-text="$store.i18n.locale === 'zh' ? '积分兑换' : 'Points Exchange'"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '配置积分兑换余额的规则' : 'Configure points to balance exchange rules'"></p>
+                
+                <div class="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                    <!-- 兑换比例 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '积分兑换比例' : 'Exchange Rate'"></label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" x-model="form.points_exchange_rate" min="1" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="100">
+                            <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '积分 = 1元' : 'points = ¥1'"></span>
+                        </div>
+                    </div>
+                    <!-- 最低兑换 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '最低兑换积分' : 'Min Exchange Points'"></label>
+                        <input type="number" x-model="form.points_min_exchange" min="1" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="100">
+                    </div>
+                    <!-- 每日兑换上限 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '每日兑换上限' : 'Daily Exchange Limit'"></label>
+                        <input type="number" x-model="form.points_max_daily_exchange" min="0" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="10000">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '设为0表示不限制' : 'Set to 0 for unlimited'"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 免费套餐设置 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('freePlanSettings.title')"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.t('freePlanSettings.description')"></p>
+                
+                <div class="space-y-4">
+                    <!-- 启用开关 -->
+                    <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.i18n.t('freePlanSettings.enabled')"></label>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('freePlanSettings.enabledDesc')"></p>
+                        </div>
+                        <select x-model="form.free_plan_enabled" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        </select>
+                    </div>
+
+                    <div class="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                        <!-- 审核模式 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('freePlanSettings.reviewMode')"></label>
+                            <select x-model="form.free_plan_review_mode" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                <option value="manual" x-text="$store.i18n.t('freePlanSettings.manualReview')"></option>
+                                <option value="auto" x-text="$store.i18n.t('freePlanSettings.autoApprove')"></option>
+                            </select>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('freePlanSettings.reviewModeDesc')"></p>
+                        </div>
+                        
+                        <!-- 单用户最大申请次数 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('freePlanSettings.maxApplications')"></label>
+                            <input type="number" x-model="form.free_plan_max_applications" min="1" max="10" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="3">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('freePlanSettings.maxApplicationsDesc')"></p>
+                        </div>
+                        
+                        <!-- 申请理由最小字符数 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('freePlanSettings.minReasonLength')"></label>
+                            <input type="number" x-model="form.free_plan_min_reason_length" min="10" max="500" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="50">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('freePlanSettings.minReasonLengthDesc')"></p>
+                        </div>
+                        
+                        <!-- 被拒绝后重新申请间隔 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('freePlanSettings.rejectCooldown')"></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" x-model="form.free_plan_reject_cooldown_days" min="1" max="30" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="7">
+                                <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '天' : 'days'"></span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('freePlanSettings.rejectCooldownDesc')"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 保存按钮 -->
+            <div class="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700">
+                <button @click="save" :disabled="saving" class="px-6 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存设置' : 'Save Settings'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pointsSettingsPage() {
+    return {
+        form: {},
+        loading: true,
+        saving: false,
+        forbidden: false,
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await this.load();
+        },
+        
+        async load() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.form = data.data.settings;
+                } else if (data.code === 403) {
+                    this.forbidden = true;
+                }
+            } catch (e) {
+                console.error('Load settings failed:', e);
+            }
+            this.loading = false;
+        },
+        
+        async save() {
+            this.saving = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.form)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '设置保存成功' : 'Settings saved successfully');
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.saving = false;
+        }
+    };
+}
+</script>
+{% endblock %}

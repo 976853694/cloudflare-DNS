@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}域名管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="hostDomainsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                <a href="/host" class="hover:text-gray-700 dark:hover:text-gray-300" x-text="$store.i18n.t('host.dashboard')"></a>
+                <span>/</span>
+                <span x-text="$store.i18n.t('host.domains')"></span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('host.domains')"></h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm" x-text="$store.i18n.locale === 'zh' ? '管理您托管的域名' : 'Manage your hosted domains'"></p>
+        </div>
+        <button @click="showAddModal = true" class="bg-gradient-to-br from-blue-500 to-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:from-blue-600 hover:to-blue-700 hover:shadow-lg transition-all duration-200 w-full sm:w-auto flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            <span x-text="$store.i18n.t('host.addDomain')"></span>
+        </button>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div x-show="loading" class="p-10 text-center">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <!-- 桌面端表格 -->
+        <table x-show="!loading && domains.length > 0" class="w-full hidden sm:table">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '渠道' : 'Channel'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '子域名数' : 'Subdomains'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '允许注册' : 'Allow Register'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="domain in domains" :key="domain.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-6 py-4 font-medium text-gray-900 dark:text-white" x-text="domain.name"></td>
+                        <td class="px-6 py-4">
+                            <span x-show="domain.dns_channel" class="px-2 py-1 text-xs rounded-full" 
+                                  :class="getProviderClass(domain.dns_channel?.provider_type)"
+                                  x-text="domain.dns_channel?.name"></span>
+                            <span x-show="!domain.dns_channel" class="text-gray-400 dark:text-gray-500">-</span>
+                        </td>
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300" x-text="domain.subdomain_count || 0"></td>
+                        <td class="px-6 py-4">
+                            <button @click="toggleRegister(domain)" 
+                                    :class="domain.allow_register ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" 
+                                    class="px-3 py-1 rounded text-xs"
+                                    x-text="domain.allow_register ? ($store.i18n.locale === 'zh' ? '允许' : 'Yes') : ($store.i18n.locale === 'zh' ? '禁止' : 'No')"></button>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button @click="confirmDelete(domain)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <!-- 移动端卡片视图 -->
+        <div x-show="!loading && domains.length > 0" class="sm:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="domain in domains" :key="domain.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <h3 class="font-medium text-gray-900 dark:text-white" x-text="domain.name"></h3>
+                        <button @click="toggleRegister(domain)" 
+                                :class="domain.allow_register ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" 
+                                class="px-2 py-1 rounded text-xs"
+                                x-text="domain.allow_register ? ($store.i18n.locale === 'zh' ? '允许' : 'Yes') : ($store.i18n.locale === 'zh' ? '禁止' : 'No')"></button>
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '渠道: ' : 'Channel: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="domain.dns_channel?.name || '-'"></span></p>
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '子域名: ' : 'Subdomains: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="domain.subdomain_count || 0"></span></p>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <button @click="confirmDelete(domain)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="!loading && domains.length === 0" class="p-10 text-center">
+            <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+            </div>
+            <p class="text-gray-500 dark:text-gray-400 mb-2" x-text="$store.i18n.t('host.noDomains')"></p>
+            <button @click="showAddModal = true" class="text-blue-600 hover:underline text-sm" x-text="$store.i18n.locale === 'zh' ? '添加第一个域名 →' : 'Add your first domain →'"></button>
+        </div>
+    </div>
+
+    <!-- Add Modal -->
+    <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showAddModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('host.addDomain')"></h3>
+            <div x-show="error" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="error"></div>
+            <div x-show="success" class="mb-4 p-3 bg-green-50 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-lg text-sm" x-text="success"></div>
+            
+            <!-- 渠道选择 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '选择渠道' : 'Select Channel'"></label>
+                <select x-model="form.channel_id" @change="onChannelChange" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '请选择渠道' : 'Select a channel'"></option>
+                    <template x-for="ch in channels" :key="ch.id">
+                        <option :value="ch.id" x-text="ch.name + ' (' + ch.provider_name + ')'"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- 加载中 -->
+            <div class="mb-4" x-show="zonesLoading">
+                <div class="text-center py-3 text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '加载域名列表...' : 'Loading domain list...'"></div>
+            </div>
+            
+            <!-- Zone列表 -->
+            <div class="mb-4" x-show="!zonesLoading && zones.length > 0">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <span x-text="$store.i18n.locale === 'zh' ? '选择域名' : 'Select Domains'"></span>
+                    <span class="text-gray-400 dark:text-gray-500 font-normal" x-text="$store.i18n.locale === 'zh' ? '（可多选）' : '(Multi-select)'"></span>
+                </label>
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg max-h-60 overflow-y-auto">
+                    <template x-for="zone in zones" :key="zone.zone_id">
+                        <label class="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0">
+                            <input type="checkbox" :value="zone.zone_id" x-model="selectedZones" class="mr-3 rounded border-gray-300 dark:border-gray-500">
+                            <span x-text="zone.name" class="text-gray-700 dark:text-gray-300"></span>
+                            <span x-show="existingDomains.includes(zone.name)" class="ml-2 text-xs text-orange-500 dark:text-orange-400" x-text="$store.i18n.locale === 'zh' ? '(已添加)' : '(added)'"></span>
+                        </label>
+                    </template>
+                </div>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <span x-text="$store.i18n.locale === 'zh' ? '已选择 ' : 'Selected '"></span>
+                    <span x-text="selectedZones.length" class="font-medium"></span>
+                    <span x-text="$store.i18n.locale === 'zh' ? ' 个域名' : ' domains'"></span>
+                </p>
+            </div>
+            
+            <!-- 手动输入（当无法获取zones时） -->
+            <div class="mb-4" x-show="!zonesLoading && zones.length === 0 && form.channel_id">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></label>
+                <input type="text" x-model="form.name" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="example.com">
+            </div>
+            <div class="mb-4" x-show="!zonesLoading && zones.length === 0 && form.channel_id">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Zone ID</label>
+                <input type="text" x-model="form.zone_id" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 dark:focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="Zone ID">
+            </div>
+            
+            <div class="flex space-x-3">
+                <button @click="closeAddModal()" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="addDomains" :disabled="adding" class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    <span x-show="!adding" x-text="$store.i18n.locale === 'zh' ? '添加' : 'Add'"></span>
+                    <span x-show="adding" x-text="$store.i18n.locale === 'zh' ? '添加中...' : 'Adding...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function hostDomainsPage() {
+    return {
+        domains: [],
+        channels: [],
+        zones: [],
+        loading: true,
+        zonesLoading: false,
+        showAddModal: false,
+        form: { name: '', zone_id: '', channel_id: '' },
+        selectedZones: [],
+        error: '',
+        success: '',
+        adding: false,
+        
+        get token() { return localStorage.getItem('token'); },
+        get existingDomains() { return this.domains.map(d => d.name); },
+        
+        getProviderClass(type) {
+            const classes = {
+                'cloudflare': 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300',
+                'aliyun': 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+                'dnspod': 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                'huawei': 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                'west': 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300',
+                'godaddy': 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300',
+                'namecheap': 'bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300',
+                'route53': 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300',
+                'powerdns': 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+            };
+            return classes[type] || 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        },
+        
+        async init() {
+            await Promise.all([this.loadDomains(), this.loadChannels()]);
+            this.loading = false;
+        },
+        
+        async loadDomains() {
+            try {
+                const res = await fetch('/api/host/domains', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.domains = data.data || [];
+                }
+            } catch (e) {
+                console.error('Load domains failed:', e);
+            }
+        },
+        
+        async loadChannels() {
+            try {
+                const res = await fetch('/api/host/channels', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.channels = data.data || [];
+                }
+            } catch (e) {
+                console.error('Load channels failed:', e);
+            }
+        },
+        
+        async onChannelChange() {
+            this.zones = [];
+            this.selectedZones = [];
+            this.form.zone_id = '';
+            this.form.name = '';
+            this.error = '';
+            this.success = '';
+            
+            if (!this.form.channel_id) return;
+            
+            await this.loadZones();
+        },
+        
+        async loadZones() {
+            this.zonesLoading = true;
+            try {
+                const res = await fetch(`/api/host/channels/${this.form.channel_id}/zones?all=1`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.zones = data.data.zones || [];
+                } else {
+                    this.error = data.message || (Alpine.store('i18n').locale === 'zh' ? '获取域名列表失败' : 'Failed to get domain list');
+                }
+            } catch (e) {
+                console.error('Load zones failed:', e);
+            }
+            this.zonesLoading = false;
+        },
+        
+        async addDomains() {
+            this.adding = true;
+            this.error = '';
+            this.success = '';
+            const locale = Alpine.store('i18n').locale;
+            let added = 0, failed = 0;
+            
+            if (this.zones.length > 0 && this.selectedZones.length > 0) {
+                // 批量添加选中的域名
+                for (const zoneId of this.selectedZones) {
+                    const zone = this.zones.find(z => z.zone_id === zoneId);
+                    if (!zone || this.existingDomains.includes(zone.name)) continue;
+                    
+                    try {
+                        const res = await fetch('/api/host/domains', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + this.token,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                channel_id: this.form.channel_id,
+                                zone_id: zone.zone_id,
+                                name: zone.name
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.code === 200) added++;
+                        else failed++;
+                    } catch (e) {
+                        failed++;
+                    }
+                }
+                
+                if (added > 0) {
+                    this.success = locale === 'zh' 
+                        ? `成功添加 ${added} 个域名` + (failed > 0 ? `，${failed} 个失败` : '')
+                        : `Added ${added} domains` + (failed > 0 ? `, ${failed} failed` : '');
+                    await this.loadDomains();
+                    this.selectedZones = [];
+                } else {
+                    this.error = locale === 'zh' ? '添加失败' : 'Add failed';
+                }
+            } else {
+                // 手动输入单个域名
+                if (!this.form.name.trim()) {
+                    this.error = locale === 'zh' ? '请输入域名' : 'Please enter domain';
+                    this.adding = false;
+                    return;
+                }
+                
+                try {
+                    const res = await fetch('/api/host/domains', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + this.token,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            channel_id: this.form.channel_id,
+                            zone_id: this.form.zone_id,
+                            name: this.form.name
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        this.closeAddModal();
+                        await this.loadDomains();
+                        window.$toast?.success(locale === 'zh' ? '域名已添加' : 'Domain added');
+                    } else {
+                        this.error = data.message || (locale === 'zh' ? '添加失败' : 'Add failed');
+                    }
+                } catch (e) {
+                    this.error = locale === 'zh' ? '网络错误' : 'Network error';
+                }
+            }
+            this.adding = false;
+        },
+        
+        async toggleRegister(domain) {
+            try {
+                const res = await fetch(`/api/host/domains/${domain.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ allow_register: !domain.allow_register })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    await this.loadDomains();
+                }
+            } catch (e) {
+                console.error('Toggle register failed:', e);
+            }
+        },
+        
+        async confirmDelete(domain) {
+            const locale = Alpine.store('i18n').locale;
+            const confirmMsg = locale === 'zh' ? `确定删除域名 ${domain.name}？` : `Delete domain ${domain.name}?`;
+            if (!confirm(confirmMsg)) return;
+            
+            try {
+                const res = await fetch(`/api/host/domains/${domain.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    await this.loadDomains();
+                    window.$toast?.success(locale === 'zh' ? '域名已删除' : 'Domain deleted');
+                } else {
+                    window.$toast?.error(data.message || (locale === 'zh' ? '删除失败' : 'Delete failed'));
+                }
+            } catch (e) {
+                window.$toast?.error(locale === 'zh' ? '删除失败' : 'Delete failed');
+            }
+        },
+        
+        closeAddModal() {
+            this.showAddModal = false;
+            this.form = { name: '', zone_id: '', channel_id: '' };
+            this.zones = [];
+            this.selectedZones = [];
+            this.error = '';
+            this.success = '';
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }} - 工单详情{% endblock %}
+
+{% block content %}
+<div class="pt-14 lg:pt-0">
+    <div class="max-w-4xl mx-auto px-4 py-6" x-data="ticketDetailPage()">
+        <!-- 返回按钮 -->
+        <a href="/tickets" class="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4">
+            <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            <span x-text="$store.i18n.t('common.back')"></span>
+        </a>
+
+        <!-- 加载中 -->
+        <template x-if="loading">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+                <div class="w-8 h-8 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 rounded-full animate-spin mx-auto mb-2"></div>
+                <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.loading')"></span>
+            </div>
+        </template>
+
+        <!-- 工单不存在 -->
+        <template x-if="!loading && !ticket">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
+                <svg class="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('ticket.notFound')"></p>
+            </div>
+        </template>
+
+        <!-- 工单详情 -->
+        <template x-if="!loading && ticket">
+            <div class="space-y-6">
+                <!-- 工单信息卡片 -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-gray-500 dark:text-gray-400" x-text="ticket.ticket_no"></span>
+                                <span class="px-2 py-0.5 text-xs rounded-full" 
+                                      :class="{
+                                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': ticket.status === 0,
+                                          'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200': ticket.status === 1,
+                                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300': ticket.status === 2
+                                      }"
+                                      x-text="ticket.status_text"></span>
+                            </div>
+                            <button x-show="ticket.status !== 2" @click="closeTicket()" class="text-sm text-red-600 hover:text-red-700" x-text="$store.i18n.t('ticket.close')"></button>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="ticket.subject"></h1>
+                        <div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-4">
+                            <span><span x-text="$store.i18n.t('ticket.from')"></span>: <span class="text-gray-900 dark:text-white" x-text="ticket.from_username"></span></span>
+                            <template x-if="ticket.to_username">
+                                <span><span x-text="$store.i18n.t('ticket.to')"></span>: <span class="text-gray-900 dark:text-white" x-text="ticket.to_username"></span></span>
+                            </template>
+                            <span x-text="ticket.created_at"></span>
+                        </div>
+                        <div class="prose dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 whitespace-pre-wrap" x-text="ticket.content"></div>
+                    </div>
+                </div>
+
+                <!-- 回复列表 -->
+                <template x-if="ticket.replies && ticket.replies.length > 0">
+                    <div class="space-y-4">
+                        <h2 class="text-lg font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('ticket.replyList')"></h2>
+                        <template x-for="reply in ticket.replies" :key="reply.id">
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="reply.username"></span>
+                                    <span class="text-sm text-gray-500 dark:text-gray-400" x-text="reply.created_at"></span>
+                                </div>
+                                <div class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap" x-text="reply.content"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- 回复表单 -->
+                <template x-if="ticket.status !== 2">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                        <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('ticket.reply')"></h2>
+                        <textarea x-model="replyContent" rows="4" :placeholder="$store.i18n.t('ticket.replyPlaceholder')" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none mb-2"></textarea>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.t('ticket.noEmailHint')"></p>
+                        <button @click="submitReply()" :disabled="replying" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                            <span x-show="!replying" x-text="$store.i18n.t('ticket.submitReply')"></span>
+                            <span x-show="replying" x-text="$store.i18n.t('common.loading')"></span>
+                        </button>
+                    </div>
+                </template>
+
+                <!-- 已关闭提示 -->
+                <template x-if="ticket.status === 2">
+                    <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center text-gray-500 dark:text-gray-400">
+                        <span x-text="$store.i18n.t('ticket.closedHint')"></span>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function ticketDetailPage() {
+    return {
+        loading: true,
+        ticket: null,
+        replyContent: '',
+        replying: false,
+
+        init() {
+            this.loadTicket();
+        },
+
+        getTicketId() {
+            const path = location.pathname;
+            const match = path.match(/\/tickets\/(\d+)/);
+            return match ? match[1] : null;
+        },
+
+        async loadTicket() {
+            const ticketId = this.getTicketId();
+            if (!ticketId) { location.href = '/tickets'; return; }
+
+            const token = localStorage.getItem('token');
+            if (!token) { location.href = '/login'; return; }
+
+            try {
+                const res = await fetch(`/api/tickets/${ticketId}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.ticket = data.data.ticket;
+                } else if (data.code === 404 || data.code === 403) {
+                    this.ticket = null;
+                }
+            } catch (e) {
+                console.error('Load ticket failed:', e);
+            }
+            this.loading = false;
+        },
+
+        async submitReply() {
+            if (!this.replyContent.trim()) {
+                alert($store.i18n.t('ticket.replyRequired'));
+                return;
+            }
+
+            this.replying = true;
+            const token = localStorage.getItem('token');
+            const ticketId = this.getTicketId();
+
+            try {
+                const res = await fetch(`/api/tickets/${ticketId}/reply`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: this.replyContent })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.replyContent = '';
+                    this.loadTicket();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                console.error('Submit reply failed:', e);
+            }
+            this.replying = false;
+        },
+
+        async closeTicket() {
+            if (!confirm($store.i18n.t('ticket.confirmClose'))) return;
+
+            const token = localStorage.getItem('token');
+            const ticketId = this.getTicketId();
+
+            try {
+                const res = await fetch(`/api/tickets/${ticketId}/close`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.loadTicket();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                console.error('Close ticket failed:', e);
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

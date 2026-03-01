@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="apiPage()" x-init="init()">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.t('nav.apiManage')"></h1>
+
+    <div class="max-w-3xl space-y-6">
+        <!-- API状态 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h2 class="font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? 'API状态' : 'API Status'"></h2>
+                <template x-if="apiData.api_key">
+                    <button @click="toggleApi()" class="px-4 py-2 rounded-lg text-sm font-medium transition"
+                        :class="apiData.api_enabled ? 'bg-red-100 dark:bg-red-900/30 text-red-700 hover:bg-red-200' : 'bg-green-100 dark:bg-green-900/30 text-green-700 hover:bg-green-200'">
+                        <span x-text="apiData.api_enabled ? ($store.i18n.locale === 'zh' ? '禁用API' : 'Disable API') : ($store.i18n.locale === 'zh' ? '启用API' : 'Enable API')"></span>
+                    </button>
+                </template>
+            </div>
+            <div class="p-6">
+                <template x-if="!apiData.api_key">
+                    <div class="text-center py-8">
+                        <div class="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '您还没有生成API密钥' : 'You have not generated an API key yet'"></p>
+                        <button @click="generateKeys()" :disabled="generating" class="px-6 py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50">
+                            <span x-text="generating ? ($store.i18n.locale === 'zh' ? '生成中...' : 'Generating...') : ($store.i18n.locale === 'zh' ? '生成API密钥' : 'Generate API Key')"></span>
+                        </button>
+                    </div>
+                </template>
+                <template x-if="apiData.api_key">
+                    <div>
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="px-3 py-1 rounded-full text-sm font-medium"
+                                :class="apiData.api_enabled ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'">
+                                <span x-text="apiData.api_enabled ? ($store.i18n.t('common.enabled')) : ($store.i18n.t('common.disabled'))"></span>
+                            </span>
+                        </div>
+                        
+                        <!-- API Key -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Key</label>
+                            <div class="flex gap-2">
+                                <input type="text" :value="apiData.api_key" readonly class="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg font-mono text-sm dark:text-white">
+                                <button @click="copyToClipboard(apiData.api_key)" class="px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- API Secret -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Secret</label>
+                            <div class="flex gap-2">
+                                <input :type="showSecret ? 'text' : 'password'" :value="secretValue" readonly class="flex-1 px-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg font-mono text-sm dark:text-white">
+                                <button @click="viewSecret()" class="px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" :title="$store.i18n.locale === 'zh' ? '查看Secret' : 'View Secret'">
+                                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                                <button x-show="showSecret" @click="copyToClipboard(secretValue)" class="px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '查看Secret需要验证密码' : 'Password required to view Secret'"></p>
+                        </div>
+                        
+                        <!-- 重置密钥 -->
+                        <button @click="showResetModal = true" class="text-red-600 hover:text-red-800 text-sm" x-text="$store.i18n.locale === 'zh' ? '重置API密钥' : 'Reset API Key'"></button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- IP白名单 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden" x-show="apiData.api_key">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h2 class="font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? 'IP白名单' : 'IP Whitelist'"></h2>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-500 dark:text-gray-400 text-sm mb-4" x-text="$store.i18n.locale === 'zh' ? '设置允许调用API的IP地址，留空表示不限制' : 'Set allowed IP addresses for API calls, leave empty for no restriction'"></p>
+                <div class="space-y-2 mb-4">
+                    <template x-for="(ip, index) in ipWhitelist" :key="index">
+                        <div class="flex gap-2">
+                            <input type="text" x-model="ipWhitelist[index]" placeholder="如: 1.2.3.4" class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm font-mono">
+                            <button @click="ipWhitelist.splice(index, 1)" class="px-3 py-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex gap-3">
+                    <button @click="ipWhitelist.push('')" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '添加IP' : 'Add IP'">
+                    </button>
+                    <button @click="saveWhitelist()" :disabled="savingWhitelist" class="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 text-sm">
+                        <span x-text="savingWhitelist ? ($store.i18n.locale === 'zh' ? '保存中...' : 'Saving...') : $store.i18n.t('common.save')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- API文档 -->
+        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100">
+                <h2 class="font-semibold text-gray-900">API文档</h2>
+            </div>
+            <div class="p-6">
+                <div class="prose prose-sm max-w-none">
+                    <h4 class="text-gray-900 font-medium mb-2">认证方式</h4>
+                    <p class="text-gray-600 text-sm mb-4">所有API请求需要在Header中携带以下参数：</p>
+                    <div class="bg-gray-50 rounded-lg p-4 font-mono text-sm mb-4 overflow-x-auto">
+                        <p>X-Api-Key: 您的API Key</p>
+                        <p>X-Timestamp: 当前Unix时间戳（秒）</p>
+                        <p>X-Signature: HMAC-SHA256签名</p>
+                    </div>
+                    
+                    <h4 class="text-gray-900 font-medium mb-2">签名算法</h4>
+                    <div class="bg-gray-50 rounded-lg p-4 font-mono text-sm mb-4 overflow-x-auto">
+                        <p>message = timestamp + method + path + body</p>
+                        <p>signature = HMAC-SHA256(message, api_secret)</p>
+                    </div>
+                    
+                    <h4 class="text-gray-900 font-medium mb-2">接口列表</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-gray-600">接口</th>
+                                    <th class="px-3 py-2 text-left text-gray-600">方法</th>
+                                    <th class="px-3 py-2 text-left text-gray-600">说明</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <tr><td class="px-3 py-2 font-mono">/api/open/user/info</td><td class="px-3 py-2">GET</td><td class="px-3 py-2">获取用户信息</td></tr>
+                                <tr><td class="px-3 py-2 font-mono">/api/open/domains</td><td class="px-3 py-2">GET</td><td class="px-3 py-2">获取可购买域名</td></tr>
+                                <tr><td class="px-3 py-2 font-mono">/api/open/subdomains</td><td class="px-3 py-2">GET</td><td class="px-3 py-2">获取子域名列表</td></tr>
+                                <tr><td class="px-3 py-2 font-mono">/api/open/subdomains</td><td class="px-3 py-2">POST</td><td class="px-3 py-2">购买子域名</td></tr>
+                                <tr><td class="px-3 py-2 font-mono">/api/open/subdomains/{id}</td><td class="px-3 py-2">DELETE</td><td class="px-3 py-2">删除子域名</td></tr>
+                                <tr><td class="px-3 py-2 font-mono">/api/open/subdomains/{id}/renew</td><td class="px-3 py-2">POST</td><td class="px-3 py-2">续费子域名</td></tr>
+                                <tr><td class="px-3 py-2 font-mono">/api/open/subdomains/{id}/records</td><td class="px-3 py-2">GET/POST</td><td class="px-3 py-2">DNS记录管理</td></tr>
+                                <tr><td class="px-3 py-2 font-mono">/api/open/dns-records/{id}</td><td class="px-3 py-2">PUT/DELETE</td><td class="px-3 py-2">更新/删除记录</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看Secret弹窗 -->
+    <div x-show="showSecretModal" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showSecretModal = false">
+        <div class="bg-white rounded-xl w-full max-w-sm p-6">
+            <h3 class="text-lg font-semibold mb-4">验证密码</h3>
+            <input type="password" x-model="password" placeholder="请输入登录密码" class="w-full px-4 py-3 border border-gray-200 rounded-lg mb-4" @keyup.enter="confirmViewSecret()">
+            <div class="flex gap-3">
+                <button @click="showSecretModal = false" class="flex-1 px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50">取消</button>
+                <button @click="confirmViewSecret()" class="flex-1 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重置密钥弹窗 -->
+    <div x-show="showResetModal" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" @click.self="showResetModal = false">
+        <div class="bg-white rounded-xl w-full max-w-sm p-6">
+            <h3 class="text-lg font-semibold mb-2">重置API密钥</h3>
+            <p class="text-gray-500 text-sm mb-4">重置后旧密钥将立即失效，请确保已更新所有使用该密钥的应用。</p>
+            <input type="password" x-model="resetPassword" placeholder="请输入登录密码" class="w-full px-4 py-3 border border-gray-200 rounded-lg mb-4">
+            <div class="flex gap-3">
+                <button @click="showResetModal = false" class="flex-1 px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50">取消</button>
+                <button @click="confirmReset()" :disabled="generating" class="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
+                    <span x-text="generating ? '重置中...' : '确认重置'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新密钥展示弹窗 -->
+    <div x-show="showNewKeysModal" x-cloak class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl w-full max-w-lg p-6">
+            <div class="text-center mb-4">
+                <div class="w-12 h-12 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold">API密钥已生成</h3>
+                <p class="text-red-500 text-sm mt-1">请立即保存Secret，关闭后将无法再次查看！</p>
+            </div>
+            <div class="space-y-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                    <div class="flex gap-2">
+                        <input type="text" :value="newKeys.api_key" readonly class="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm">
+                        <button @click="copyToClipboard(newKeys.api_key)" class="px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">复制</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API Secret</label>
+                    <div class="flex gap-2">
+                        <input type="text" :value="newKeys.api_secret" readonly class="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg font-mono text-sm">
+                        <button @click="copyToClipboard(newKeys.api_secret)" class="px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">复制</button>
+                    </div>
+                </div>
+            </div>
+            <button @click="closeNewKeysModal()" class="w-full px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800">我已保存，关闭</button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div x-show="toast.show" x-cloak x-transition class="fixed bottom-6 right-6 z-50">
+        <div :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" class="text-white px-4 py-2 rounded-lg shadow-lg text-sm" x-text="toast.message"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function apiPage() {
+    return {
+        apiData: { api_key: null, api_secret: null, api_enabled: false, api_ip_whitelist: [] },
+        ipWhitelist: [],
+        showSecret: false,
+        secretValue: '******',
+        password: '',
+        resetPassword: '',
+        showSecretModal: false,
+        showResetModal: false,
+        showNewKeysModal: false,
+        newKeys: { api_key: '', api_secret: '' },
+        generating: false,
+        savingWhitelist: false,
+        toast: { show: false, message: '', type: 'success' },
+        
+        get token() { return localStorage.getItem('token'); },
+        
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadApiKeys();
+        },
+        
+        async loadApiKeys() {
+            const res = await fetch('/api/security/api-keys', {
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.apiData = data.data;
+                this.ipWhitelist = data.data.api_ip_whitelist || [];
+                if (this.ipWhitelist.length === 0) this.ipWhitelist = [''];
+            }
+        },
+        
+        async generateKeys() {
+            this.generating = true;
+            const res = await fetch('/api/security/api-keys/generate', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.newKeys = data.data;
+                this.showNewKeysModal = true;
+                await this.loadApiKeys();
+            } else {
+                this.showToast(data.message, 'error');
+            }
+            this.generating = false;
+        },
+        
+        async toggleApi() {
+            const res = await fetch('/api/security/api-keys/toggle', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: !this.apiData.api_enabled })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.apiData.api_enabled = data.data.api_enabled;
+                this.showToast(data.message, 'success');
+            } else {
+                this.showToast(data.message, 'error');
+            }
+        },
+        
+        viewSecret() {
+            this.password = '';
+            this.showSecretModal = true;
+        },
+        
+        async confirmViewSecret() {
+            if (!this.password) { this.showToast('请输入密码', 'error'); return; }
+            const res = await fetch('/api/security/api-keys/secret', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: this.password })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.secretValue = data.data.api_secret;
+                this.showSecret = true;
+                this.showSecretModal = false;
+            } else {
+                this.showToast(data.message, 'error');
+            }
+        },
+        
+        async confirmReset() {
+            if (!this.resetPassword) { this.showToast('请输入密码', 'error'); return; }
+            this.generating = true;
+            const res = await fetch('/api/security/api-keys/generate', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: this.resetPassword })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.newKeys = data.data;
+                this.showResetModal = false;
+                this.showNewKeysModal = true;
+                this.resetPassword = '';
+                this.showSecret = false;
+                this.secretValue = '******';
+                await this.loadApiKeys();
+            } else {
+                this.showToast(data.message, 'error');
+            }
+            this.generating = false;
+        },
+        
+        closeNewKeysModal() {
+            this.showNewKeysModal = false;
+            this.newKeys = { api_key: '', api_secret: '' };
+        },
+        
+        async saveWhitelist() {
+            this.savingWhitelist = true;
+            const validIps = this.ipWhitelist.filter(ip => ip.trim());
+            const res = await fetch('/api/security/api-keys/whitelist', {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip_whitelist: validIps })
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.ipWhitelist = data.data.api_ip_whitelist;
+                if (this.ipWhitelist.length === 0) this.ipWhitelist = [''];
+                this.showToast('保存成功', 'success');
+            } else {
+                this.showToast(data.message, 'error');
+            }
+            this.savingWhitelist = false;
+        },
+        
+        copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                this.showToast('已复制到剪贴板', 'success');
+            });
+        },
+        
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => { this.toast.show = false; }, 3000);
+        }
+    }
+}
+</script>
+{% endblock %}

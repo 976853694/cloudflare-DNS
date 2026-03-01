@@ -1,0 +1,549 @@
+{% extends "base.html" %}
+
+{% block title %}解析查询 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="dnsRecordsPage()" x-init="init()">
+    <!-- 头部 -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
+        <div class="flex items-center flex-wrap gap-1 sm:gap-2 min-w-0">
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white shrink-0" x-text="$store.i18n.locale === 'zh' ? '解析查询' : 'DNS Query'"></h1>
+            <template x-if="selectedDomain">
+                <div class="flex items-center text-gray-500 dark:text-gray-400 min-w-0">
+                    <svg class="w-4 h-4 mx-1 sm:mx-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    <span class="text-base sm:text-lg font-medium text-blue-600 dark:text-blue-400 truncate" x-text="selectedDomain.name"></span>
+                </div>
+            </template>
+        </div>
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button x-show="selectedDomain" @click="backToList()" class="px-3 sm:px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-sm whitespace-nowrap text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '返回列表' : 'Back to List'"></button>
+            <button @click="openAddModal()" x-show="selectedDomain" class="px-3 sm:px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 text-sm whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '添加记录' : 'Add Record'"></button>
+        </div>
+    </div>
+
+    <!-- 域名列表视图 -->
+    <div x-show="!selectedDomain" x-transition>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+            <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '选择域名查看解析记录' : 'Select domain to view DNS records'"></span>
+                    <input type="text" x-model="domainSearch" :placeholder="$store.i18n.locale === 'zh' ? '搜索域名...' : 'Search domains...'" class="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm w-full sm:w-48 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+            </div>
+            <div x-show="loadingDomains" class="p-10 text-center">
+                <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+            </div>
+            <div x-show="!loadingDomains" class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="domain in filteredDomains" :key="domain.id">
+                    <div @click="selectDomain(domain)" class="px-3 sm:px-4 py-3 sm:py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition group">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-3 min-w-0 flex-1">
+                                <div class="w-9 h-9 sm:w-10 sm:h-10 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center shrink-0 transition-colors">
+                                    <svg class="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                                    </svg>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="font-medium text-gray-900 dark:text-white text-sm sm:text-base truncate" x-text="domain.name"></p>
+                                    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
+                                        <span x-text="domain.provider_name || 'Cloudflare'"></span>
+                                        <span class="mx-1">·</span>
+                                        <span :class="domain.status === 1 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'" x-text="domain.status === 1 ? ($store.i18n.locale === 'zh' ? '正常' : 'Active') : ($store.i18n.locale === 'zh' ? '禁用' : 'Disabled')"></span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 sm:gap-4 shrink-0">
+                                <div class="text-right hidden sm:block">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '渠道' : 'Channel'"></p>
+                                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300" x-text="domain.channel_name || '-'"></p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div x-show="!loadingDomains && filteredDomains.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400">
+                <template x-if="domainSearch">
+                    <span x-text="$store.i18n.locale === 'zh' ? '未找到匹配的域名' : 'No matching domains found'"></span>
+                </template>
+                <template x-if="!domainSearch">
+                    <span x-text="$store.i18n.locale === 'zh' ? '暂无域名' : 'No domains'"></span>
+                </template>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 解析记录视图 -->
+    <div x-show="selectedDomain" x-transition>
+        <!-- 筛选 -->
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 hover:shadow-lg transition-shadow">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '记录类型' : 'Record Type'"></label>
+                    <select x-model="filter.type" @change="loadRecords()" class="w-full px-2 sm:px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="" x-text="$store.i18n.locale === 'zh' ? '全部' : 'All'"></option>
+                        <option value="A">A</option>
+                        <option value="AAAA">AAAA</option>
+                        <option value="CNAME">CNAME</option>
+                        <option value="TXT">TXT</option>
+                        <option value="MX">MX</option>
+                        <option value="NS">NS</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '来源' : 'Source'"></label>
+                    <select x-model="filter.source" @change="loadRecords()" class="w-full px-2 sm:px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="" x-text="$store.i18n.locale === 'zh' ? '全部' : 'All'"></option>
+                        <option value="system" x-text="$store.i18n.locale === 'zh' ? '本系统' : 'System'"></option>
+                        <option value="provider" x-text="$store.i18n.locale === 'zh' ? '服务商' : 'Provider'"></option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '搜索' : 'Search'"></label>
+                    <input type="text" x-model="filter.search" @keyup.enter="loadRecords()" :placeholder="$store.i18n.locale === 'zh' ? '搜索记录名称...' : 'Search record name...'" class="w-full px-2 sm:px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+            </div>
+        </div>
+
+        <!-- 记录列表 - 桌面端表格 -->
+        <div class="hidden sm:block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+            <div x-show="loading" class="p-10 text-center">
+                <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+            </div>
+            <div class="hidden lg:block overflow-x-auto">
+                <table x-show="!loading && records.length > 0" class="w-full min-w-[800px]">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '名称' : 'Name'"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '类型' : 'Type'"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '内容' : 'Content'"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">TTL</th>
+                            <th x-show="showProxyColumn" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '代理' : 'Proxy'"></th>
+                            <th x-show="showLineColumn" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '线路' : 'Line'"></th>
+                            <th x-show="showWeightColumn" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '权重' : 'Weight'"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '来源' : 'Source'"></th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                        <template x-for="record in records" :key="record.record_id">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-3">
+                                    <p class="font-medium text-gray-900 dark:text-white text-sm" x-text="record.name"></p>
+                                </td>
+                                <td class="px-4 py-3"><span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs transition-colors" x-text="record.type"></span></td>
+                                <td class="px-4 py-3 text-gray-600 dark:text-gray-300 text-sm font-mono max-w-xs truncate" x-text="record.content || record.value"></td>
+                                <td class="px-4 py-3 text-gray-600 dark:text-gray-300 text-sm" x-text="record.ttl === 1 ? ($store.i18n.locale === 'zh' ? '自动' : 'Auto') : record.ttl"></td>
+                                <td x-show="showProxyColumn" class="px-4 py-3">
+                                    <span :class="record.proxied ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" class="px-2 py-1 rounded text-xs" x-text="record.proxied ? ($store.i18n.locale === 'zh' ? '开启' : 'On') : ($store.i18n.locale === 'zh' ? '关闭' : 'Off')"></span>
+                                </td>
+                                <td x-show="showLineColumn" class="px-4 py-3 text-gray-600 dark:text-gray-300 text-sm" x-text="record.line_name || record.line || ($store.i18n.locale === 'zh' ? '默认' : 'Default')"></td>
+                                <td x-show="showWeightColumn" class="px-4 py-3 text-gray-600 dark:text-gray-300 text-sm" x-text="record.weight || '-'"></td>
+                                <td class="px-4 py-3">
+                                    <template x-if="record.source === 'system'">
+                                        <span class="text-sm text-blue-600 dark:text-blue-400" x-text="record.username || ($store.i18n.locale === 'zh' ? '用户' : 'User')"></span>
+                                    </template>
+                                    <template x-if="record.source !== 'system'">
+                                        <span class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '服务商' : 'Provider'"></span>
+                                    </template>
+                                </td>
+                                <td class="px-4 py-3 space-x-2">
+                                    <button @click="editRecord(record)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                                    <button @click="deleteRecord(record)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="!loading && records.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无DNS记录' : 'No DNS records'"></div>
+            <div x-show="!loading && pagination.pages > 1" class="px-4 py-3 border-t border-gray-100 dark:border-gray-700 flex justify-center space-x-2">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <span class="px-3 py-1 text-gray-600 dark:text-gray-400 text-sm" x-text="page + ' / ' + pagination.pages"></span>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+
+
+        <!-- 记录列表 - 移动端卡片 -->
+        <div class="sm:hidden">
+            <div x-show="loading" class="p-10 text-center">
+                <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+            </div>
+            <div x-show="!loading && records.length > 0" class="space-y-3">
+                <template x-for="record in records" :key="record.record_id">
+                    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-shadow">
+                        <div class="flex items-start justify-between gap-2 mb-3">
+                            <div class="min-w-0 flex-1">
+                                <p class="font-medium text-gray-900 dark:text-white text-sm truncate" x-text="record.name"></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 font-mono truncate mt-1" x-text="record.content || record.value"></p>
+                            </div>
+                            <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs shrink-0 transition-colors" x-text="record.type"></span>
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
+                            <span>TTL: <span x-text="record.ttl === 1 ? ($store.i18n.locale === 'zh' ? '自动' : 'Auto') : record.ttl"></span></span>
+                            <template x-if="showProxyColumn">
+                                <span><span x-text="$store.i18n.locale === 'zh' ? '代理: ' : 'Proxy: '"></span><span :class="record.proxied ? 'text-orange-600 dark:text-orange-400' : ''" x-text="record.proxied ? ($store.i18n.locale === 'zh' ? '开启' : 'On') : ($store.i18n.locale === 'zh' ? '关闭' : 'Off')"></span></span>
+                            </template>
+                            <template x-if="showLineColumn">
+                                <span><span x-text="$store.i18n.locale === 'zh' ? '线路: ' : 'Line: '"></span><span x-text="record.line_name || record.line || ($store.i18n.locale === 'zh' ? '默认' : 'Default')"></span></span>
+                            </template>
+                            <template x-if="showWeightColumn && record.weight">
+                                <span><span x-text="$store.i18n.locale === 'zh' ? '权重: ' : 'Weight: '"></span><span x-text="record.weight"></span></span>
+                            </template>
+                            <span><span x-text="$store.i18n.locale === 'zh' ? '来源: ' : 'Source: '"></span>
+                                <template x-if="record.source === 'system'">
+                                    <span class="text-blue-600 dark:text-blue-400" x-text="record.username || ($store.i18n.locale === 'zh' ? '用户' : 'User')"></span>
+                                </template>
+                                <template x-if="record.source !== 'system'">
+                                    <span x-text="$store.i18n.locale === 'zh' ? '服务商' : 'Provider'"></span>
+                                </template>
+                            </span>
+                        </div>
+                        <div class="flex gap-4 pt-2 border-t border-gray-100 dark:border-gray-700">
+                            <button @click="editRecord(record)" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '编辑' : 'Edit'"></button>
+                            <button @click="deleteRecord(record)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div x-show="!loading && records.length === 0" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-10 text-center text-gray-500 dark:text-gray-400 hover:shadow-lg transition-shadow" x-text="$store.i18n.locale === 'zh' ? '暂无DNS记录' : 'No DNS records'"></div>
+            <div x-show="!loading && pagination.pages > 1" class="mt-4 flex justify-center gap-2">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <span class="px-3 py-1.5 text-gray-600 dark:text-gray-400 text-sm" x-text="page + ' / ' + pagination.pages"></span>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 添加/编辑弹窗 -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="isEdit ? ($store.i18n.locale === 'zh' ? '编辑DNS记录' : 'Edit DNS Record') : ($store.i18n.locale === 'zh' ? '添加DNS记录' : 'Add DNS Record')"></h3>
+            <div x-show="modalError" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="modalError"></div>
+            
+            <!-- 名称 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '主机记录' : 'Host Record'"></label>
+                <input type="text" x-model="form.name" :readonly="isEdit" :disabled="isEdit" 
+                    :placeholder="$store.i18n.locale === 'zh' ? '如 www, @, mail' : 'e.g. www, @, mail'" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    :class="isEdit ? 'bg-gray-50 dark:bg-gray-600' : ''">
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '@ 表示根域名' : '@ represents root domain'"></p>
+            </div>
+            
+            <!-- 类型 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '记录类型' : 'Record Type'"></label>
+                <select x-model="form.type" :disabled="isEdit" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    :class="isEdit ? 'bg-gray-50 dark:bg-gray-600' : ''">
+                    <template x-for="t in supportedTypes" :key="t">
+                        <option :value="t" x-text="t"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- 内容 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '记录值' : 'Record Value'"></label>
+                <input type="text" x-model="form.content" :placeholder="$store.i18n.locale === 'zh' ? '记录值' : 'Record value'" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            </div>
+            
+            <!-- TTL -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">TTL</label>
+                <select x-model="form.ttl" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="1" x-text="$store.i18n.locale === 'zh' ? '自动' : 'Auto'"></option>
+                    <option value="60" x-text="$store.i18n.locale === 'zh' ? '1分钟' : '1 minute'"></option>
+                    <option value="120" x-text="$store.i18n.locale === 'zh' ? '2分钟' : '2 minutes'"></option>
+                    <option value="300" x-text="$store.i18n.locale === 'zh' ? '5分钟' : '5 minutes'"></option>
+                    <option value="600" x-text="$store.i18n.locale === 'zh' ? '10分钟' : '10 minutes'"></option>
+                    <option value="1800" x-text="$store.i18n.locale === 'zh' ? '30分钟' : '30 minutes'"></option>
+                    <option value="3600" x-text="$store.i18n.locale === 'zh' ? '1小时' : '1 hour'"></option>
+                    <option value="7200" x-text="$store.i18n.locale === 'zh' ? '2小时' : '2 hours'"></option>
+                    <option value="43200" x-text="$store.i18n.locale === 'zh' ? '12小时' : '12 hours'"></option>
+                    <option value="86400" x-text="$store.i18n.locale === 'zh' ? '1天' : '1 day'"></option>
+                </select>
+            </div>
+            
+            <!-- MX 优先级 -->
+            <div class="mb-4" x-show="form.type === 'MX'">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '优先级' : 'Priority'"></label>
+                <input type="number" x-model="form.priority" min="0" max="65535" placeholder="10" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            </div>
+            
+            <!-- 代理开关（仅 Cloudflare） -->
+            <div class="mb-4" x-show="capabilities.supports_proxy">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? 'CDN 代理' : 'CDN Proxy'"></label>
+                <div class="flex items-center space-x-4">
+                    <label class="flex items-center text-gray-700 dark:text-gray-300">
+                        <input type="radio" x-model="form.proxied" :value="false" class="mr-2">
+                        <span class="text-sm" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Off'"></span>
+                    </label>
+                    <label class="flex items-center text-gray-700 dark:text-gray-300">
+                        <input type="radio" x-model="form.proxied" :value="true" class="mr-2">
+                        <span class="text-sm" x-text="$store.i18n.locale === 'zh' ? '开启' : 'On'"></span>
+                    </label>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '开启后流量将通过 Cloudflare CDN' : 'Traffic will go through Cloudflare CDN when enabled'"></p>
+            </div>
+            
+            <!-- 线路选择（国内服务商） -->
+            <div class="mb-4" x-show="capabilities.supports_line && lines.length > 0">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '解析线路' : 'DNS Line'"></label>
+                <select x-model="form.line" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '默认' : 'Default'"></option>
+                    <template x-for="line in lines" :key="line.line_id">
+                        <option :value="line.line_id" x-text="line.name"></option>
+                    </template>
+                </select>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '不同线路可返回不同解析结果' : 'Different lines can return different results'"></p>
+            </div>
+            
+            <!-- 权重（支持权重的服务商） -->
+            <div class="mb-4" x-show="capabilities.supports_weight">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '权重' : 'Weight'"></label>
+                <input type="number" x-model="form.weight" min="0" max="100" :placeholder="$store.i18n.locale === 'zh' ? '留空表示不启用' : 'Empty to disable'" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '相同主机记录和线路下，按权重比例分配流量' : 'Traffic distributed by weight ratio for same host and line'"></p>
+            </div>
+            
+            <div class="flex space-x-3 mt-6">
+                <button @click="showModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="saveRecord" :disabled="saving" class="flex-1 px-4 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存' : 'Save'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+function dnsRecordsPage() {
+    return {
+        domains: [],
+        records: [],
+        loading: false,
+        loadingDomains: false,
+        page: 1,
+        pagination: { pages: 1 },
+        filter: { type: '', source: '', search: '' },
+        domainSearch: '',
+        selectedDomain: null,
+        
+        showModal: false,
+        isEdit: false,
+        modalError: '',
+        saving: false,
+        
+        form: {
+            record_id: '',
+            name: '',
+            type: 'A',
+            content: '',
+            ttl: '600',
+            proxied: false,
+            line: '',
+            weight: '',
+            priority: ''
+        },
+        
+        capabilities: {
+            supports_proxy: false,
+            supports_line: false,
+            supports_weight: false,
+            supported_types: ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']
+        },
+        lines: [],
+        
+        get filteredDomains() {
+            if (!this.domainSearch) return this.domains;
+            const search = this.domainSearch.toLowerCase();
+            return this.domains.filter(d => d.name.toLowerCase().includes(search));
+        },
+        
+        get showProxyColumn() { return this.capabilities.supports_proxy; },
+        get showLineColumn() { return this.capabilities.supports_line; },
+        get showWeightColumn() { return this.capabilities.supports_weight; },
+        get supportedTypes() { return this.capabilities.supported_types || ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']; },
+        
+        get token() { return localStorage.getItem('token'); },
+        
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadDomains();
+        },
+        
+        async loadDomains() {
+            this.loadingDomains = true;
+            const res = await fetch('/api/admin/domains', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.domains = data.data.domains;
+            this.loadingDomains = false;
+        },
+        
+        async selectDomain(domain) {
+            this.selectedDomain = domain;
+            this.page = 1;
+            this.filter = { type: '', source: '', search: '' };
+            await this.loadCapabilities();
+            await this.loadRecords();
+        },
+        
+        backToList() {
+            this.selectedDomain = null;
+            this.records = [];
+            this.capabilities = {
+                supports_proxy: false,
+                supports_line: false,
+                supports_weight: false,
+                supported_types: ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']
+            };
+            this.lines = [];
+        },
+        
+        async loadCapabilities() {
+            if (!this.selectedDomain) return;
+            try {
+                const res = await fetch(`/api/admin/domains/${this.selectedDomain.id}/capabilities`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.capabilities = data.data.capabilities || {};
+                    this.lines = data.data.lines || [];
+                }
+            } catch (e) {
+                console.error('Failed to load capabilities:', e);
+            }
+        },
+        
+        async loadRecords() {
+            if (!this.selectedDomain) { this.records = []; return; }
+            this.loading = true;
+            let url = `/api/admin/dns-records?page=${this.page}&per_page=20&domain_id=${this.selectedDomain.id}`;
+            if (this.filter.type) url += `&type=${this.filter.type}`;
+            if (this.filter.source) url += `&source=${this.filter.source}`;
+            if (this.filter.search) url += `&search=${encodeURIComponent(this.filter.search)}`;
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.records = data.data.records;
+                this.pagination = data.data.pagination;
+            }
+            this.loading = false;
+        },
+        
+        openAddModal() {
+            this.isEdit = false;
+            this.form = { record_id: '', name: '', type: 'A', content: '', ttl: '600', proxied: false, line: '', weight: '', priority: '' };
+            this.modalError = '';
+            this.showModal = true;
+        },
+        
+        editRecord(record) {
+            this.isEdit = true;
+            this.form = {
+                record_id: record.record_id || record.cf_record_id,
+                domain_id: record.domain_id,
+                name: record.name,
+                type: record.type,
+                content: record.content || record.value,
+                ttl: String(record.ttl),
+                proxied: record.proxied || false,
+                line: record.line || '',
+                weight: record.weight || '',
+                priority: record.priority || ''
+            };
+            this.modalError = '';
+            this.showModal = true;
+        },
+        
+        async saveRecord() {
+            this.saving = true;
+            this.modalError = '';
+            
+            const payload = {
+                domain_id: this.selectedDomain.id,
+                name: this.form.name,
+                type: this.form.type,
+                content: this.form.content,
+                ttl: parseInt(this.form.ttl)
+            };
+            
+            if (this.capabilities.supports_proxy) {
+                payload.proxied = this.form.proxied === true || this.form.proxied === 'true';
+            }
+            if (this.capabilities.supports_line && this.form.line) {
+                payload.line = this.form.line;
+            }
+            if (this.capabilities.supports_weight && this.form.weight) {
+                payload.weight = parseInt(this.form.weight);
+            }
+            if (this.form.type === 'MX' && this.form.priority) {
+                payload.priority = parseInt(this.form.priority);
+            }
+            
+            try {
+                let res;
+                if (this.isEdit) {
+                    res = await fetch(`/api/admin/dns-records/${this.form.record_id}`, {
+                        method: 'PUT',
+                        headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } else {
+                    res = await fetch('/api/admin/dns-records', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                }
+                const data = await res.json();
+                if (data.code === 200 || data.code === 201) {
+                    this.showModal = false;
+                    await this.loadRecords();
+                } else {
+                    this.modalError = data.message;
+                }
+            } catch (e) {
+                const failMsg = Alpine.store('i18n').locale === 'zh' ? '操作失败: ' : 'Operation failed: ';
+                this.modalError = failMsg + e.message;
+            }
+            this.saving = false;
+        },
+        
+        async deleteRecord(record) {
+            const confirmMsg = Alpine.store('i18n').locale === 'zh' ? `确定删除记录 ${record.name}？` : `Delete record ${record.name}?`;
+            if (!confirm(confirmMsg)) return;
+            const recordId = record.record_id || record.cf_record_id;
+            const res = await fetch(`/api/admin/dns-records/${recordId}?domain_id=${this.selectedDomain.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                await this.loadRecords();
+            } else {
+                alert(data.message);
+            }
+        },
+        
+        async goPage(newPage) {
+            if (newPage < 1 || newPage > this.pagination.pages || newPage === this.page) return;
+            this.page = newPage;
+            await this.loadRecords();
+        }
+    }
+}
+</script>
+{% endblock %}

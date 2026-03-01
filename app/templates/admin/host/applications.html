@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}托管申请审核 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 max-w-full" x-data="hostApplications()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                <a href="/admin" class="hover:text-gray-700 dark:hover:text-gray-300" x-text="$store.i18n.t('host.admin.breadcrumb')"></a>
+                <span>/</span>
+                <span x-text="$store.i18n.t('host.admin.applications.title')"></span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.applications.title')"></h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm" x-text="$store.i18n.t('host.admin.applications.description')"></p>
+        </div>
+        <!-- 批量删除按钮 -->
+        <div x-show="selectedIds.length > 0" x-cloak class="flex items-center gap-2">
+            <span class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('host.admin.applications.selected') + ': ' + selectedIds.length"></span>
+            <button @click="batchDelete()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium" x-text="$store.i18n.t('host.admin.applications.batchDelete')"></button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-6 overflow-x-auto">
+        <button @click="currentTab = ''; loadApplications()" :class="currentTab === '' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'" class="px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap" x-text="$store.i18n.t('host.admin.applications.tabs.all')"></button>
+        <button @click="currentTab = 'pending'; loadApplications()" :class="currentTab === 'pending' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'" class="px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">
+            <span x-text="$store.i18n.t('host.admin.applications.tabs.pending')"></span> <span x-show="pendingCount > 0" class="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full" x-text="pendingCount"></span>
+        </button>
+        <button @click="currentTab = 'approved'; loadApplications()" :class="currentTab === 'approved' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'" class="px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap" x-text="$store.i18n.t('host.admin.applications.tabs.approved')"></button>
+        <button @click="currentTab = 'rejected'; loadApplications()" :class="currentTab === 'rejected' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'" class="px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap" x-text="$store.i18n.t('host.admin.applications.tabs.rejected')"></button>
+    </div>
+
+    <!-- Applications List -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <!-- 全选 -->
+        <div x-show="!loading && applications.length > 0" x-cloak class="px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-3">
+            <input type="checkbox" @change="toggleSelectAll($event.target.checked)" :checked="selectedIds.length === applications.length && applications.length > 0" class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+            <span class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('host.admin.applications.selectAll')"></span>
+        </div>
+        
+        <div x-show="loading" class="p-8 text-center">
+            <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <div x-show="!loading && applications.length === 0" x-cloak class="p-8 text-center">
+            <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('host.admin.applications.noRecords')"></p>
+        </div>
+        <div x-show="!loading && applications.length > 0" x-cloak class="divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="app in applications" :key="app.id">
+                <div class="px-5 py-4">
+                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div class="flex items-start gap-3 flex-1 min-w-0">
+                            <!-- 复选框 -->
+                            <input type="checkbox" :value="app.id" :checked="selectedIds.includes(app.id)" @change="toggleSelect(app.id)" class="mt-1 w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <p class="font-medium text-gray-900 dark:text-white" x-text="app.user?.username || $store.i18n.t('host.admin.applications.user')"></p>
+                                    <span class="px-2 py-0.5 text-xs rounded-full"
+                                          :class="{
+                                              'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': app.status === 'pending',
+                                              'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': app.status === 'approved',
+                                              'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400': app.status === 'rejected'
+                                          }"
+                                          x-text="$store.i18n.t('host.admin.applications.tabs.' + app.status)"></span>
+                                </div>
+                                <p class="text-sm text-gray-500 dark:text-gray-400" x-text="app.user?.email"></p>
+                                <p class="text-sm text-gray-600 dark:text-gray-300 mt-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3" x-text="app.reason"></p>
+                                <p class="text-xs text-gray-400 mt-2" x-text="$store.i18n.t('host.admin.applications.applyTime') + ': ' + formatDate(app.created_at)"></p>
+                                <p x-show="app.admin_remark" class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('host.adminRemark') + ': ' + app.admin_remark"></p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0 ml-7 sm:ml-0">
+                            <template x-if="app.status === 'pending'">
+                                <div class="flex gap-2">
+                                    <button @click="reviewApplication(app, 'approve')" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium" x-text="$store.i18n.t('host.approve')"></button>
+                                    <button @click="reviewApplication(app, 'reject')" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium" x-text="$store.i18n.t('host.reject')"></button>
+                                </div>
+                            </template>
+                            <button @click="deleteApplication(app)" class="px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+        
+        <!-- Pagination -->
+        <div x-show="!loading && pagination.total_pages > 1" x-cloak class="px-5 py-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between">
+            <p class="text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.t('host.admin.applications.pagination.total')"></span> <span x-text="pagination.total"></span> <span x-text="$store.i18n.t('host.admin.applications.pagination.items')"></span></p>
+            <div class="flex gap-2">
+                <button @click="goToPage(pagination.page - 1)" :disabled="pagination.page <= 1" class="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm disabled:opacity-50" x-text="$store.i18n.t('host.admin.applications.pagination.prev')"></button>
+                <span class="px-3 py-1.5 text-sm" x-text="pagination.page + ' / ' + pagination.total_pages"></span>
+                <button @click="goToPage(pagination.page + 1)" :disabled="pagination.page >= pagination.total_pages" class="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm disabled:opacity-50" x-text="$store.i18n.t('host.admin.applications.pagination.next')"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div x-show="showReviewModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showReviewModal = false">
+        <div class="absolute inset-0 bg-black/50" @click="showReviewModal = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="reviewAction === 'approve' ? $store.i18n.t('host.admin.applications.reviewModal.approveTitle') : $store.i18n.t('host.admin.applications.reviewModal.rejectTitle')"></h3>
+            </div>
+            <form @submit.prevent="submitReview()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('host.admin.applications.reviewModal.remark')"></label>
+                    <textarea x-model="reviewRemark" rows="3" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="reviewAction === 'approve' ? $store.i18n.t('host.admin.applications.reviewModal.remarkPlaceholder.approve') : $store.i18n.t('host.admin.applications.reviewModal.remarkPlaceholder.reject')"></textarea>
+                </div>
+                <div x-show="reviewAction === 'approve'">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('host.admin.applications.reviewModal.commissionRate')"></label>
+                    <input type="number" x-model="reviewCommission" min="0" max="100" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" @click="showReviewModal = false" class="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 font-medium" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button type="submit" :disabled="submitting" class="flex-1 px-4 py-2.5 rounded-xl font-medium disabled:opacity-50" :class="reviewAction === 'approve' ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-red-600 text-white hover:bg-red-700'">
+                        <span x-show="!submitting" x-text="reviewAction === 'approve' ? $store.i18n.t('host.admin.applications.reviewModal.confirmApprove') : $store.i18n.t('host.admin.applications.reviewModal.confirmReject')"></span>
+                        <span x-show="submitting" x-text="$store.i18n.t('host.admin.applications.reviewModal.processing')"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showDeleteModal = false">
+        <div class="absolute inset-0 bg-black/50" @click="showDeleteModal = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm" @click.stop>
+            <div class="p-6 text-center">
+                <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2" x-text="$store.i18n.t('host.admin.applications.deleteModal.title')"></h3>
+                <p class="text-gray-500 dark:text-gray-400 text-sm mb-6" x-text="deleteCount > 1 ? $store.i18n.t('host.admin.applications.deleteModal.batchConfirm').replace('{count}', deleteCount) : $store.i18n.t('host.admin.applications.deleteModal.confirm')"></p>
+                <div class="flex gap-3">
+                    <button @click="showDeleteModal = false" class="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 font-medium" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button @click="confirmDelete()" :disabled="deleting" class="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 font-medium disabled:opacity-50">
+                        <span x-show="!deleting" x-text="$store.i18n.t('common.delete')"></span>
+                        <span x-show="deleting" x-text="$store.i18n.t('host.admin.applications.deleteModal.deleting')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function hostApplications() {
+    return {
+        loading: true,
+        applications: [],
+        currentTab: '',
+        pendingCount: 0,
+        pagination: { page: 1, per_page: 20, total: 0, total_pages: 0 },
+        showReviewModal: false,
+        reviewingApp: null,
+        reviewAction: '',
+        reviewRemark: '',
+        reviewCommission: 10,
+        submitting: false,
+        // 删除相关
+        selectedIds: [],
+        showDeleteModal: false,
+        deleteIds: [],
+        deleteCount: 0,
+        deleting: false,
+        
+        async init() {
+            await this.loadApplications();
+            this.loading = false;
+        },
+        
+        async loadApplications() {
+            try {
+                let url = `/api/admin/host/applications?page=${this.pagination.page}`;
+                if (this.currentTab) {
+                    url += `&status=${this.currentTab}`;
+                }
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.applications = data.data.items || [];
+                    this.pagination = {
+                        page: data.data.page,
+                        per_page: data.data.per_page,
+                        total: data.data.total,
+                        total_pages: data.data.total_pages
+                    };
+                }
+                // 单独获取待审核数量
+                await this.loadPendingCount();
+                // 清空选择
+                this.selectedIds = [];
+            } catch (e) {
+                console.error('Load applications failed:', e);
+            }
+        },
+        
+        async loadPendingCount() {
+            try {
+                const res = await fetch('/api/admin/host/applications?status=pending&page=1&per_page=1', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.pendingCount = data.data.total || 0;
+                }
+            } catch (e) {
+                console.error('Load pending count failed:', e);
+            }
+        },
+        
+        reviewApplication(app, action) {
+            this.reviewingApp = app;
+            this.reviewAction = action;
+            this.reviewRemark = '';
+            this.reviewCommission = 10;
+            this.showReviewModal = true;
+        },
+        
+        async submitReview() {
+            this.submitting = true;
+            try {
+                const url = `/api/admin/host/applications/${this.reviewingApp.id}/${this.reviewAction}`;
+                const body = { remark: this.reviewRemark };
+                if (this.reviewAction === 'approve') {
+                    body.commission_rate = this.reviewCommission;
+                }
+                
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showReviewModal = false;
+                    await this.loadApplications();
+                    window.$toast?.success(this.reviewAction === 'approve' ? Alpine.store('i18n').t('host.admin.applications.messages.approved') : Alpine.store('i18n').t('host.admin.applications.messages.rejected'));
+                } else {
+                    window.$toast?.error(data.message || Alpine.store('i18n').t('message.operationFailed'));
+                }
+            } catch (e) {
+                window.$toast?.error(Alpine.store('i18n').t('message.operationFailed'));
+            }
+            this.submitting = false;
+        },
+        
+        // 选择相关
+        toggleSelect(id) {
+            const idx = this.selectedIds.indexOf(id);
+            if (idx > -1) {
+                this.selectedIds.splice(idx, 1);
+            } else {
+                this.selectedIds.push(id);
+            }
+        },
+        
+        toggleSelectAll(checked) {
+            if (checked) {
+                this.selectedIds = this.applications.map(a => a.id);
+            } else {
+                this.selectedIds = [];
+            }
+        },
+        
+        // 删除单条
+        deleteApplication(app) {
+            this.deleteIds = [app.id];
+            this.deleteCount = 1;
+            this.showDeleteModal = true;
+        },
+        
+        // 批量删除
+        batchDelete() {
+            if (this.selectedIds.length === 0) return;
+            this.deleteIds = [...this.selectedIds];
+            this.deleteCount = this.selectedIds.length;
+            this.showDeleteModal = true;
+        },
+        
+        // 确认删除
+        async confirmDelete() {
+            this.deleting = true;
+            try {
+                let res;
+                if (this.deleteIds.length === 1) {
+                    // 单条删除
+                    res = await fetch(`/api/admin/host/applications/${this.deleteIds[0]}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                    });
+                } else {
+                    // 批量删除
+                    res = await fetch('/api/admin/host/applications/batch-delete', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ ids: this.deleteIds })
+                    });
+                }
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showDeleteModal = false;
+                    await this.loadApplications();
+                    window.$toast?.success(Alpine.store('i18n').t('message.deleteSuccess'));
+                } else {
+                    window.$toast?.error(data.message || Alpine.store('i18n').t('message.operationFailed'));
+                }
+            } catch (e) {
+                window.$toast?.error(Alpine.store('i18n').t('message.operationFailed'));
+            }
+            this.deleting = false;
+        },
+        
+        goToPage(page) {
+            if (page < 1 || page > this.pagination.total_pages) return;
+            this.pagination.page = page;
+            this.loadApplications();
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return new Date(dateStr).toLocaleString();
+        }
+    }
+}
+</script>
+{% endblock %}

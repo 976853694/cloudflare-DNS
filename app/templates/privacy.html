@@ -1,0 +1,80 @@
+{% extends "base_public.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }} - 隐私政策{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-12 px-4">
+    <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-2xl p-8">
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-8" x-text="$store.i18n.t('legal.privacyPolicy')"></h1>
+        
+        <div class="prose dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 space-y-6">
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.introduction')"></h2>
+                <p x-text="$store.i18n.t('legal.privacyIntro', { siteName: '{{ site_settings.site_name|default('六趣DNS') }}' })"></p>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.infoCollection')"></h2>
+                <p x-text="$store.i18n.t('legal.infoCollectionDesc')"></p>
+                <ul class="list-disc list-inside mt-2 space-y-1">
+                    <li x-text="$store.i18n.t('legal.infoEmail')"></li>
+                    <li x-text="$store.i18n.t('legal.infoUsername')"></li>
+                    <li x-text="$store.i18n.t('legal.infoIP')"></li>
+                    <li x-text="$store.i18n.t('legal.infoDomain')"></li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.infoUsage')"></h2>
+                <p x-text="$store.i18n.t('legal.infoUsageDesc')"></p>
+                <ul class="list-disc list-inside mt-2 space-y-1">
+                    <li x-text="$store.i18n.t('legal.usageService')"></li>
+                    <li x-text="$store.i18n.t('legal.usageSecurity')"></li>
+                    <li x-text="$store.i18n.t('legal.usageNotify')"></li>
+                    <li x-text="$store.i18n.t('legal.usageImprove')"></li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.infoProtection')"></h2>
+                <p x-text="$store.i18n.t('legal.infoProtectionDesc')"></p>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.infoSharing')"></h2>
+                <p x-text="$store.i18n.t('legal.infoSharingDesc')"></p>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.userRights')"></h2>
+                <p x-text="$store.i18n.t('legal.userRightsDesc')"></p>
+                <ul class="list-disc list-inside mt-2 space-y-1">
+                    <li x-text="$store.i18n.t('legal.rightAccess')"></li>
+                    <li x-text="$store.i18n.t('legal.rightCorrect')"></li>
+                    <li x-text="$store.i18n.t('legal.rightDelete')"></li>
+                </ul>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.policyUpdate')"></h2>
+                <p x-text="$store.i18n.t('legal.policyUpdateDesc')"></p>
+            </section>
+
+            <section>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('legal.contactUs')"></h2>
+                <p x-text="$store.i18n.t('legal.contactUsDesc')"></p>
+                {% if site_settings.support_email %}
+                <p class="mt-2">
+                    <span x-text="$store.i18n.t('auth.email')"></span>: 
+                    <a href="mailto:{{ site_settings.support_email }}" class="text-blue-600 dark:text-blue-400 hover:underline">{{ site_settings.support_email }}</a>
+                </p>
+                {% endif %}
+            </section>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <a href="/" class="text-blue-600 dark:text-blue-400 hover:underline" x-text="$store.i18n.t('common.back')"></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

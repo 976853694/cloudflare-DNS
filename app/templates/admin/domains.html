@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+
+{% block title %}域名列表 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="domainsPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '域名列表' : 'Domain List'"></h1>
+        <button x-show="!isDemo" @click="showAddModal = true" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500 transition w-full sm:w-auto" x-text="$store.i18n.locale === 'zh' ? '添加域名' : 'Add Domain'"></button>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        <!-- 桌面端表格 -->
+        <table x-show="!loading && domains.length > 0" class="w-full hidden sm:table">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '渠道' : 'Channel'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '子域名数' : 'Subdomains'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '允许注册' : 'Allow Register'"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.t('domain.nsTransfer')"></th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                <template x-for="domain in domains" :key="domain.id">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-6 py-4 font-medium text-gray-900 dark:text-white" x-text="domain.name"></td>
+                        <td class="px-6 py-4">
+                            <span x-show="domain.dns_channel" class="px-2 py-1 text-xs rounded-full" 
+                                  :class="getProviderClass(domain.dns_channel?.provider_type)"
+                                  x-text="domain.dns_channel?.name"></span>
+                            <span x-show="!domain.dns_channel && domain.cf_account" class="px-2 py-1 text-xs rounded-full bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300"
+                                  x-text="domain.cf_account?.name + ($store.i18n.locale === 'zh' ? ' (旧)' : ' (old)')"></span>
+                            <span x-show="!domain.dns_channel && !domain.cf_account" class="text-gray-400 dark:text-gray-500">-</span>
+                        </td>
+                        <td class="px-6 py-4 text-gray-600 dark:text-gray-300" x-text="domain.subdomain_count"></td>
+                        <td class="px-6 py-4">
+                            <button @click="toggleRegister(domain)" x-show="!isDemo" :class="domain.allow_register ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" class="px-3 py-1 rounded text-xs" x-text="domain.allow_register ? ($store.i18n.locale === 'zh' ? '允许' : 'Yes') : ($store.i18n.locale === 'zh' ? '禁止' : 'No')"></button>
+                            <span x-show="isDemo" :class="domain.allow_register ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" class="px-3 py-1 rounded text-xs" x-text="domain.allow_register ? ($store.i18n.locale === 'zh' ? '允许' : 'Yes') : ($store.i18n.locale === 'zh' ? '禁止' : 'No')"></span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button @click="toggleNsTransfer(domain)" x-show="!isDemo" :class="domain.allow_ns_transfer ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'" class="px-3 py-1 rounded text-xs" x-text="domain.allow_ns_transfer ? $store.i18n.t('domain.nsTransferEnabled') : $store.i18n.t('domain.nsTransferDisabled')"></button>
+                            <span x-show="isDemo" :class="domain.allow_ns_transfer ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'" class="px-3 py-1 rounded text-xs" x-text="domain.allow_ns_transfer ? $store.i18n.t('domain.nsTransferEnabled') : $store.i18n.t('domain.nsTransferDisabled')"></span>
+                        </td>
+                        <td class="px-6 py-4"><button x-show="!isDemo" @click="confirmDelete(domain)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button></td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <!-- 移动端卡片视图 -->
+        <div x-show="!loading && domains.length > 0" class="sm:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="domain in domains" :key="domain.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <h3 class="font-medium text-gray-900 dark:text-white" x-text="domain.name"></h3>
+                        <button @click="toggleRegister(domain)" x-show="!isDemo" :class="domain.allow_register ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" class="px-2 py-1 rounded text-xs" x-text="domain.allow_register ? ($store.i18n.locale === 'zh' ? '允许' : 'Yes') : ($store.i18n.locale === 'zh' ? '禁止' : 'No')"></button>
+                        <span x-show="isDemo" :class="domain.allow_register ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'" class="px-2 py-1 rounded text-xs" x-text="domain.allow_register ? ($store.i18n.locale === 'zh' ? '允许' : 'Yes') : ($store.i18n.locale === 'zh' ? '禁止' : 'No')"></span>
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '渠道: ' : 'Channel: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="domain.dns_channel?.name || domain.cf_account?.name || '-'"></span></p>
+                        <p><span x-text="$store.i18n.locale === 'zh' ? '子域名: ' : 'Subdomains: '"></span><span class="text-gray-700 dark:text-gray-300" x-text="domain.subdomain_count"></span></p>
+                        <p><span x-text="$store.i18n.t('domain.nsTransfer') + ': '"></span>
+                            <button @click="toggleNsTransfer(domain)" x-show="!isDemo" :class="domain.allow_ns_transfer ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'" class="px-2 py-1 rounded text-xs" x-text="domain.allow_ns_transfer ? $store.i18n.t('domain.nsTransferEnabled') : $store.i18n.t('domain.nsTransferDisabled')"></button>
+                            <span x-show="isDemo" :class="domain.allow_ns_transfer ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300'" class="px-2 py-1 rounded text-xs" x-text="domain.allow_ns_transfer ? $store.i18n.t('domain.nsTransferEnabled') : $store.i18n.t('domain.nsTransferDisabled')"></span>
+                        </p>
+                    </div>
+                    <div x-show="!isDemo" class="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <button @click="confirmDelete(domain)" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div x-show="!loading && domains.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '暂无域名' : 'No domains'"></div>
+    </div>
+
+
+    <!-- Add Modal -->
+    <div x-show="showAddModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showAddModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto hover:shadow-lg transition-shadow">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '添加域名' : 'Add Domain'"></h3>
+            <div x-show="error" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-xl text-sm" x-text="error"></div>
+            <div x-show="success" class="mb-4 p-3 bg-green-50 dark:bg-green-900/50 text-green-600 dark:text-green-400 rounded-xl text-sm" x-text="success"></div>
+            
+            <!-- 渠道选择 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '选择渠道' : 'Select Channel'"></label>
+                <select x-model="form.dns_channel_id" @change="onChannelChange" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '请选择渠道' : 'Select a channel'"></option>
+                    <template x-for="ch in channels" :key="ch.id">
+                        <option :value="ch.id" x-text="ch.name + ' (' + ch.provider_name + ')'"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- 加载中 -->
+            <div class="mb-4" x-show="zonesLoading || remoteLoading"><div class="text-center py-3 text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '加载域名列表...' : 'Loading domain list...'"></div></div>
+            
+            <!-- 六趣DNS渠道：上游域名列表 -->
+            <div class="mb-4" x-show="!remoteLoading && isLiuquChannel && remoteDomains.length > 0">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"><span x-text="$store.i18n.locale === 'zh' ? '上游域名' : 'Upstream Domains'"></span> <span class="text-gray-400 dark:text-gray-500 font-normal" x-text="$store.i18n.locale === 'zh' ? '可多选，将同时导入套餐' : 'Multi-select, plans will be imported'"></span></label>
+                <div class="border border-gray-200 dark:border-gray-600 rounded-xl max-h-60 overflow-y-auto">
+                    <template x-for="domain in remoteDomains" :key="domain.id">
+                        <label class="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0" :class="domain.imported ? 'bg-gray-50 dark:bg-gray-700' : ''">
+                            <input type="checkbox" :value="domain.id" :checked="selectedRemoteDomains.includes(domain.id)" @change="toggleRemoteDomain(domain.id)" :disabled="domain.imported" class="mr-3 rounded border-gray-300 dark:border-gray-500">
+                            <span x-text="domain.name" class="text-gray-700 dark:text-gray-300"></span>
+                            <span x-show="domain.plans && domain.plans.length > 0" class="ml-2 text-xs text-gray-400 dark:text-gray-500" x-text="'(' + domain.plans.length + ($store.i18n.locale === 'zh' ? '个套餐)' : ' plans)')"></span>
+                            <span x-show="domain.imported" class="ml-2 text-xs text-green-600 dark:text-green-400" x-text="$store.i18n.locale === 'zh' ? '(已导入)' : '(imported)'"></span>
+                        </label>
+                    </template>
+                </div>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '已选择 ' : 'Selected '"></span><span x-text="selectedRemoteDomains.length" class="font-medium"></span><span x-text="$store.i18n.locale === 'zh' ? ' 个域名' : ' domains'"></span></p>
+            </div>
+            <div class="mb-4" x-show="!remoteLoading && isLiuquChannel && remoteDomains.length === 0 && form.dns_channel_id">
+                <p class="text-center py-3 text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '上游暂无可用域名' : 'No available upstream domains'"></p>
+            </div>
+            
+            <!-- 普通渠道：Zone列表 -->
+            <div class="mb-4" x-show="!zonesLoading && !isLiuquChannel && zones.length > 0">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300"><span x-text="$store.i18n.locale === 'zh' ? '选择域名' : 'Select Domains'"></span> <span class="text-gray-400 dark:text-gray-500 font-normal" x-text="$store.i18n.locale === 'zh' ? '可多选' : 'Multi-select'"></span></label>
+                    <button type="button" @click="toggleSelectAllZones()" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" x-text="selectedZones.length === availableZones.length ? ($store.i18n.locale === 'zh' ? '取消全选' : 'Deselect All') : ($store.i18n.locale === 'zh' ? '全选' : 'Select All')"></button>
+                </div>
+                <div class="border border-gray-200 dark:border-gray-600 rounded-xl max-h-60 overflow-y-auto">
+                    <template x-for="zone in zones" :key="zone.zone_id">
+                        <label class="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0">
+                            <input type="checkbox" :value="zone.zone_id" x-model="selectedZones" class="mr-3 rounded border-gray-300 dark:border-gray-500">
+                            <span x-text="zone.name" class="text-gray-700 dark:text-gray-300"></span>
+                            <span x-show="existingDomains.includes(zone.name)" class="ml-2 text-xs text-orange-500 dark:text-orange-400" x-text="$store.i18n.locale === 'zh' ? '(已添加)' : '(added)'"></span>
+                        </label>
+                    </template>
+                </div>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '已选择 ' : 'Selected '"></span><span x-text="selectedZones.length" class="font-medium"></span><span x-text="$store.i18n.locale === 'zh' ? ' 个域名' : ' domains'"></span></p>
+            </div>
+            
+            <!-- 普通渠道：手动输入 -->
+            <div class="mb-4" x-show="!zonesLoading && !isLiuquChannel && zones.length === 0 && form.dns_channel_id">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '域名' : 'Domain'"></label>
+                <input type="text" x-model="form.name" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="example.com">
+            </div>
+            <div class="mb-4" x-show="!zonesLoading && !isLiuquChannel && zones.length === 0 && form.dns_channel_id">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Zone ID</label>
+                <input type="text" x-model="form.zone_id" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="Zone ID">
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showAddModal = false" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="addDomains" :disabled="adding" class="flex-1 px-4 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!adding" x-text="$store.i18n.locale === 'zh' ? '添加' : 'Add'"></span>
+                    <span x-show="adding" x-text="$store.i18n.locale === 'zh' ? '添加中...' : 'Adding...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+function domainsPage() {
+    return {
+        domains: [], channels: [], zones: [], loading: true, zonesLoading: false, showAddModal: false,
+        form: { name: '', zone_id: '', dns_channel_id: '', description: '' }, 
+        selectedZones: [], error: '', success: '', adding: false, isDemo: false,
+        remoteDomains: [], selectedRemoteDomains: [], remoteLoading: false,
+        
+        get token() { return localStorage.getItem('token'); },
+        get existingDomains() { return this.domains.map(d => d.name); },
+        get selectedChannel() { return this.channels.find(c => c.id == this.form.dns_channel_id); },
+        get isLiuquChannel() { return this.selectedChannel?.provider_type === 'liuqu'; },
+        get availableZones() { return this.zones.map(z => z.zone_id); },
+        
+        toggleSelectAllZones() {
+            if (this.selectedZones.length === this.availableZones.length) {
+                this.selectedZones = [];
+            } else {
+                this.selectedZones = [...this.availableZones];
+            }
+        },
+        
+        getProviderClass(type) {
+            const classes = {
+                'cloudflare': 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300',
+                'aliyun': 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+                'dnspod': 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+                'huawei': 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300',
+                'liuqu': 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+            };
+            return classes[type] || 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+        },
+        
+        async init() { 
+            if (!this.token) { window.location.href = '/login'; return; } 
+            if (window.$store && window.$store.auth && window.$store.auth.user) {
+                this.isDemo = window.$store.auth.user.role === 'demo';
+            } else {
+                const res = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                if (data.code === 200) this.isDemo = data.data.role === 'demo';
+            }
+            await this.loadDomains(); 
+            await this.loadChannels(); 
+        },
+        async loadDomains() {
+            this.loading = true;
+            const res = await fetch('/api/admin/domains', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.domains = data.data.domains;
+            this.loading = false;
+        },
+        async loadChannels() {
+            const res = await fetch('/api/admin/channels', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.channels = data.data.channels;
+        },
+        async onChannelChange() {
+            this.zones = []; this.selectedZones = []; 
+            this.remoteDomains = []; this.selectedRemoteDomains = [];
+            this.form.zone_id = ''; this.form.name = '';
+            
+            if (!this.form.dns_channel_id) return;
+            
+            if (this.isLiuquChannel) {
+                await this.loadRemoteDomains();
+            } else {
+                await this.loadZones();
+            }
+        },
+        async loadZones() {
+            this.zonesLoading = true;
+            const res = await fetch(`/api/admin/channels/${this.form.dns_channel_id}/zones?all=1`, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.zones = data.data.zones || [];
+            this.zonesLoading = false;
+        },
+        async loadRemoteDomains() {
+            this.remoteLoading = true;
+            const res = await fetch(`/api/admin/channels/${this.form.dns_channel_id}/remote-domains`, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.remoteDomains = data.data.domains || [];
+            } else {
+                const failMsg = Alpine.store('i18n').locale === 'zh' ? '获取上游域名失败' : 'Failed to get upstream domains';
+                this.error = data.message || failMsg;
+            }
+            this.remoteLoading = false;
+        },
+        toggleRemoteDomain(domainId) {
+            const idx = this.selectedRemoteDomains.indexOf(domainId);
+            if (idx > -1) { this.selectedRemoteDomains.splice(idx, 1); } 
+            else { this.selectedRemoteDomains.push(domainId); }
+        },
+        async addDomains() {
+            this.adding = true; this.error = ''; this.success = '';
+            let added = 0, failed = 0;
+            const locale = Alpine.store('i18n').locale;
+            
+            if (this.isLiuquChannel && this.selectedRemoteDomains.length > 0) {
+                const items = this.selectedRemoteDomains.map(domainId => {
+                    const domain = this.remoteDomains.find(d => d.id === domainId);
+                    // 同时导入域名的套餐信息
+                    return { domain_id: domain.id, domain_name: domain.name, plans: domain.plans || [] };
+                });
+                
+                const res = await fetch(`/api/admin/channels/${this.form.dns_channel_id}/import-domains`, {
+                    method: 'POST', 
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.success = data.message;
+                    await this.loadDomains();
+                    this.selectedRemoteDomains = [];
+                    await this.loadRemoteDomains();
+                } else {
+                    const failMsg = locale === 'zh' ? '导入失败' : 'Import failed';
+                    this.error = data.message || failMsg;
+                }
+            }
+            else if (this.zones.length > 0 && this.selectedZones.length > 0) {
+                for (const zoneId of this.selectedZones) {
+                    const zone = this.zones.find(z => z.zone_id === zoneId);
+                    if (!zone || this.existingDomains.includes(zone.name)) continue;
+                    const res = await fetch('/api/admin/domains', {
+                        method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ dns_channel_id: this.form.dns_channel_id, zone_id: zone.zone_id, name: zone.name })
+                    });
+                    const data = await res.json();
+                    if (data.code === 201) added++; else failed++;
+                }
+                if (added > 0) {
+                    this.success = locale === 'zh' ? `成功添加 ${added} 个域名` + (failed > 0 ? `，${failed} 个失败` : '') : `Added ${added} domains` + (failed > 0 ? `, ${failed} failed` : '');
+                    await this.loadDomains();
+                    this.selectedZones = [];
+                } else {
+                    this.error = locale === 'zh' ? '添加失败' : 'Add failed';
+                }
+            } else {
+                const res = await fetch('/api/admin/domains', {
+                    method: 'POST', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.form)
+                });
+                const data = await res.json();
+                if (data.code === 201) { 
+                    this.showAddModal = false; 
+                    this.form = { name: '', zone_id: '', dns_channel_id: '', description: '' }; 
+                    this.zones = []; 
+                    await this.loadDomains(); 
+                } else { 
+                    this.error = data.message; 
+                }
+            }
+            this.adding = false;
+        },
+        async toggleRegister(domain) {
+            const res = await fetch(`/api/admin/domains/${domain.id}`, {
+                method: 'PUT', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow_register: !domain.allow_register })
+            });
+            if ((await res.json()).code === 200) await this.loadDomains();
+        },
+        async toggleNsTransfer(domain) {
+            const res = await fetch(`/api/admin/domains/${domain.id}/ns-transfer`, {
+                method: 'PUT', headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow_ns_transfer: !domain.allow_ns_transfer })
+            });
+            if ((await res.json()).code === 200) await this.loadDomains();
+        },
+        async confirmDelete(domain) {
+            const confirmMsg = Alpine.store('i18n').locale === 'zh' ? `确定删除域名 ${domain.name}？` : `Delete domain ${domain.name}?`;
+            if (!confirm(confirmMsg)) return;
+            const res = await fetch(`/api/admin/domains/${domain.id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token } });
+            if ((await res.json()).code === 200) await this.loadDomains();
+        }
+    }
+}
+</script>
+{% endblock %}

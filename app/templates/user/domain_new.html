@@ -1,0 +1,1077 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="newDomain()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('nav.buyDomain')"></h1>
+        <!-- 余额信息 -->
+        <div class="flex items-center gap-3">
+            <div class="text-right flex-1 sm:flex-none">
+                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '当前余额' : 'Balance'"></p>
+                <p class="text-lg font-bold" :class="user?.balance == -1 ? 'text-purple-600' : 'text-gray-900 dark:text-white'" x-text="user?.balance_text || '¥0'"></p>
+            </div>
+            <a href="/user/redeem" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '充值' : 'Recharge'"></a>
+        </div>
+    </div>
+
+    <!-- 套餐类型切换按钮 -->
+    <div class="flex justify-center mb-6">
+        <div class="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-1">
+            <button 
+                @click="planMode = 'free'"
+                :class="planMode === 'free' ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2">
+                <span class="text-lg">🎁</span>
+                <span x-text="$store.i18n.locale === 'zh' ? '免费套餐' : 'Free Plans'"></span>
+            </button>
+            <button 
+                @click="planMode = 'paid'"
+                :class="planMode === 'paid' ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                class="px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2">
+                <span class="text-lg">💳</span>
+                <span x-text="$store.i18n.locale === 'zh' ? '付费套餐' : 'Paid Plans'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 免费套餐区域 -->
+    <div class="mb-8" x-show="planMode === 'free'" x-transition>
+        <div class="flex items-center gap-2 mb-4">
+            <span class="text-2xl">🎁</span>
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '免费套餐（推荐）' : 'Free Plans (Recommended)'"></h2>
+        </div>
+        <p class="text-gray-600 dark:text-gray-400 text-sm mb-6" x-text="$store.i18n.locale === 'zh' ? '申请免费套餐，体验我们的服务' : 'Apply for free plans and try our services'"></p>
+        
+        <!-- 加载状态 -->
+        <div x-show="loadingFreePlans" class="flex justify-center py-12">
+            <div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+
+        <!-- 免费套餐卡片列表 -->
+        <div x-show="!loadingFreePlans && freePlans.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <template x-for="plan in freePlans" :key="plan.id">
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 hover:shadow-lg transition-shadow">
+                    <!-- 套餐标题 -->
+                    <div class="flex items-start justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white" x-text="plan.name"></h3>
+                            <span class="inline-block mt-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded text-xs" x-text="$store.i18n.locale === 'zh' ? '免费' : 'Free'"></span>
+                        </div>
+                        <!-- 申请次数/状态标签 -->
+                        <div class="flex flex-col items-end gap-1">
+                            <!-- 申请次数显示 -->
+                            <span x-show="plan.max_purchase_count > 0" 
+                                  class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs">
+                                <span x-text="plan.used_count || 0"></span>/<span x-text="plan.max_purchase_count"></span>
+                            </span>
+                            <span x-show="plan.max_purchase_count === 0" 
+                                  class="px-2 py-1 bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 rounded text-xs"
+                                  x-text="$store.i18n.locale === 'zh' ? '无限次' : 'Unlimited'"></span>
+                            <!-- 当前申请状态 -->
+                            <span x-show="plan.application_status" 
+                                  :class="{
+                                      'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300': plan.application_status === 'pending',
+                                      'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': plan.application_status === 'approved',
+                                      'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': plan.application_status === 'rejected',
+                                      'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300': plan.application_status === 'used'
+                                  }"
+                                  class="px-2 py-1 rounded text-xs"
+                                  x-text="getFreePlanStatusText(plan.application_status)"></span>
+                        </div>
+                    </div>
+
+                    <!-- 套餐信息 -->
+                    <div class="space-y-2 mb-6 text-sm text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center">
+                            <span x-text="$store.i18n.locale === 'zh' ? '有效期：' : 'Duration: '"></span>
+                            <span class="ml-1 text-gray-900 dark:text-white" x-text="plan.duration_text"></span>
+                        </div>
+                        <div class="flex items-center">
+                            <span x-text="$store.i18n.locale === 'zh' ? '字符限制：' : 'Char Limit: '"></span>
+                            <span class="ml-1 text-gray-900 dark:text-white" x-text="plan.min_length + '-' + plan.max_length"></span>
+                        </div>
+                        <div class="flex items-center">
+                            <span x-text="$store.i18n.locale === 'zh' ? '记录数：' : 'Records: '"></span>
+                            <span class="ml-1 text-gray-900 dark:text-white" x-text="plan.max_records_text"></span>
+                        </div>
+                        <div class="flex items-start">
+                            <span class="whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '可用域名：' : 'Domains: '"></span>
+                            <span class="ml-1 text-gray-900 dark:text-white" x-text="plan.domain_names.join(', ')"></span>
+                        </div>
+                    </div>
+
+                    <!-- 描述 -->
+                    <p x-show="plan.description" class="text-sm text-gray-600 dark:text-gray-400 mb-4" x-text="plan.description"></p>
+
+                    <!-- 操作按钮 -->
+                    <div class="flex gap-2">
+                        <button x-show="plan.can_apply" 
+                                @click="openApplyModal(plan)" 
+                                class="flex-1 bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500 text-sm"
+                                x-text="$store.i18n.locale === 'zh' ? '立即申请' : 'Apply Now'"></button>
+                        
+                        <button x-show="plan.application_status === 'pending'" 
+                                @click="window.location.href='/my-applications'" 
+                                class="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-sm"
+                                x-text="$store.i18n.locale === 'zh' ? '查看申请' : 'View Application'"></button>
+                        
+                        <button x-show="plan.application_status === 'used'" 
+                                @click="window.location.href='/user/domains'" 
+                                class="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm"
+                                x-text="$store.i18n.locale === 'zh' ? '查看域名' : 'View Domain'"></button>
+                        
+                        <button x-show="plan.application_status === 'approved'" 
+                                class="flex-1 bg-yellow-600 text-white px-4 py-2 rounded-lg cursor-not-allowed text-sm"
+                                disabled
+                                x-text="$store.i18n.locale === 'zh' ? '开通中...' : 'Provisioning...'"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- 无免费套餐提示 -->
+        <div x-show="!loadingFreePlans && freePlans.length === 0" class="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-xl">
+            <p class="text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无免费套餐' : 'No free plans available'"></p>
+        </div>
+    </div>
+
+    <!-- 分隔线 -->
+    <div x-show="planMode === 'free'" class="border-t border-gray-200 dark:border-gray-700 my-8"></div>
+
+    <!-- 付费套餐区域 -->
+    <div x-show="planMode === 'paid'" x-transition class="bg-gray-50 dark:bg-gray-900 rounded-xl p-6">
+        <div class="flex items-center gap-2 mb-6">
+            <span class="text-2xl">💳</span>
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '付费套餐' : 'Paid Plans'"></h2>
+        </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 左侧：选择域名和套餐 -->
+        <div class="lg:col-span-2 space-y-6">
+            <div x-show="error" class="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 rounded-lg text-sm" x-text="error"></div>
+            
+            <!-- 步骤1: 选择域名 -->
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="'1. ' + ($store.i18n.locale === 'zh' ? '选择主域名' : 'Select Domain')"></label>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <template x-for="domain in domains" :key="domain.id">
+                        <button @click="selectDomain(domain)" :class="form.domain_id == domain.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-200' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'" class="p-3 border rounded-lg text-left transition relative">
+                            <p class="font-medium text-gray-900 dark:text-white text-sm truncate" x-text="domain.name"></p>
+                            <!-- 托管商标记 -->
+                            <span x-show="!domain.is_platform" class="absolute top-1 right-1 px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400" x-text="$store.i18n.locale === 'zh' ? '托管' : 'Host'"></span>
+                        </button>
+                    </template>
+                </div>
+                <p x-show="domains.length === 0" class="text-gray-500 dark:text-gray-400 text-sm py-4 text-center" x-text="$store.i18n.locale === 'zh' ? '暂无可用域名' : 'No domains available'"></p>
+            </div>
+            
+            <!-- 步骤2: 选择套餐 -->
+            <div x-show="form.domain_id" x-transition class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                <div class="flex items-center justify-between mb-3">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" x-text="'2. ' + ($store.i18n.locale === 'zh' ? '选择套餐' : 'Select Plan')"></label>
+                    <!-- 展开/收起全部按钮 -->
+                    <button x-show="!loadingPlans && plans.length > 0" 
+                            @click="toggleAllPlans()" 
+                            class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                        <span x-text="allPlansExpanded ? ($store.i18n.locale === 'zh' ? '收起全部' : 'Collapse All') : ($store.i18n.locale === 'zh' ? '展开全部' : 'Expand All')"></span>
+                    </button>
+                </div>
+                
+                <div x-show="loadingPlans" class="text-center py-8">
+                    <div class="inline-block w-6 h-6 border-2 border-gray-300 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+                </div>
+                
+                <div x-show="!loadingPlans" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <template x-for="plan in plans" :key="plan.id">
+                        <div 
+                            :class="form.plan_id == plan.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-200' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'"
+                            class="border rounded-lg transition overflow-hidden">
+                            
+                            <!-- 卡片头部（始终显示） -->
+                            <div @click="togglePlanExpand(plan)" class="p-4 cursor-pointer">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1 min-w-0">
+                                        <p class="font-medium text-gray-900 dark:text-white" x-text="plan.name"></p>
+                                    </div>
+                                    <div class="flex items-center gap-2 ml-2">
+                                        <p class="text-lg font-bold whitespace-nowrap" 
+                                           :class="plan.price == 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'" 
+                                           x-text="plan.price == 0 ? $store.i18n.t('plan.free') : '¥' + plan.price"></p>
+                                        <!-- 展开/收起图标 -->
+                                        <svg class="w-5 h-5 text-gray-400 transition-transform duration-300" 
+                                             :class="plan.expanded ? 'rotate-180' : ''"
+                                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 卡片详情（展开时显示） -->
+                            <div x-show="plan.expanded" 
+                                 x-transition:enter="transition ease-out duration-300"
+                                 x-transition:enter-start="opacity-0 transform -translate-y-2"
+                                 x-transition:enter-end="opacity-100 transform translate-y-0"
+                                 x-transition:leave="transition ease-in duration-200"
+                                 x-transition:leave-start="opacity-100 transform translate-y-0"
+                                 x-transition:leave-end="opacity-0 transform -translate-y-2"
+                                 class="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
+                                
+                                <div class="space-y-2 text-xs text-gray-600 dark:text-gray-400">
+                                    <div class="flex items-center">
+                                        <span x-text="$store.i18n.locale === 'zh' ? '有效期：' : 'Duration: '"></span>
+                                        <span class="ml-1 text-gray-900 dark:text-white" x-text="plan.duration_text"></span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <span x-text="$store.i18n.locale === 'zh' ? '字符限制：' : 'Char Limit: '"></span>
+                                        <span class="ml-1 text-gray-900 dark:text-white" x-text="plan.min_length + '-' + plan.max_length"></span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <span x-text="$store.i18n.locale === 'zh' ? '记录数：' : 'Records: '"></span>
+                                        <span class="ml-1 text-gray-900 dark:text-white" x-text="plan.max_records_text"></span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 套餐描述 -->
+                                <p x-show="plan.description" 
+                                   class="mt-3 text-xs text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 p-2 rounded" 
+                                   x-text="plan.description"></p>
+                                
+                                <!-- 选择按钮 -->
+                                <button 
+                                    @click.stop="selectPlan(plan)"
+                                    :class="form.plan_id == plan.id ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-900 dark:bg-gray-700 hover:bg-gray-800 dark:hover:bg-gray-600'"
+                                    class="w-full mt-3 px-4 py-2 text-white rounded-lg text-sm transition">
+                                    <span x-text="form.plan_id == plan.id ? ($store.i18n.locale === 'zh' ? '已选择' : 'Selected') : ($store.i18n.locale === 'zh' ? '选择此套餐' : 'Select Plan')"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <p x-show="!loadingPlans && plans.length === 0" class="text-gray-500 dark:text-gray-400 text-sm py-4 text-center" x-text="$store.i18n.locale === 'zh' ? '该域名暂无可用套餐' : 'No plans available for this domain'"></p>
+            </div>
+            
+            <!-- 步骤3: 输入域名前缀 -->
+            <div x-show="form.plan_id" x-transition class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3" x-text="'3. ' + ($store.i18n.locale === 'zh' ? '设置域名前缀' : 'Set Domain Prefix')"></label>
+                <div class="flex">
+                    <input type="text" x-model="form.name" @input.debounce.500ms="checkAvailability()" @keydown.enter.prevent="checkAllDomains()" class="flex-1 px-4 py-3 border rounded-l-lg focus:outline-none focus:ring-2 text-lg lowercase dark:bg-gray-700 dark:text-white" :class="nameStatus === 'available' ? 'border-green-400 focus:border-green-400 focus:ring-green-100' : nameStatus === 'unavailable' ? 'border-red-400 focus:border-red-400 focus:ring-red-100' : 'border-gray-200 dark:border-gray-600 focus:border-blue-400 focus:ring-blue-100'" placeholder="your-name">
+                    <span class="px-4 py-3 bg-gray-100 dark:bg-gray-700 border border-l-0 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 whitespace-nowrap" x-text="'.' + (selectedDomain?.name || '')"></span>
+                    <button @click="checkAllDomains()" :disabled="!form.name.trim() || checkingAll" class="px-4 py-3 bg-blue-600 text-white border border-l-0 border-blue-600 rounded-r-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:border-gray-300 disabled:cursor-not-allowed transition whitespace-nowrap">
+                        <span x-show="!checkingAll" x-text="$store.i18n.locale === 'zh' ? '查询全部' : 'Check All'"></span>
+                        <span x-show="checkingAll" class="flex items-center gap-1">
+                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        </span>
+                    </button>
+                </div>
+                <!-- 可用性检查状态 -->
+                <div class="mt-2 flex items-center gap-2 text-sm">
+                    <template x-if="checkingName">
+                        <span class="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span x-text="$store.i18n.locale === 'zh' ? '检查中...' : 'Checking...'"></span>
+                        </span>
+                    </template>
+                    <template x-if="!checkingName && nameStatus === 'available'">
+                        <span class="text-green-600 flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span x-text="nameMessage"></span>
+                        </span>
+                    </template>
+                    <template x-if="!checkingName && nameStatus === 'unavailable'">
+                        <span class="text-red-600 flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            <span x-text="nameMessage"></span>
+                        </span>
+                    </template>
+                    <template x-if="!checkingName && !nameStatus && form.name">
+                        <span class="text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '只能包含字母、数字和连字符，长度' : 'Only letters, numbers and hyphens, length'"></span> <span x-text="selectedPlan?.min_length || 1"></span>-<span x-text="selectedPlan?.max_length || 63"></span> <span x-text="$store.i18n.locale === 'zh' ? '字符' : 'chars'"></span></span>
+                    </template>
+                </div>
+                
+                <!-- 全部域名查询结果 -->
+                <div x-show="allResults.length > 0" class="mt-4 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                    <div class="px-4 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400">
+                        <span x-text="$store.i18n.locale === 'zh' ? '查询前缀:' : 'Prefix:'"></span> <span class="font-semibold text-gray-900 dark:text-white" x-text="form.name"></span>
+                    </div>
+                    <div class="max-h-48 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
+                        <template x-for="item in allResults" :key="item.id">
+                            <div class="flex items-center justify-between px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="item.fullDomain"></span>
+                                    <span x-show="!item.is_platform" class="px-1.5 py-0.5 text-xs rounded bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400" x-text="$store.i18n.locale === 'zh' ? '托管' : 'Host'"></span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <template x-if="item.available === null">
+                                        <span class="text-xs text-gray-400" x-text="$store.i18n.locale === 'zh' ? '检查中...' : 'Checking...'"></span>
+                                    </template>
+                                    <template x-if="item.available === true">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs text-green-600 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full" x-text="$store.i18n.t('domain.available')"></span>
+                                            <button @click="selectFromResults(item)" class="text-xs text-white bg-blue-600 px-2 py-0.5 rounded-full hover:bg-blue-700" x-text="$store.i18n.locale === 'zh' ? '选择' : 'Select'"></button>
+                                        </div>
+                                    </template>
+                                    <template x-if="item.available === false">
+                                        <span class="text-xs text-red-600 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full" x-text="$store.i18n.t('domain.registered')"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧：确认信息 -->
+        <div class="lg:col-span-1">
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 sticky top-6">
+                <h4 class="font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '订单确认' : 'Order Confirmation'"></h4>
+                
+                <div x-show="!form.domain_id" class="text-center py-8 text-gray-400 dark:text-gray-500">
+                    <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                    <p class="text-sm" x-text="$store.i18n.locale === 'zh' ? '请先选择域名' : 'Please select a domain first'"></p>
+                </div>
+                
+                <div x-show="form.domain_id" class="space-y-4">
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('domain.domain')"></span>
+                            <span class="font-mono text-gray-900 dark:text-white" x-text="form.name ? (form.name + '.' + selectedDomain?.name) : '-'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('plan.plan')"></span>
+                            <span class="text-gray-900 dark:text-white" x-text="selectedPlan?.name || '-'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '有效期' : 'Duration'"></span>
+                            <span class="text-gray-900 dark:text-white" x-text="selectedPlan?.duration_text || '-'"></span>
+                        </div>
+                        <!-- 套餐描述 -->
+                        <div x-show="selectedPlan?.description" class="pt-2">
+                            <span class="text-gray-500 dark:text-gray-400 block mb-1" x-text="$store.i18n.locale === 'zh' ? '套餐说明' : 'Plan Description'"></span>
+                            <p class="text-gray-700 dark:text-gray-300 text-sm bg-gray-50 dark:bg-gray-700 p-2 rounded" x-text="selectedPlan?.description"></p>
+                        </div>
+                    </div>
+                    
+                    <!-- 优惠码 -->
+                    <div x-show="selectedPlan && selectedPlan.price > 0" class="border-t border-gray-100 dark:border-gray-700 pt-4">
+                        <label class="block text-sm text-gray-500 dark:text-gray-400 mb-2" x-text="$store.i18n.t('order.couponCode')"></label>
+                        <!-- 域名变更提示 -->
+                        <div x-show="couponChangedNotice" x-transition class="mb-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                            <p class="text-xs text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                <span x-text="couponChangedNotice"></span>
+                            </p>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" x-model="couponCode" class="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm uppercase" :placeholder="$store.i18n.locale === 'zh' ? '输入优惠码' : 'Enter coupon code'">
+                            <button @click="applyCoupon()" :disabled="checkingCoupon" class="px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300">
+                                <span x-show="!checkingCoupon" x-text="$store.i18n.locale === 'zh' ? '使用' : 'Apply'"></span>
+                                <span x-show="checkingCoupon">...</span>
+                            </button>
+                        </div>
+                        <p x-show="couponError" class="text-xs text-red-500 mt-1" x-text="couponError"></p>
+                        <!-- 优惠码域名限制提示 -->
+                        <p x-show="domainRestrictions?.has_exclusions && !appliedCoupon" class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('order.domainRestrictionNote')"></p>
+                        <div x-show="appliedCoupon" class="mt-2 p-2 bg-green-50 dark:bg-green-900/30 rounded-lg flex items-center justify-between">
+                            <span class="text-sm text-green-700 dark:text-green-400">
+                                <span x-text="appliedCoupon?.name"></span>
+                                <span class="text-green-600 font-medium" x-text="'-¥' + discount"></span>
+                            </span>
+                            <button @click="removeCoupon()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">&times;</button>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-100 dark:border-gray-700 pt-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-700 dark:text-gray-300 font-medium" x-text="$store.i18n.locale === 'zh' ? '费用' : 'Price'"></span>
+                            <div class="text-right">
+                                <span x-show="discount > 0" class="text-sm text-gray-400 line-through mr-2" x-text="'¥' + selectedPlan?.price"></span>
+                                <span class="text-2xl font-bold" :class="finalPrice == 0 ? 'text-green-600' : 'text-gray-900 dark:text-white'" x-text="selectedPlan ? (finalPrice == 0 ? $store.i18n.t('plan.free') : '¥' + finalPrice) : '-'"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3 pt-2">
+                        <!-- 未绑定手机号提示 -->
+                        <div x-show="requirePhoneBinding && !user?.phone_bound" class="p-3 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                            <div class="flex items-start gap-2">
+                                <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                <div>
+                                    <p class="text-sm text-yellow-800 dark:text-yellow-200" x-text="$store.i18n.locale === 'zh' ? '请先绑定手机号后再进行购买' : 'Please bind your phone number before purchasing'"></p>
+                                    <a href="/user/security" class="text-sm text-yellow-600 dark:text-yellow-400 hover:underline mt-1 inline-block" x-text="$store.i18n.locale === 'zh' ? '前往绑定 →' : 'Go to bind →'"></a>
+                                </div>
+                            </div>
+                        </div>
+                        <button @click="submit" :disabled="submitting || !canSubmit" class="w-full px-4 py-3 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                            <span x-show="!submitting" x-text="$store.i18n.locale === 'zh' ? '确认购买' : 'Confirm Purchase'"></span>
+                            <span x-show="submitting" x-text="$store.i18n.locale === 'zh' ? '购买中...' : 'Processing...'"></span>
+                        </button>
+                        <a href="/user/domains" class="block w-full px-4 py-3 text-center border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition" x-text="$store.i18n.t('common.cancel')"></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- 免费套餐申请表单模态框 -->
+    <div x-show="showApplyModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @click.self="showApplyModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '申请免费套餐' : 'Apply for Free Plan'"></h3>
+                
+                <div x-show="applyError" class="mb-4 p-3 bg-red-50 dark:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-sm" x-text="applyError"></div>
+                
+                <div class="space-y-4">
+                    <!-- 套餐信息 -->
+                    <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-1" x-text="$store.i18n.locale === 'zh' ? '申请套餐' : 'Plan'"></p>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="selectedFreePlan?.name"></p>
+                    </div>
+
+                    <!-- 选择域名 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '选择域名' : 'Select Domain'"></label>
+                        <select x-model="applyForm.domain_id" 
+                                @change="checkFreePlanSubdomainAvailability()"
+                                class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="" x-text="$store.i18n.locale === 'zh' ? '请选择域名' : 'Select a domain'"></option>
+                            <template x-for="(domainName, index) in selectedFreePlan?.domain_names" :key="index">
+                                <option :value="selectedFreePlan?.domain_ids[index]" x-text="domainName"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- 域名前缀（必填） -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span x-text="$store.i18n.locale === 'zh' ? '域名前缀' : 'Subdomain Prefix'"></span>
+                            <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <input type="text" 
+                                   x-model="applyForm.subdomain_name" 
+                                   @input.debounce.500ms="checkFreePlanSubdomainAvailability()"
+                                   :placeholder="$store.i18n.locale === 'zh' ? '例如：mysite' : 'e.g., mysite'" 
+                                   :class="freePlanSubdomainStatus === 'available' ? 'border-green-400 focus:border-green-400' : freePlanSubdomainStatus === 'unavailable' ? 'border-red-400 focus:border-red-400' : 'border-gray-200 dark:border-gray-600'"
+                                   class="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-100">
+                            <!-- 验证状态图标 -->
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                                <svg x-show="checkingFreePlanSubdomain" class="w-5 h-5 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                <svg x-show="!checkingFreePlanSubdomain && freePlanSubdomainStatus === 'available'" class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <svg x-show="!checkingFreePlanSubdomain && freePlanSubdomainStatus === 'unavailable'" class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <!-- 验证提示信息 -->
+                        <div class="mt-1 text-xs">
+                            <p x-show="checkingFreePlanSubdomain" class="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                <span x-text="$store.i18n.locale === 'zh' ? '检查中...' : 'Checking...'"></span>
+                            </p>
+                            <p x-show="!checkingFreePlanSubdomain && freePlanSubdomainStatus === 'available'" class="text-green-600 flex items-center gap-1">
+                                <span x-text="freePlanSubdomainMessage"></span>
+                            </p>
+                            <p x-show="!checkingFreePlanSubdomain && freePlanSubdomainStatus === 'unavailable'" class="text-red-600 flex items-center gap-1">
+                                <span x-text="freePlanSubdomainMessage"></span>
+                            </p>
+                            <p x-show="!checkingFreePlanSubdomain && !freePlanSubdomainStatus" class="text-gray-500 dark:text-gray-400">
+                                <span x-text="$store.i18n.locale === 'zh' ? '填写您想要的域名前缀，审核通过后将自动创建' : 'Enter your desired subdomain prefix, will be auto-created after approval'"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 申请理由 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span x-text="$store.i18n.locale === 'zh' ? '申请理由' : 'Application Reason'"></span>
+                            <span class="text-red-500">*</span>
+                        </label>
+                        <textarea x-model="applyForm.apply_reason" rows="6" 
+                                  :placeholder="$store.i18n.locale === 'zh' ? `请详细说明您的使用场景和需求（至少${freePlanConfig.min_reason_length}字）` : `Please describe your use case and requirements (at least ${freePlanConfig.min_reason_length} characters)`" 
+                                  class="w-full px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"></textarea>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            <span x-text="applyForm.apply_reason.length"></span>
+                            <span x-text="$store.i18n.locale === 'zh' ? ` / ${freePlanConfig.min_reason_length} 字符（最多${freePlanConfig.max_reason_length}字符）` : ` / ${freePlanConfig.min_reason_length} characters (max ${freePlanConfig.max_reason_length})`"></span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button @click="showApplyModal = false" 
+                            class="flex-1 px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                    <button @click="submitApplication()" :disabled="submittingApplication" 
+                            class="flex-1 px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                        <span x-show="!submittingApplication" x-text="$store.i18n.locale === 'zh' ? '提交申请' : 'Submit'"></span>
+                        <span x-show="submittingApplication" x-text="$store.i18n.locale === 'zh' ? '提交中...' : 'Submitting...'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function newDomain() {
+    return {
+        user: null, domains: [], plans: [], loadingPlans: false,
+        form: { domain_id: '', plan_id: '', name: '' },
+        error: '', submitting: false,
+        checkingName: false, nameStatus: '', nameMessage: '',
+        checkingAll: false, allResults: [],
+        couponCode: '', checkingCoupon: false, couponError: '', appliedCoupon: null, discount: 0,
+        validatedDomainId: null, // 优惠码验证时的域名ID
+        domainRestrictions: null, // 优惠码的域名限制信息
+        couponChangedNotice: '', // 优惠码状态变更提示
+        requirePhoneBinding: false,
+        _selectedDomainId: null, // 内部跟踪选中的域名ID
+        allPlansExpanded: false, // 所有套餐是否展开
+        planMode: 'free', // 套餐模式：'free' 或 'paid'
+        // 免费套餐相关状态
+        freePlans: [],
+        loadingFreePlans: true,
+        freePlanConfig: { min_reason_length: 50, max_reason_length: 500 }, // 免费套餐配置
+        showApplyModal: false,
+        selectedFreePlan: null,
+        applyForm: {
+            domain_id: '',
+            subdomain_name: '',
+            apply_reason: ''
+        },
+        applyError: '',
+        submittingApplication: false,
+        // 免费套餐域名前缀验证
+        checkingFreePlanSubdomain: false,
+        freePlanSubdomainStatus: null, // 'available', 'unavailable', null
+        freePlanSubdomainMessage: '',
+        get token() { return localStorage.getItem('token'); },
+        get selectedDomain() { 
+            // 使用 _selectedDomainId 来查找域名，确保响应式更新
+            const id = this._selectedDomainId;
+            return this.domains.find(d => d.id == id) || null;
+        },
+        get selectedPlan() { return this.plans.find(p => p.id == this.form.plan_id); },
+        get finalPrice() { return this.selectedPlan ? Math.max(0, this.selectedPlan.price - this.discount) : 0; },
+        get canSubmit() { 
+            if (this.requirePhoneBinding && !this.user?.phone_bound) return false;
+            return this.form.domain_id && this.form.plan_id && this.form.name.trim() && this.nameStatus === 'available'; 
+        },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            const userRes = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const userData = await userRes.json();
+            if (userData.code === 200) {
+                this.user = userData.data;
+                this.requirePhoneBinding = userData.data.require_phone_binding || false;
+            }
+            
+            // 优先加载免费套餐
+            await this.loadFreePlans();
+            
+            // 智能设置默认模式：如果有可申请的免费套餐，默认显示免费套餐；否则显示付费套餐
+            const hasAvailableFreePlans = this.freePlans.some(plan => plan.can_apply);
+            this.planMode = hasAvailableFreePlans ? 'free' : 'paid';
+            
+            const res = await fetch('/api/domains', { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) this.domains = data.data.domains;
+            
+            // 从 URL 参数读取预选的域名和前缀
+            const urlParams = new URLSearchParams(window.location.search);
+            const domainId = urlParams.get('domain');
+            const prefix = urlParams.get('prefix');
+            const mode = urlParams.get('mode'); // 支持通过 URL 参数指定模式
+            
+            // 如果 URL 指定了模式，使用 URL 的模式
+            if (mode === 'free' || mode === 'paid') {
+                this.planMode = mode;
+            }
+            
+            if (domainId) {
+                const domain = this.domains.find(d => d.id == domainId);
+                if (domain) {
+                    // 如果指定了域名，切换到付费模式
+                    this.planMode = 'paid';
+                    await this.selectDomain(domain);
+                    // 如果有前缀参数，自动填入并检查可用性
+                    if (prefix) {
+                        this.form.name = prefix;
+                        // 等待套餐加载完成后再检查可用性
+                        setTimeout(() => {
+                            this.checkAvailability();
+                        }, 500);
+                    }
+                }
+            }
+        },
+        // 加载免费套餐列表
+        async loadFreePlans() {
+            this.loadingFreePlans = true;
+            try {
+                const headers = { 'Authorization': 'Bearer ' + this.token };
+                const res = await fetch('/api/free-plans', { headers });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.freePlans = data.data.plans;
+                    // 获取配置
+                    if (data.data.config) {
+                        this.freePlanConfig = data.data.config;
+                    }
+                }
+            } catch (e) {
+                console.error('加载免费套餐失败:', e);
+            }
+            this.loadingFreePlans = false;
+        },
+        // 打开免费套餐申请弹窗
+        openApplyModal(plan) {
+            this.selectedFreePlan = plan;
+            this.applyForm = {
+                domain_id: '',
+                subdomain_name: '',
+                apply_reason: ''
+            };
+            this.applyError = '';
+            // 重置域名前缀验证状态
+            this.checkingFreePlanSubdomain = false;
+            this.freePlanSubdomainStatus = null;
+            this.freePlanSubdomainMessage = '';
+            this.showApplyModal = true;
+        },
+        // 提交免费套餐申请
+        async submitApplication() {
+            this.applyError = '';
+            
+            console.log('[提交] 开始验证表单');
+            console.log('[提交] 当前状态:', {
+                domain_id: this.applyForm.domain_id,
+                subdomain_name: this.applyForm.subdomain_name,
+                freePlanSubdomainStatus: this.freePlanSubdomainStatus,
+                apply_reason_length: this.applyForm.apply_reason.length
+            });
+            
+            // 表单验证
+            if (!this.applyForm.domain_id) {
+                this.applyError = this.$store.i18n.locale === 'zh' ? '请选择域名' : 'Please select a domain';
+                console.log('[提交] 验证失败: 未选择域名');
+                return;
+            }
+            
+            if (!this.applyForm.subdomain_name || !this.applyForm.subdomain_name.trim()) {
+                this.applyError = this.$store.i18n.locale === 'zh' ? '请填写域名前缀' : 'Please enter subdomain prefix';
+                console.log('[提交] 验证失败: 未填写域名前缀');
+                return;
+            }
+            
+            // 验证域名前缀可用性
+            if (this.freePlanSubdomainStatus !== 'available') {
+                this.applyError = this.$store.i18n.locale === 'zh' ? '请填写可用的域名前缀' : 'Please enter an available subdomain prefix';
+                console.log('[提交] 验证失败: 域名前缀不可用，当前状态:', this.freePlanSubdomainStatus);
+                return;
+            }
+            
+            if (!this.applyForm.apply_reason || this.applyForm.apply_reason.length < this.freePlanConfig.min_reason_length) {
+                this.applyError = this.$store.i18n.locale === 'zh' ? `申请理由至少需要${this.freePlanConfig.min_reason_length}个字符` : `Application reason must be at least ${this.freePlanConfig.min_reason_length} characters`;
+                console.log(`[提交] 验证失败: 申请理由不足${this.freePlanConfig.min_reason_length}字`);
+                return;
+            }
+            
+            if (this.applyForm.apply_reason.length > this.freePlanConfig.max_reason_length) {
+                this.applyError = this.$store.i18n.locale === 'zh' ? `申请理由最多${this.freePlanConfig.max_reason_length}个字符` : `Application reason must be at most ${this.freePlanConfig.max_reason_length} characters`;
+                console.log(`[提交] 验证失败: 申请理由超过${this.freePlanConfig.max_reason_length}字`);
+                return;
+            }
+            
+            console.log('[提交] 表单验证通过，开始提交');
+            
+            this.submittingApplication = true;
+            try {
+                const res = await fetch('/api/free-plan-applications', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        plan_id: this.selectedFreePlan.id,
+                        domain_id: parseInt(this.applyForm.domain_id),
+                        subdomain_name: this.applyForm.subdomain_name,
+                        apply_reason: this.applyForm.apply_reason
+                    })
+                });
+                
+                const data = await res.json();
+                if (data.code === 201) {
+                    this.showApplyModal = false;
+                    alert(this.$store.i18n.locale === 'zh' ? '申请提交成功，请等待审核' : 'Application submitted successfully');
+                    // 刷新免费套餐列表
+                    await this.loadFreePlans();
+                } else {
+                    this.applyError = data.message;
+                }
+            } catch (e) {
+                this.applyError = this.$store.i18n.locale === 'zh' ? '提交失败，请重试' : 'Submission failed, please try again';
+            }
+            this.submittingApplication = false;
+        },
+        // 检查免费套餐域名前缀可用性
+        async checkFreePlanSubdomainAvailability() {
+            const prefix = this.applyForm.subdomain_name.trim().toLowerCase();
+            const domainId = this.applyForm.domain_id;
+            
+            console.log('[验证] 开始验证:', { prefix, domainId, status: this.freePlanSubdomainStatus });
+            
+            // 重置状态
+            this.freePlanSubdomainStatus = null;
+            this.freePlanSubdomainMessage = '';
+            
+            if (!prefix) {
+                console.log('[验证] 前缀为空，跳过验证');
+                return;
+            }
+            
+            if (!domainId) {
+                console.log('[验证] 域名ID为空，跳过验证');
+                this.freePlanSubdomainStatus = 'unavailable';
+                this.freePlanSubdomainMessage = this.$store.i18n.locale === 'zh' 
+                    ? '请先选择域名' 
+                    : 'Please select a domain first';
+                return;
+            }
+            
+            // 基本格式验证
+            if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(prefix)) {
+                console.log('[验证] 格式验证失败');
+                this.freePlanSubdomainStatus = 'unavailable';
+                this.freePlanSubdomainMessage = this.$store.i18n.locale === 'zh' 
+                    ? '域名前缀格式不正确，只能包含字母、数字和连字符，且不能以连字符开头或结尾' 
+                    : 'Invalid format: only letters, numbers and hyphens, cannot start or end with hyphen';
+                return;
+            }
+            
+            // 长度验证
+            const plan = this.selectedFreePlan;
+            if (plan) {
+                if (prefix.length < plan.min_length || prefix.length > plan.max_length) {
+                    console.log('[验证] 长度验证失败:', { length: prefix.length, min: plan.min_length, max: plan.max_length });
+                    this.freePlanSubdomainStatus = 'unavailable';
+                    this.freePlanSubdomainMessage = this.$store.i18n.locale === 'zh' 
+                        ? `域名前缀长度需在 ${plan.min_length}-${plan.max_length} 个字符之间` 
+                        : `Prefix length must be between ${plan.min_length}-${plan.max_length} characters`;
+                    return;
+                }
+            }
+            
+            this.checkingFreePlanSubdomain = true;
+            console.log('[验证] 开始API检查');
+            
+            try {
+                const res = await fetch(`/api/domains/${domainId}/check?name=${encodeURIComponent(prefix)}`, {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                
+                console.log('[验证] API响应:', data);
+                
+                if (data.code === 200) {
+                    if (data.data.available) {
+                        this.freePlanSubdomainStatus = 'available';
+                        this.freePlanSubdomainMessage = this.$store.i18n.locale === 'zh' 
+                            ? '该域名前缀可用' 
+                            : 'This prefix is available';
+                        console.log('[验证] 前缀可用');
+                    } else {
+                        this.freePlanSubdomainStatus = 'unavailable';
+                        this.freePlanSubdomainMessage = data.data.message || (this.$store.i18n.locale === 'zh' 
+                            ? '该域名前缀已被占用' 
+                            : 'This prefix is already taken');
+                        console.log('[验证] 前缀不可用:', this.freePlanSubdomainMessage);
+                    }
+                } else {
+                    this.freePlanSubdomainStatus = 'unavailable';
+                    this.freePlanSubdomainMessage = data.message;
+                    console.log('[验证] API返回错误:', data.message);
+                }
+            } catch (e) {
+                console.error('[验证] 检查域名前缀失败:', e);
+                this.freePlanSubdomainStatus = null;
+                this.freePlanSubdomainMessage = '';
+            }
+            
+            this.checkingFreePlanSubdomain = false;
+            console.log('[验证] 验证完成，最终状态:', this.freePlanSubdomainStatus);
+        },
+        // 获取免费套餐申请状态文本
+        getFreePlanStatusText(status) {
+            const map = {
+                'pending': this.$store.i18n.locale === 'zh' ? '待审核' : 'Pending',
+                'approved': this.$store.i18n.locale === 'zh' ? '已通过' : 'Approved',
+                'rejected': this.$store.i18n.locale === 'zh' ? '已拒绝' : 'Rejected',
+                'used': this.$store.i18n.locale === 'zh' ? '已使用' : 'Used'
+            };
+            return map[status] || status;
+        },
+        async selectDomain(domain) {
+            // 如果点击的是当前已选中的域名，不做任何操作
+            if (this.form.domain_id == domain.id) {
+                return;
+            }
+            
+            const currentName = this.form.name; // 保留当前前缀
+            const hadCoupon = !!(this.appliedCoupon && this.validatedDomainId);
+            // 使用字符串比较，处理类型不一致的情况
+            const domainChanged = hadCoupon && (String(this.validatedDomainId) !== String(domain.id));
+            
+            // 处理优惠码状态 - 只要有优惠码且切换到不同域名就清除
+            if (hadCoupon && domainChanged) {
+                // 域名变更，清除优惠码并显示提示
+                this.clearCouponState();
+                this.couponChangedNotice = this.$store.i18n.t('order.domainChanged');
+                setTimeout(() => { this.couponChangedNotice = ''; }, 3000);
+            } else if (!hadCoupon) {
+                // 没有已应用的优惠码，清除状态
+                this.clearCouponState();
+            }
+            
+            // 立即更新域名ID - 同时更新 form.domain_id 和 _selectedDomainId
+            this.form.domain_id = domain.id;
+            this._selectedDomainId = domain.id;
+            this.form.plan_id = '';
+            this.nameStatus = ''; // 重置可用性状态
+            this.nameMessage = '';
+            this.plans = [];
+            this.loadingPlans = true;
+            
+            // 加载套餐
+            const targetDomainId = domain.id;
+            try {
+                const res = await fetch(`/api/domains/${targetDomainId}/plans`, { headers: { 'Authorization': 'Bearer ' + this.token } });
+                const data = await res.json();
+                // 确保响应对应当前选中的域名（防止竞态条件）
+                if (data.code === 200 && this.form.domain_id == targetDomainId) {
+                    // 为每个套餐添加 expanded 属性
+                    this.plans = data.data.plans.map(plan => ({
+                        ...plan,
+                        expanded: false // 默认收起
+                    }));
+                    
+                    // 默认选择第一个套餐并展开
+                    if (this.plans.length > 0) {
+                        this.form.plan_id = this.plans[0].id;
+                        this.plans[0].expanded = true;
+                    }
+                    
+                    // 如果只有1-2个套餐，默认全部展开
+                    if (this.plans.length <= 2) {
+                        this.plans.forEach(plan => {
+                            plan.expanded = true;
+                        });
+                        this.allPlansExpanded = true;
+                    } else {
+                        this.updateAllPlansExpandedState();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load plans:', e);
+            }
+            
+            // 只有当前域名仍然是请求的域名时才更新加载状态
+            if (this.form.domain_id == targetDomainId) {
+                this.loadingPlans = false;
+            }
+            
+            // 恢复前缀并重新检查可用性
+            if (currentName) {
+                this.form.name = currentName;
+                // 切换域名后需要重新检查前缀在新域名下的可用性
+                await this.checkAvailability();
+            }
+        },
+        // 清除优惠码状态的辅助方法
+        clearCouponState() {
+            this.couponCode = '';
+            this.couponError = '';
+            this.appliedCoupon = null;
+            this.discount = 0;
+            this.validatedDomainId = null;
+            this.domainRestrictions = null;
+        },
+        // 切换套餐展开/收起
+        togglePlanExpand(plan) {
+            plan.expanded = !plan.expanded;
+            // 更新全部展开状态
+            this.updateAllPlansExpandedState();
+        },
+        // 展开/收起所有套餐
+        toggleAllPlans() {
+            this.allPlansExpanded = !this.allPlansExpanded;
+            this.plans.forEach(plan => {
+                plan.expanded = this.allPlansExpanded;
+            });
+        },
+        // 更新全部展开状态
+        updateAllPlansExpandedState() {
+            if (this.plans.length === 0) {
+                this.allPlansExpanded = false;
+                return;
+            }
+            this.allPlansExpanded = this.plans.every(plan => plan.expanded);
+        },
+        selectPlan(plan) {
+            const previousPlanId = this.form.plan_id;
+            this.form.plan_id = plan.id;
+            
+            // 选中套餐时自动展开
+            if (!plan.expanded) {
+                plan.expanded = true;
+                this.updateAllPlansExpandedState();
+            }
+            
+            // 只有当用户手动切换到不同套餐时才清除优惠码状态
+            if (previousPlanId && previousPlanId != plan.id) {
+                this.clearCouponState();
+            }
+        },
+        async checkAvailability() {
+            const name = this.form.name.trim().toLowerCase();
+            if (!name || !this.form.domain_id) {
+                this.nameStatus = '';
+                this.nameMessage = '';
+                return;
+            }
+            this.checkingName = true;
+            try {
+                const res = await fetch(`/api/domains/${this.form.domain_id}/check?name=${encodeURIComponent(name)}`);
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.nameStatus = data.data.available ? 'available' : 'unavailable';
+                    this.nameMessage = data.data.message;
+                } else {
+                    this.nameStatus = 'unavailable';
+                    this.nameMessage = data.message;
+                }
+            } catch (e) {
+                this.nameStatus = '';
+                this.nameMessage = '';
+            }
+            this.checkingName = false;
+        },
+        async checkAllDomains() {
+            const name = this.form.name.trim().toLowerCase();
+            if (!name || name.length < 1) return;
+            
+            this.checkingAll = true;
+            this.allResults = this.domains.map(d => ({
+                ...d,
+                fullDomain: name + '.' + d.name,
+                available: null
+            }));
+            
+            for (let i = 0; i < this.allResults.length; i++) {
+                try {
+                    const res = await fetch(`/api/domains/${this.allResults[i].id}/check?name=${encodeURIComponent(name)}`);
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        this.allResults[i].available = data.data.available;
+                    } else {
+                        this.allResults[i].available = false;
+                    }
+                } catch (e) {
+                    this.allResults[i].available = false;
+                }
+            }
+            this.checkingAll = false;
+        },
+        async selectFromResults(item) {
+            // 选择域名
+            const domain = this.domains.find(d => d.id == item.id);
+            if (domain) {
+                await this.selectDomain(domain);
+                // 保持前缀不变，重新检查可用性
+                setTimeout(() => {
+                    this.checkAvailability();
+                }, 300);
+            }
+            this.allResults = [];
+        },
+        async applyCoupon() {
+            this.couponError = '';
+            this.couponChangedNotice = '';
+            if (!this.couponCode.trim()) { 
+                this.couponError = $store.i18n.t('order.enterCoupon'); 
+                return; 
+            }
+            if (!this.selectedPlan) { 
+                this.couponError = $store.i18n.t('order.selectPlanFirst'); 
+                return; 
+            }
+            this.checkingCoupon = true;
+            try {
+                const res = await fetch('/api/coupon/validate', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: this.couponCode.trim(), plan_id: this.form.plan_id, domain_id: this.form.domain_id, price: this.selectedPlan.price })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.appliedCoupon = data.data.coupon;
+                    this.discount = data.data.discount;
+                    // 保存验证时的域名ID和域名限制信息
+                    this.validatedDomainId = data.data.validated_domain_id;
+                    this.domainRestrictions = data.data.domain_restrictions;
+                } else {
+                    this.couponError = data.message;
+                    // 如果是域名被排除的错误，保存域名限制信息
+                    if (data.error_code === 'domain_excluded' && data.data?.domain_restrictions) {
+                        this.domainRestrictions = data.data.domain_restrictions;
+                    }
+                }
+            } catch (e) {
+                this.couponError = $store.i18n.t('order.validationFailed');
+            }
+            this.checkingCoupon = false;
+        },
+        removeCoupon() {
+            this.clearCouponState();
+        },
+        async submit() {
+            this.error = '';
+            if (!this.canSubmit) { this.error = '请完成所有选项'; return; }
+            this.submitting = true;
+            const payload = { 
+                plan_id: parseInt(this.form.plan_id), 
+                name: this.form.name.trim(),
+                domain_id: parseInt(this.form.domain_id)
+            };
+            if (this.appliedCoupon) {
+                payload.coupon_code = this.appliedCoupon.code;
+            }
+            const res = await fetch('/api/purchase', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+                window.location.href = '/user/domains/' + data.data.subdomain.id;
+            } else {
+                this.error = data.message;
+            }
+            this.submitting = false;
+        }
+    }
+}
+</script>
+{% endblock %}

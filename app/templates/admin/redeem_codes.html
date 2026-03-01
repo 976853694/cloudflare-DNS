@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}卡密管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="redeemCodesPage()" x-init="init()">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '卡密管理' : 'Redeem Code Management'"></h1>
+        <div class="flex flex-col sm:flex-row gap-2">
+            <div class="flex gap-2">
+                <button x-show="selectedIds.length > 0" @click="batchDelete()" class="bg-red-500 text-white px-4 py-2 rounded-xl text-sm hover:bg-red-600 whitespace-nowrap">
+                    <span x-text="$store.i18n.locale === 'zh' ? '删除选中' : 'Delete Selected'"></span> (<span x-text="selectedIds.length"></span>)
+                </button>
+                <select x-model="filters.status" @change="page=1; loadCodes()" class="flex-1 sm:flex-none px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.locale === 'zh' ? '全部状态' : 'All Status'"></option>
+                    <option value="0" x-text="$store.i18n.locale === 'zh' ? '未使用' : 'Unused'"></option>
+                    <option value="1" x-text="$store.i18n.locale === 'zh' ? '已使用' : 'Used'"></option>
+                    <option value="2" x-text="$store.i18n.locale === 'zh' ? '已禁用' : 'Disabled'"></option>
+                </select>
+                <input type="text" x-model="filters.search" @keyup.enter="page=1; loadCodes()" :placeholder="$store.i18n.locale === 'zh' ? '搜索卡密...' : 'Search codes...'" class="flex-1 sm:w-32 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            </div>
+            <button @click="exportCodes()" class="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '导出卡密' : 'Export Codes'"></button>
+            <button @click="openGenerateModal()" class="bg-gray-900 dark:bg-gray-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-gray-800 dark:hover:bg-gray-500 whitespace-nowrap" x-text="$store.i18n.locale === 'zh' ? '生成卡密' : 'Generate Codes'"></button>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <!-- 桌面端表格 -->
+        <div x-show="!loading" class="hidden lg:block overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase w-10">
+                            <input type="checkbox" x-model="selectAll" @change="toggleSelectAll()" class="rounded border-gray-300 dark:border-gray-500">
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '卡密' : 'Code'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '金额' : 'Amount'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '状态' : 'Status'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '使用者' : 'Used By'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '批次号' : 'Batch No.'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '卡密有效期' : 'Expires'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '创建时间' : 'Created'"></th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase" x-text="$store.i18n.locale === 'zh' ? '操作' : 'Actions'"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                    <template x-for="code in codes" :key="code.id">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-4">
+                                <input type="checkbox" :checked="selectedIds.includes(code.id)" @change="$event.target.checked ? selectedIds.push(code.id) : selectedIds = selectedIds.filter(id => id !== code.id)" class="rounded border-gray-300 dark:border-gray-500">
+                            </td>
+                            <td class="px-4 py-4 font-mono text-sm text-gray-900 dark:text-white" x-text="code.code"></td>
+                            <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm font-medium" :class="{'text-purple-600 dark:text-purple-400': code.amount === -1}" x-text="code.amount_text"></td>
+                            <td class="px-4 py-4">
+                                <span :class="{'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400': code.status === 0, 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': code.status === 1, 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': code.status === 2}" class="px-2 py-1 rounded text-xs" x-text="code.status === 0 ? ($store.i18n.locale === 'zh' ? '未使用' : 'Unused') : (code.status === 1 ? ($store.i18n.locale === 'zh' ? '已使用' : 'Used') : ($store.i18n.locale === 'zh' ? '已禁用' : 'Disabled'))"></span>
+                            </td>
+                            <td class="px-4 py-4 text-gray-600 dark:text-gray-300 text-sm" x-text="code.used_by ? code.used_by.username : '-'"></td>
+                            <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-xs font-mono" x-text="code.batch_no || '-'"></td>
+                            <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm" x-text="code.expires_at ? new Date(code.expires_at).toLocaleDateString() : ($store.i18n.locale === 'zh' ? '永久' : 'Forever')"></td>
+                            <td class="px-4 py-4 text-gray-500 dark:text-gray-400 text-sm" x-text="new Date(code.created_at).toLocaleDateString()"></td>
+                            <td class="px-4 py-4">
+                                <div class="flex items-center space-x-2">
+                                    <template x-if="code.status !== 1">
+                                        <button @click="toggleStatus(code)" :class="code.status === 0 ? 'text-orange-500 hover:text-orange-700' : 'text-green-500 hover:text-green-700'" class="text-sm" x-text="code.status === 0 ? ($store.i18n.locale === 'zh' ? '禁用' : 'Disable') : ($store.i18n.locale === 'zh' ? '启用' : 'Enable')"></button>
+                                    </template>
+                                    <button @click="deleteCode(code)" class="text-red-500 hover:text-red-700 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="codes.length === 0">
+                        <td colspan="9" class="px-4 py-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无卡密数据' : 'No redeem codes'"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 移动端卡片列表 -->
+        <div x-show="!loading" class="lg:hidden divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="code in codes" :key="code.id">
+                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-start gap-2">
+                            <input type="checkbox" :checked="selectedIds.includes(code.id)" @change="$event.target.checked ? selectedIds.push(code.id) : selectedIds = selectedIds.filter(id => id !== code.id)" class="rounded border-gray-300 dark:border-gray-500 mt-1">
+                            <p class="font-mono text-sm text-gray-900 dark:text-white break-all" x-text="code.code"></p>
+                        </div>
+                        <span :class="{'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400': code.status === 0, 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300': code.status === 1, 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': code.status === 2}" class="px-2 py-0.5 rounded text-xs ml-2 whitespace-nowrap" x-text="code.status === 0 ? ($store.i18n.locale === 'zh' ? '未使用' : 'Unused') : (code.status === 1 ? ($store.i18n.locale === 'zh' ? '已使用' : 'Used') : ($store.i18n.locale === 'zh' ? '已禁用' : 'Disabled'))"></span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm mb-2">
+                        <span class="font-medium text-gray-700 dark:text-gray-300" :class="{'text-purple-600 dark:text-purple-400': code.amount === -1}" x-text="code.amount_text"></span>
+                        <span class="text-gray-500 dark:text-gray-400 text-xs" x-text="code.used_by ? code.used_by.username : ''"></span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 mb-2">
+                        <span><span x-text="$store.i18n.locale === 'zh' ? '有效期: ' : 'Expires: '"></span><span x-text="code.expires_at ? new Date(code.expires_at).toLocaleDateString() : ($store.i18n.locale === 'zh' ? '永久' : 'Forever')"></span></span>
+                        <span x-text="new Date(code.created_at).toLocaleDateString()"></span>
+                    </div>
+                    <div class="flex items-center gap-4 pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <template x-if="code.status !== 1">
+                            <button @click="toggleStatus(code)" :class="code.status === 0 ? 'text-orange-500' : 'text-green-500'" class="text-sm" x-text="code.status === 0 ? ($store.i18n.locale === 'zh' ? '禁用' : 'Disable') : ($store.i18n.locale === 'zh' ? '启用' : 'Enable')"></button>
+                        </template>
+                        <button @click="deleteCode(code)" class="text-red-500 text-sm" x-text="$store.i18n.locale === 'zh' ? '删除' : 'Delete'"></button>
+                    </div>
+                </div>
+            </template>
+            <div x-show="codes.length === 0" class="p-10 text-center text-gray-400 dark:text-gray-500" x-text="$store.i18n.locale === 'zh' ? '暂无卡密数据' : 'No redeem codes'"></div>
+        </div>
+
+        <div x-show="!loading && pagination.pages > 1" class="px-4 sm:px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span class="text-sm text-gray-500 dark:text-gray-400"><span x-text="$store.i18n.locale === 'zh' ? '共 ' : 'Total '"></span><span x-text="pagination.total"></span><span x-text="$store.i18n.locale === 'zh' ? ' 条' : ' records'"></span></span>
+            <div class="flex items-center space-x-2">
+                <button @click="goPage(page - 1)" :disabled="page <= 1" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '上一页' : 'Prev'"></button>
+                <span class="text-sm text-gray-600 dark:text-gray-400" x-text="page + '/' + pagination.pages"></span>
+                <button @click="goPage(page + 1)" :disabled="page >= pagination.pages" class="px-3 py-1 border border-gray-200 dark:border-gray-600 rounded text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '下一页' : 'Next'"></button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 生成卡密弹窗 -->
+    <div x-show="showGenModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showGenModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4 hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.locale === 'zh' ? '批量生成卡密' : 'Generate Redeem Codes'"></h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.locale === 'zh' ? '充值金额' : 'Amount'"></label>
+                    <div class="flex items-center space-x-3">
+                        <label class="flex items-center text-gray-600 dark:text-gray-300">
+                            <input type="radio" x-model="genForm.amountType" value="fixed" class="mr-2">
+                            <span class="text-sm" x-text="$store.i18n.locale === 'zh' ? '固定金额' : 'Fixed Amount'"></span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" x-model="genForm.amountType" value="unlimited" class="mr-2">
+                            <span class="text-sm text-purple-600 dark:text-purple-400 font-medium" x-text="$store.i18n.locale === 'zh' ? '无限余额' : 'Unlimited'"></span>
+                        </label>
+                    </div>
+                    <input x-show="genForm.amountType === 'fixed'" type="number" x-model="genForm.amount" min="0" step="0.01" :placeholder="$store.i18n.locale === 'zh' ? '输入金额，如 10.00' : 'Enter amount, e.g. 10.00'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl mt-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <p x-show="genForm.amountType === 'unlimited'" class="text-sm text-purple-600 dark:text-purple-400 mt-2" x-text="$store.i18n.locale === 'zh' ? '无限余额卡可无限购买套餐' : 'Unlimited balance card can purchase unlimited plans'"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '生成数量' : 'Quantity'"></span> (1-100)</label>
+                    <input type="number" x-model="genForm.count" min="1" max="100" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"><span x-text="$store.i18n.locale === 'zh' ? '卡密有效期(天)' : 'Validity (days)'"></span> <span class="text-gray-400 dark:text-gray-500 font-normal" x-text="$store.i18n.locale === 'zh' ? '留空永久有效' : 'Empty for forever'"></span></label>
+                    <input type="number" x-model="genForm.expires_days" min="1" :placeholder="$store.i18n.locale === 'zh' ? '如30' : 'e.g. 30'" class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="showGenModal = false" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm" x-text="$store.i18n.locale === 'zh' ? '取消' : 'Cancel'"></button>
+                <button @click="generateCodes()" :disabled="generating" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl text-sm disabled:opacity-50">
+                    <span x-text="generating ? ($store.i18n.locale === 'zh' ? '生成中...' : 'Generating...') : ($store.i18n.locale === 'zh' ? '生成' : 'Generate')"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出结果弹窗 -->
+    <div x-show="showExportModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showExportModal = false">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4 hover:shadow-lg transition-shadow">
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="exportData.batch_no ? ($store.i18n.locale === 'zh' ? '生成成功' : 'Generated Successfully') : ($store.i18n.locale === 'zh' ? '导出卡密' : 'Export Codes')"></h3>
+                <button @click="showExportModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">×</button>
+            </div>
+            <div class="p-6">
+                <p x-show="exportData.batch_no" class="text-sm text-gray-600 dark:text-gray-400 mb-2"><span x-text="$store.i18n.locale === 'zh' ? '批次号: ' : 'Batch No.: '"></span><span class="font-mono" x-text="exportData.batch_no"></span></p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-3"><span x-text="$store.i18n.locale === 'zh' ? '共 ' : 'Total '"></span><span x-text="exportData.codes.length"></span><span x-text="$store.i18n.locale === 'zh' ? ' 张卡密' : ' codes'"></span></p>
+                <textarea readonly class="w-full h-48 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white" x-text="exportData.codes.join('\n')"></textarea>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end space-x-3">
+                <button @click="copyExport()" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '复制全部' : 'Copy All'"></button>
+                <button @click="downloadTxt()" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-700 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '下载TXT' : 'Download TXT'"></button>
+                <button @click="showExportModal = false" class="px-4 py-2 bg-gray-900 dark:bg-gray-600 text-white rounded-xl text-sm" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Close'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div x-show="toast.show" x-cloak x-transition class="fixed bottom-6 right-6 z-50">
+        <div :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'" class="text-white px-4 py-2 rounded-xl shadow-lg text-sm" x-text="toast.message"></div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+function redeemCodesPage() {
+    return {
+        codes: [], loading: true, page: 1, pagination: { pages: 1, total: 0 },
+        filters: { status: '', search: '' },
+        selectedIds: [], selectAll: false,
+        showGenModal: false, showExportModal: false, generating: false,
+        genForm: { amountType: 'fixed', amount: '', count: 10, expires_days: '' },
+        exportData: { batch_no: '', codes: [] },
+        toast: { show: false, message: '', type: 'success' },
+        get token() { return localStorage.getItem('token'); },
+        async init() {
+            if (!this.token) { window.location.href = '/login'; return; }
+            await this.loadCodes();
+        },
+        async loadCodes() {
+            this.loading = true;
+            this.selectedIds = [];
+            this.selectAll = false;
+            let url = `/api/admin/redeem-codes?page=${this.page}&per_page=20`;
+            if (this.filters.status !== '') url += `&status=${this.filters.status}`;
+            if (this.filters.search) url += `&search=${encodeURIComponent(this.filters.search)}`;
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                this.codes = data.data.codes;
+                this.pagination = data.data.pagination;
+            }
+            this.loading = false;
+        },
+        openGenerateModal() {
+            this.genForm = { amountType: 'fixed', amount: '', count: 10, expires_days: '' };
+            this.showGenModal = true;
+        },
+        async generateCodes() {
+            let amount;
+            if (this.genForm.amountType === 'unlimited') {
+                amount = -1;
+            } else {
+                amount = parseFloat(this.genForm.amount);
+                const amountError = Alpine.store('i18n').locale === 'zh' ? '请输入有效金额' : 'Please enter a valid amount';
+                if (isNaN(amount) || amount < 0) {
+                    this.showToast(amountError, 'error');
+                    return;
+                }
+            }
+            this.generating = true;
+            try {
+                const res = await fetch('/api/admin/redeem-codes/generate', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: amount,
+                        count: parseInt(this.genForm.count) || 10,
+                        expires_days: this.genForm.expires_days ? parseInt(this.genForm.expires_days) : null
+                    })
+                });
+                const data = await res.json();
+                if (data.code === 201) {
+                    this.exportData = { batch_no: data.data.batch_no, codes: data.data.codes.map(c => c.code) };
+                    this.showGenModal = false;
+                    this.showExportModal = true;
+                    await this.loadCodes();
+                } else {
+                    const failMsg = Alpine.store('i18n').locale === 'zh' ? '生成失败' : 'Generation failed';
+                    this.showToast(data.message || failMsg, 'error');
+                }
+            } catch (e) {
+                const netError = Alpine.store('i18n').locale === 'zh' ? '网络错误' : 'Network error';
+                this.showToast(netError, 'error');
+            }
+            this.generating = false;
+        },
+        async toggleStatus(code) {
+            const newStatus = code.status === 0 ? 2 : 0;
+            const res = await fetch(`/api/admin/redeem-codes/${code.id}`, {
+                method: 'PUT',
+                headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            const data = await res.json();
+            const successMsg = Alpine.store('i18n').locale === 'zh' ? '操作成功' : 'Operation successful';
+            const failMsg = Alpine.store('i18n').locale === 'zh' ? '操作失败' : 'Operation failed';
+            if (data.code === 200) { this.showToast(successMsg, 'success'); await this.loadCodes(); }
+            else { this.showToast(data.message || failMsg, 'error'); }
+        },
+        async deleteCode(code) {
+            const confirmMsg = Alpine.store('i18n').locale === 'zh' ? '确定要删除这张卡密吗？' : 'Delete this redeem code?';
+            if (!confirm(confirmMsg)) return;
+            const res = await fetch(`/api/admin/redeem-codes/${code.id}`, {
+                method: 'DELETE', headers: { 'Authorization': 'Bearer ' + this.token }
+            });
+            const data = await res.json();
+            const successMsg = Alpine.store('i18n').locale === 'zh' ? '删除成功' : 'Deleted successfully';
+            const failMsg = Alpine.store('i18n').locale === 'zh' ? '删除失败' : 'Delete failed';
+            if (data.code === 200) { this.showToast(successMsg, 'success'); await this.loadCodes(); }
+            else { this.showToast(data.message || failMsg, 'error'); }
+        },
+        async exportCodes() {
+            let url = '/api/admin/redeem-codes/export?';
+            if (this.filters.status !== '') url += `status=${this.filters.status}&`;
+            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + this.token } });
+            const data = await res.json();
+            if (data.code === 200) {
+                const noDataMsg = Alpine.store('i18n').locale === 'zh' ? '没有可导出的卡密' : 'No codes to export';
+                if (data.data.codes.length === 0) {
+                    this.showToast(noDataMsg, 'error');
+                    return;
+                }
+                this.exportData = { batch_no: '', codes: data.data.codes };
+                this.showExportModal = true;
+            } else {
+                const failMsg = Alpine.store('i18n').locale === 'zh' ? '导出失败' : 'Export failed';
+                this.showToast(data.message || failMsg, 'error');
+            }
+        },
+        copyExport() {
+            navigator.clipboard.writeText(this.exportData.codes.join('\n'));
+            const msg = Alpine.store('i18n').locale === 'zh' ? '已复制到剪贴板' : 'Copied to clipboard';
+            this.showToast(msg, 'success');
+        },
+        downloadTxt() {
+            const content = this.exportData.codes.join('\n');
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const prefix = Alpine.store('i18n').locale === 'zh' ? '卡密_' : 'codes_';
+            const filename = this.exportData.batch_no ? `${prefix}${this.exportData.batch_no}.txt` : `${prefix}${new Date().toISOString().slice(0,10)}.txt`;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            const msg = Alpine.store('i18n').locale === 'zh' ? '下载成功' : 'Downloaded successfully';
+            this.showToast(msg, 'success');
+        },
+        toggleSelectAll() {
+            if (this.selectAll) {
+                this.selectedIds = this.codes.map(c => c.id);
+            } else {
+                this.selectedIds = [];
+            }
+        },
+        async batchDelete() {
+            if (this.selectedIds.length === 0) return;
+            const confirmMsg = Alpine.store('i18n').locale === 'zh' ? `确定要删除选中的 ${this.selectedIds.length} 张卡密吗？` : `Delete ${this.selectedIds.length} selected codes?`;
+            if (!confirm(confirmMsg)) return;
+            try {
+                const res = await fetch('/api/admin/redeem-codes/batch-delete', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: this.selectedIds })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showToast(data.message, 'success');
+                    await this.loadCodes();
+                } else {
+                    const failMsg = Alpine.store('i18n').locale === 'zh' ? '删除失败' : 'Delete failed';
+                    this.showToast(data.message || failMsg, 'error');
+                }
+            } catch (e) {
+                const netError = Alpine.store('i18n').locale === 'zh' ? '网络错误' : 'Network error';
+                this.showToast(netError, 'error');
+            }
+        },
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => { this.toast.show = false; }, 3000);
+        },
+        async goPage(newPage) {
+            if (newPage < 1 || newPage > this.pagination.pages || newPage === this.page) return;
+            this.page = newPage;
+            await this.loadCodes();
+        }
+    }
+}
+</script>
+{% endblock %}

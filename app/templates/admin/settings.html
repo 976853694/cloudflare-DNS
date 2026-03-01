@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}系统设置 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="settingsPage()" x-init="init()">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.locale === 'zh' ? '系统设置' : 'System Settings'"></h1>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <!-- 演示用户禁止访问提示 -->
+        <div x-show="!loading && forbidden" class="p-10 text-center">
+            <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <p class="text-gray-500 dark:text-gray-400 text-lg" x-text="$store.i18n.locale === 'zh' ? '演示用户无权查看系统设置' : 'Demo users cannot view system settings'"></p>
+            <p class="text-gray-400 dark:text-gray-500 text-sm mt-2" x-text="$store.i18n.locale === 'zh' ? '如需体验完整功能，请联系管理员' : 'Contact admin for full access'"></p>
+        </div>
+        
+        <div x-show="!loading && !forbidden" class="p-4 sm:p-6 space-y-6">
+            <!-- 站点基本设置 -->
+            <div class="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '站点名称' : 'Site Name'"></label>
+                    <input type="text" x-model="form.site_name" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '站点URL' : 'Site URL'"></label>
+                    <div class="flex gap-2">
+                        <input type="text" x-model="form.site_url" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="window.location.origin">
+                        <button type="button" @click="form.site_url = window.location.origin" class="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" x-text="$store.i18n.locale === 'zh' ? '自动获取' : 'Auto'"></button>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '用于OAuth回调地址，不含末尾斜杠' : 'Used for OAuth callback URL, no trailing slash'"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '站点描述' : 'Site Description'"></label>
+                    <input type="text" x-model="form.site_description" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '站点Logo URL' : 'Site Logo URL'"></label>
+                    <input type="text" x-model="form.site_logo" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="https://example.com/logo.png">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '站点Favicon URL' : 'Site Favicon URL'"></label>
+                    <input type="text" x-model="form.site_favicon" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="https://example.com/favicon.ico">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '管理员邮箱' : 'Admin Email'"></label>
+                    <input type="email" x-model="form.admin_email" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '客服邮箱' : 'Support Email'"></label>
+                    <input type="email" x-model="form.support_email" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? 'ICP备案号' : 'ICP Number'"></label>
+                    <input type="text" x-model="form.icp_number" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="京ICP备xxxxxxxx号">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '默认域名配额' : 'Default Domain Quota'"></label>
+                    <input type="number" x-model="form.default_max_domains" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '开放注册' : 'Open Registration'"></label>
+                    <select x-model="form.allow_register" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '开放' : 'Open'"></option>
+                        <option value="0" x-text="$store.i18n.locale === 'zh' ? '关闭' : 'Closed'"></option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '允许邮箱注册' : 'Allow Email Registration'"></label>
+                    <select x-model="form.allow_email_register" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="1" x-text="$store.i18n.locale === 'zh' ? '允许' : 'Allow'"></option>
+                        <option value="0" x-text="$store.i18n.locale === 'zh' ? '仅快捷登录' : 'OAuth Only'"></option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-text="$store.i18n.locale === 'zh' ? '关闭后仅允许通过 GitHub/Google/NodeLoc 快捷登录注册，已有账号仍可使用邮箱登录' : 'When disabled, only OAuth registration is allowed. Existing users can still login with email'"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '页脚文字' : 'Footer Text'"></label>
+                    <input type="text" x-model="form.footer_text" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '系统公告' : 'System Announcement'"></label>
+                <textarea x-model="form.announcement" rows="3" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '显示在顶部的公告内容' : 'Announcement displayed at top'"></textarea>
+            </div>
+            
+            <!-- 卡密获取渠道 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '卡密获取渠道' : 'Redeem Code Channel'"></h3>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '按钮文字' : 'Button Text'"></label>
+                        <input type="text" x-model="form.redeem_channel_name" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" :placeholder="$store.i18n.locale === 'zh' ? '如：购买卡密' : 'e.g. Buy Code'">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '跳转链接' : 'Redirect URL'"></label>
+                        <input type="text" x-model="form.redeem_channel_url" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="https://shop.example.com">
+                    </div>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2" x-text="$store.i18n.locale === 'zh' ? '配置后将在用户卡密充值页面显示获取卡密按钮' : 'Button will appear on user redeem page when configured'"></p>
+            </div>
+
+            <!-- 网站统计 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '网站统计' : 'Analytics'"></h3>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '统计代码' : 'Analytics Code'"></label>
+                    <textarea x-model="form.analytics_code" rows="5" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm" :placeholder="$store.i18n.locale === 'zh' ? '粘贴百度统计、Google Analytics 等统计代码' : 'Paste analytics code (Baidu, Google Analytics, etc.)'"></textarea>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-2" x-text="$store.i18n.locale === 'zh' ? '支持百度统计、Google Analytics、51.la 等，代码将添加到所有页面底部' : 'Supports Baidu Analytics, Google Analytics, 51.la, etc. Code will be added to all pages'"></p>
+                </div>
+            </div>
+
+            <!-- 全局广告按钮 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.locale === 'zh' ? '全局广告按钮' : 'Global Ad Buttons'"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '配置后将在首页和Telegram机器人中显示广告按钮' : 'Ad buttons will be displayed on homepage and Telegram bot'"></p>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.locale === 'zh' ? '按钮配置（每行一个，格式：文字,链接）' : 'Button Config (one per line, format: text,url)'"></label>
+                    <textarea x-model="form.ad_buttons" rows="4" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm" :placeholder="$store.i18n.locale === 'zh' ? '免费流量卡,https://example.com\n官方网站,https://example.org' : 'Free Data Card,https://example.com\nOfficial Site,https://example.org'"></textarea>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-2" x-text="$store.i18n.locale === 'zh' ? '留空则不显示广告按钮' : 'Leave empty to hide ad buttons'"></p>
+                </div>
+            </div>
+            
+            <!-- 保存按钮 -->
+            <div class="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700">
+                <button @click="save" :disabled="saving" class="px-6 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存设置' : 'Save Settings'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function settingsPage() {
+    return {
+        form: {},
+        loading: true,
+        saving: false,
+        forbidden: false,
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await this.load();
+        },
+        
+        async load() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.form = data.data.settings;
+                } else if (data.code === 403) {
+                    this.forbidden = true;
+                }
+            } catch (e) {
+                console.error('Load settings failed:', e);
+            }
+            this.loading = false;
+        },
+        
+        async save() {
+            this.saving = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.form)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '设置保存成功' : 'Settings saved successfully');
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.saving = false;
+        }
+    };
+}
+</script>
+{% endblock %}

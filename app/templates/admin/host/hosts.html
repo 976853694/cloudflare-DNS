@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}托管商管理 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6 max-w-full" x-data="hostManagement()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
+                <a href="/admin" class="hover:text-gray-700 dark:hover:text-gray-300" x-text="$store.i18n.t('host.admin.breadcrumb')"></a>
+                <span>/</span>
+                <span x-text="$store.i18n.t('host.admin.hosts.title')"></span>
+            </div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.hosts.title')"></h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm" x-text="$store.i18n.t('host.admin.hosts.description')"></p>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs" x-text="$store.i18n.t('host.admin.hosts.stats.total')"></p>
+            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1" x-text="stats.total || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs" x-text="$store.i18n.t('host.admin.hosts.stats.active')"></p>
+            <p class="text-2xl font-bold text-green-600 mt-1" x-text="stats.active || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs" x-text="$store.i18n.t('host.admin.hosts.stats.suspended')"></p>
+            <p class="text-2xl font-bold text-yellow-600 mt-1" x-text="stats.suspended || 0"></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+            <p class="text-gray-500 dark:text-gray-400 text-xs" x-text="$store.i18n.t('host.admin.hosts.stats.totalEarnings')"></p>
+            <p class="text-2xl font-bold text-blue-600 mt-1" x-text="'¥' + (stats.total_earnings || 0).toFixed(2)"></p>
+        </div>
+    </div>
+
+    <!-- Hosts List -->
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        <div x-show="loading" class="p-8 text-center">
+            <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+        </div>
+        <div x-show="!loading && hosts.length === 0" x-cloak class="p-8 text-center">
+            <p class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('host.admin.hosts.noHosts')"></p>
+        </div>
+        <div x-show="!loading && hosts.length > 0" x-cloak class="divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="host in hosts" :key="host.id">
+                <div class="px-5 py-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <p class="font-medium text-gray-900 dark:text-white" x-text="host.username"></p>
+                                <span class="px-2 py-0.5 text-xs rounded-full"
+                                      :class="{
+                                          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': host.host_status === 'approved',
+                                          'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': host.host_status === 'suspended',
+                                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400': host.host_status === 'revoked'
+                                      }"
+                                      x-text="$store.i18n.t('host.admin.hosts.status.' + host.host_status)"></span>
+                            </div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400" x-text="host.email"></p>
+                            <div class="flex flex-wrap gap-4 mt-2 text-sm text-gray-600 dark:text-gray-300">
+                                <span x-text="$store.i18n.t('host.admin.hosts.info.balance') + ': ¥' + (host.host_balance || 0).toFixed(2)"></span>
+                                <span x-text="$store.i18n.t('host.admin.hosts.info.commission') + ': ' + (host.host_commission_rate || 10) + '%'"></span>
+                                <span x-text="$store.i18n.t('host.admin.hosts.info.channels') + ': ' + (host.channels_count || 0)"></span>
+                                <span x-text="$store.i18n.t('host.admin.hosts.info.domains') + ': ' + (host.domains_count || 0)"></span>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-1" x-text="$store.i18n.t('host.admin.hosts.info.joinTime') + ': ' + formatDate(host.host_approved_at)"></p>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0">
+                            <button @click="viewChannels(host)" class="px-3 py-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg text-sm" x-text="$store.i18n.t('host.admin.hosts.actions.viewChannels')"></button>
+                            <button @click="viewPlans(host)" class="px-3 py-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg text-sm" x-text="$store.i18n.t('host.admin.hosts.actions.viewPlans')"></button>
+                            <button x-show="host.host_status !== 'revoked'" @click="editHost(host)" class="px-3 py-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg text-sm" x-text="$store.i18n.t('common.edit')"></button>
+                            <button x-show="host.host_status === 'approved'" @click="suspendHost(host)" class="px-3 py-1.5 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 rounded-lg text-sm" x-text="$store.i18n.t('host.suspend')"></button>
+                            <button x-show="host.host_status === 'suspended'" @click="restoreHost(host)" class="px-3 py-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg text-sm" x-text="$store.i18n.t('host.restore')"></button>
+                            <button x-show="host.host_status === 'approved' || host.host_status === 'suspended'" @click="revokeHost(host)" class="px-3 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg text-sm" x-text="$store.i18n.t('host.revoke')"></button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div x-show="showEditModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="showEditModal = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('host.admin.hosts.editModal.title')"></h3>
+            </div>
+            <form @submit.prevent="submitEdit()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('host.admin.hosts.editModal.commissionRate')"></label>
+                    <input type="number" x-model="editForm.commission_rate" min="0" max="100" class="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" @click="showEditModal = false" class="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 font-medium" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button type="submit" :disabled="submitting" class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium disabled:opacity-50" x-text="$store.i18n.t('common.save')"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Channels Modal -->
+    <div x-show="showChannelsModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="showChannelsModal = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <span x-text="viewingHost?.username"></span> - <span x-text="$store.i18n.t('host.admin.hosts.channelsModal.title')"></span>
+                </h3>
+                <button @click="showChannelsModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <div x-show="channelsLoading" class="text-center py-8">
+                    <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+                </div>
+                <div x-show="!channelsLoading && channels.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('host.admin.hosts.channelsModal.noChannels')"></div>
+                <div x-show="!channelsLoading && channels.length > 0" class="space-y-3">
+                    <template x-for="channel in channels" :key="channel.id">
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-gray-900 dark:text-white" x-text="channel.name"></span>
+                                <span class="px-2 py-0.5 text-xs rounded-full"
+                                      :class="channel.status ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'"
+                                      x-text="channel.status ? $store.i18n.t('common.enabled') : $store.i18n.t('common.disabled')"></span>
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                <span x-text="$store.i18n.t('host.admin.hosts.channelsModal.provider') + ': ' + channel.provider_type"></span>
+                            </div>
+                            <div x-show="channel.remark" class="text-sm text-gray-400 mt-1" x-text="channel.remark"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plans Modal -->
+    <div x-show="showPlansModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="showPlansModal = false"></div>
+        <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-3xl max-h-[80vh] overflow-hidden" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    <span x-text="viewingHost?.username"></span> - <span x-text="$store.i18n.t('host.admin.hosts.plansModal.title')"></span>
+                </h3>
+                <button @click="showPlansModal = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto max-h-[60vh]">
+                <div x-show="plansLoading" class="text-center py-8">
+                    <div class="inline-block w-6 h-6 border-2 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
+                </div>
+                <div x-show="!plansLoading && plans.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('host.admin.hosts.plansModal.noPlans')"></div>
+                <div x-show="!plansLoading && plans.length > 0" class="space-y-3">
+                    <template x-for="plan in plans" :key="plan.id">
+                        <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-medium text-gray-900 dark:text-white" x-text="plan.name"></span>
+                                <span class="px-2 py-0.5 text-xs rounded-full"
+                                      :class="plan.status ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'"
+                                      x-text="plan.status ? $store.i18n.t('common.enabled') : $store.i18n.t('common.disabled')"></span>
+                            </div>
+                            <div class="flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
+                                <span x-text="$store.i18n.t('host.admin.hosts.plansModal.price') + ': ¥' + (plan.price || 0).toFixed(2)"></span>
+                                <span x-text="$store.i18n.t('host.admin.hosts.plansModal.duration') + ': ' + (plan.duration_days === -1 ? $store.i18n.t('common.permanent') : plan.duration_days + $store.i18n.t('common.days'))"></span>
+                                <span x-text="$store.i18n.t('host.admin.hosts.plansModal.maxRecords') + ': ' + plan.max_records"></span>
+                            </div>
+                            <div x-show="plan.domains && plan.domains.length > 0" class="mt-2">
+                                <span class="text-xs text-gray-400" x-text="$store.i18n.t('host.admin.hosts.plansModal.domains') + ': '"></span>
+                                <template x-for="domain in plan.domains" :key="domain.id">
+                                    <span class="inline-block px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs rounded mr-1" x-text="domain.name"></span>
+                                </template>
+                            </div>
+                            <div x-show="plan.description" class="text-sm text-gray-400 mt-2" x-text="plan.description"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function hostManagement() {
+    return {
+        loading: true,
+        hosts: [],
+        stats: {},
+        showEditModal: false,
+        editingHost: null,
+        editForm: { commission_rate: 10 },
+        submitting: false,
+        // 渠道弹窗
+        showChannelsModal: false,
+        viewingHost: null,
+        channels: [],
+        channelsLoading: false,
+        // 套餐弹窗
+        showPlansModal: false,
+        plans: [],
+        plansLoading: false,
+        
+        async init() {
+            await Promise.all([this.loadHosts(), this.loadStats()]);
+            this.loading = false;
+        },
+        
+        async loadHosts() {
+            try {
+                const res = await fetch('/api/admin/host/hosts', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.hosts = data.data.items || [];
+                }
+            } catch (e) {
+                console.error('Load hosts failed:', e);
+            }
+        },
+        
+        async loadStats() {
+            try {
+                const res = await fetch('/api/admin/host/stats', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.stats = data.data || {};
+                }
+            } catch (e) {
+                console.error('Load stats failed:', e);
+            }
+        },
+        
+        editHost(host) {
+            this.editingHost = host;
+            this.editForm.commission_rate = host.host_commission_rate || 10;
+            this.showEditModal = true;
+        },
+        
+        async submitEdit() {
+            this.submitting = true;
+            try {
+                const res = await fetch(`/api/admin/host/hosts/${this.editingHost.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        host_commission_rate: this.editForm.commission_rate
+                    })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.showEditModal = false;
+                    await this.loadHosts();
+                    window.$toast?.success(Alpine.store('i18n').t('host.admin.hosts.messages.updated'));
+                } else {
+                    window.$toast?.error(data.message || Alpine.store('i18n').t('message.operationFailed'));
+                }
+            } catch (e) {
+                window.$toast?.error(Alpine.store('i18n').t('message.operationFailed'));
+            }
+            this.submitting = false;
+        },
+        
+        async viewChannels(host) {
+            this.viewingHost = host;
+            this.channels = [];
+            this.showChannelsModal = true;
+            this.channelsLoading = true;
+            
+            try {
+                const res = await fetch(`/api/admin/host/hosts/${host.id}/channels`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.channels = data.data.items || [];
+                }
+            } catch (e) {
+                console.error('Load channels failed:', e);
+            }
+            this.channelsLoading = false;
+        },
+        
+        async viewPlans(host) {
+            this.viewingHost = host;
+            this.plans = [];
+            this.showPlansModal = true;
+            this.plansLoading = true;
+            
+            try {
+                const res = await fetch(`/api/admin/host/hosts/${host.id}/plans`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.plans = data.data.items || [];
+                }
+            } catch (e) {
+                console.error('Load plans failed:', e);
+            }
+            this.plansLoading = false;
+        },
+        
+        async suspendHost(host) {
+            const msg = Alpine.store('i18n').t('host.admin.hosts.confirm.suspend').replace('{username}', host.username);
+            const reason = prompt(msg + '\n\n请输入暂停原因:');
+            if (!reason) return;
+            await this.hostAction(host.id, 'suspend', reason);
+        },
+        
+        async restoreHost(host) {
+            const msg = Alpine.store('i18n').t('host.admin.hosts.confirm.restore').replace('{username}', host.username);
+            if (!confirm(msg)) return;
+            await this.hostAction(host.id, 'restore');
+        },
+        
+        async revokeHost(host) {
+            const msg = Alpine.store('i18n').t('host.admin.hosts.confirm.revoke').replace('{username}', host.username);
+            const reason = prompt(msg + '\n\n请输入撤销原因:');
+            if (!reason) return;
+            await this.hostAction(host.id, 'revoke', reason);
+        },
+        
+        async hostAction(hostId, action, reason = '') {
+            try {
+                const res = await fetch(`/api/admin/host/hosts/${hostId}/${action}`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason: reason })
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    await this.loadHosts();
+                    window.$toast?.success(Alpine.store('i18n').t('host.admin.hosts.messages.operationSuccess'));
+                } else {
+                    window.$toast?.error(data.message || Alpine.store('i18n').t('message.operationFailed'));
+                }
+            } catch (e) {
+                window.$toast?.error(Alpine.store('i18n').t('message.operationFailed'));
+            }
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return new Date(dateStr).toLocaleDateString();
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block title %}域名管理设置 - {{ site_settings.site_name|default('六趣DNS') }}{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-6" x-data="domainSettingsPage()" x-init="init()">
+    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-6" x-text="$store.i18n.locale === 'zh' ? '域名管理设置' : 'Domain Management Settings'"></h1>
+
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+        <div x-show="loading" class="p-10 text-center"><div class="inline-block w-8 h-8 border-4 border-gray-200 dark:border-gray-600 border-t-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div></div>
+        
+        <!-- 演示用户禁止访问提示 -->
+        <div x-show="!loading && forbidden" class="p-10 text-center">
+            <svg class="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <p class="text-gray-500 dark:text-gray-400 text-lg" x-text="$store.i18n.locale === 'zh' ? '演示用户无权查看系统设置' : 'Demo users cannot view system settings'"></p>
+            <p class="text-gray-400 dark:text-gray-500 text-sm mt-2" x-text="$store.i18n.locale === 'zh' ? '如需体验完整功能，请联系管理员' : 'Contact admin for full access'"></p>
+        </div>
+        
+        <div x-show="!loading && !forbidden" class="p-4 sm:p-6 space-y-6">
+            <!-- 域名到期提醒 -->
+            <div>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white" x-text="$store.i18n.t('domainExpiry.title')"></h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '配置域名到期前的邮件提醒时间节点' : 'Configure email reminder time points before domain expiration'"></p>
+                    </div>
+                    <button @click="checkExpiry()" :disabled="checkingExpiry" class="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 text-sm flex items-center gap-2 transition-colors">
+                        <svg x-show="checkingExpiry" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span x-text="checkingExpiry ? (locale === 'zh' ? '检测中...' : 'Checking...') : (locale === 'zh' ? '立即检测' : 'Check Now')"></span>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <!-- 启用开关 -->
+                    <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.i18n.t('domainExpiry.enabled')"></label>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '关闭后将停止发送域名到期提醒邮件' : 'Disable to stop sending domain expiry reminder emails'"></p>
+                        </div>
+                        <select x-model="form.domain_expiry_reminder_enabled" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        </select>
+                    </div>
+
+                    <!-- 提醒天数配置 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('domainExpiry.reminderDays')"></label>
+                        <input type="text" x-model="form.domain_expiry_reminder_days" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="7,3,2,1">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainExpiry.reminderDaysDesc')"></p>
+                    </div>
+
+                    <!-- 过期停用天数 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('domainExpiry.disableDays')"></label>
+                        <input type="number" x-model="form.domain_expiry_disable_days" min="0" max="30" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainExpiry.disableDaysDesc')"></p>
+                    </div>
+
+                    <!-- 过期删除天数 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('domainExpiry.deleteDays')"></label>
+                        <input type="number" x-model="form.domain_expiry_delete_days" min="1" max="365" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainExpiry.deleteDaysDesc')"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 空置域名管理 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('idleDomain.title')"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.locale === 'zh' ? '自动检测并清理长期未添加DNS记录的空置域名' : 'Automatically detect and clean idle domains without DNS records'"></p>
+                
+                <div class="space-y-4">
+                    <!-- 启用开关 -->
+                    <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.i18n.t('idleDomain.enabled')"></label>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.locale === 'zh' ? '关闭后将停止空置域名检测和自动清理' : 'Disable to stop idle domain detection and cleanup'"></p>
+                        </div>
+                        <select x-model="form.idle_domain_check_enabled" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        </select>
+                    </div>
+
+                    <!-- 提醒天数 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('idleDomain.reminderDays')"></label>
+                        <input type="number" x-model="form.idle_domain_reminder_days" min="1" max="365" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('idleDomain.reminderDaysDesc')"></p>
+                    </div>
+
+                    <!-- 删除天数 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('idleDomain.deleteDays')"></label>
+                        <input type="number" x-model="form.idle_domain_delete_days" min="1" max="365" class="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('idleDomain.deleteDaysDesc')"></p>
+                    </div>
+
+                    <!-- 验证提示 -->
+                    <div x-show="parseInt(form.idle_domain_delete_days) <= parseInt(form.idle_domain_reminder_days)" class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                        <p class="text-sm text-amber-700 dark:text-amber-400" x-text="$store.i18n.t('idleDomain.validation')"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 域名转移设置 -->
+            <div class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" x-text="$store.i18n.t('domainTransfer.settingsTitle')"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" x-text="$store.i18n.t('domainTransfer.settingsDesc')"></p>
+                
+                <div class="space-y-4">
+                    <!-- 启用开关 -->
+                    <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.i18n.t('domainTransfer.enabled')"></label>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainTransfer.enabledDesc')"></p>
+                        </div>
+                        <select x-model="form.domain_transfer_enabled" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        </select>
+                    </div>
+
+                    <div class="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                        <!-- 转移手续费 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('domainTransfer.fee')"></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" x-model="form.domain_transfer_fee" min="0" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="0">
+                                <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('domainTransfer.points')"></span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainTransfer.feeDesc')"></p>
+                        </div>
+                        <!-- 冷却期 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('domainTransfer.cooldown')"></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" x-model="form.domain_transfer_cooldown" min="0" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="24">
+                                <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('domainTransfer.hours')"></span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainTransfer.cooldownDesc')"></p>
+                        </div>
+                        <!-- 每日限制 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('domainTransfer.dailyLimit')"></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" x-model="form.domain_transfer_daily_limit" min="0" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="5">
+                                <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('domainTransfer.times')"></span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainTransfer.dailyLimitDesc')"></p>
+                        </div>
+                        <!-- 验证码有效期 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" x-text="$store.i18n.t('domainTransfer.verifyExpire')"></label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" x-model="form.domain_transfer_verify_expire" min="1" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" placeholder="10">
+                                <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('domainTransfer.minutes')"></span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainTransfer.verifyExpireDesc')"></p>
+                        </div>
+                    </div>
+
+                    <!-- 邮件通知开关 -->
+                    <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.i18n.t('domainTransfer.notifyEmail')"></label>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('domainTransfer.notifyEmailDesc')"></p>
+                        </div>
+                        <select x-model="form.domain_transfer_notify_email" class="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="1" x-text="$store.i18n.locale === 'zh' ? '启用' : 'Enabled'"></option>
+                            <option value="0" x-text="$store.i18n.locale === 'zh' ? '禁用' : 'Disabled'"></option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 保存按钮 -->
+            <div class="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700">
+                <button @click="save" :disabled="saving" class="px-6 py-3 bg-gray-900 dark:bg-gray-600 text-white rounded-xl hover:bg-gray-800 dark:hover:bg-gray-500 disabled:opacity-50">
+                    <span x-show="!saving" x-text="$store.i18n.locale === 'zh' ? '保存设置' : 'Save Settings'"></span>
+                    <span x-show="saving" x-text="$store.i18n.locale === 'zh' ? '保存中...' : 'Saving...'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function domainSettingsPage() {
+    return {
+        form: {},
+        loading: true,
+        saving: false,
+        forbidden: false,
+        checkingExpiry: false,
+        
+        get token() { return localStorage.getItem('token'); },
+        get locale() { return Alpine.store('i18n').locale; },
+        
+        async init() {
+            if (!this.token) {
+                window.location.href = '/login';
+                return;
+            }
+            await this.load();
+        },
+        
+        async load() {
+            this.loading = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    headers: { 'Authorization': 'Bearer ' + this.token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.form = data.data.settings;
+                } else if (data.code === 403) {
+                    this.forbidden = true;
+                }
+            } catch (e) {
+                console.error('Load settings failed:', e);
+            }
+            this.loading = false;
+        },
+        
+        async save() {
+            this.saving = true;
+            try {
+                const res = await fetch('/api/admin/settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.form)
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(this.locale === 'zh' ? '设置保存成功' : 'Settings saved successfully');
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '保存失败' : 'Save failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.saving = false;
+        },
+        
+        async checkExpiry() {
+            this.checkingExpiry = true;
+            try {
+                const res = await fetch('/api/admin/settings/check-expiry', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + this.token,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    alert(data.message || (this.locale === 'zh' ? '检测完成' : 'Check completed'));
+                } else {
+                    alert(data.message || (this.locale === 'zh' ? '检测失败' : 'Check failed'));
+                }
+            } catch (e) {
+                alert(this.locale === 'zh' ? '网络错误，请重试' : 'Network error, please retry');
+            }
+            this.checkingExpiry = false;
+        }
+    };
+}
+</script>
+{% endblock %}

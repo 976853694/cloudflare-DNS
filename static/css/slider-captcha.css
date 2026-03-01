@@ -1,0 +1,286 @@
+/**
+ * 滑块验证码样式
+ * 支持 6 种 CSS 背景样式
+ */
+
+/* 容器 */
+.slider-captcha-container {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    user-select: none;
+}
+
+/* 背景区域 */
+.slider-captcha-bg {
+    width: 100%;
+    height: 150px;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    background-color: #1a1a2e;
+}
+
+/* 缺口 */
+.slider-captcha-puzzle {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+/* 滑块轨道 */
+.slider-captcha-track {
+    width: 100%;
+    height: 45px;
+    background: #2d2d44;
+    border-radius: 25px;
+    margin-top: 12px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding: 0 5px;
+    box-sizing: border-box;
+}
+
+/* 滑块按钮 */
+.slider-captcha-btn {
+    width: 50px;
+    height: 35px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
+    position: absolute;
+    left: 5px;
+    transition: box-shadow 0.2s;
+    z-index: 10;
+}
+
+.slider-captcha-btn:hover {
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.6);
+}
+
+.slider-captcha-btn:active {
+    cursor: grabbing;
+}
+
+.slider-captcha-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: white;
+}
+
+/* 提示文字 */
+.slider-captcha-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    color: #666;
+    font-size: 13px;
+    pointer-events: none;
+    left: 0;
+}
+
+/* 滑块拖动块（跟随滑块移动的拼图块） */
+.slider-captcha-piece {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    border-radius: 4px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    z-index: 5;
+}
+
+
+/* 状态样式 */
+.slider-captcha-success .slider-captcha-track {
+    background: #2d4a3e;
+}
+
+.slider-captcha-success .slider-captcha-btn {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    box-shadow: 0 2px 10px rgba(67, 233, 123, 0.4);
+}
+
+.slider-captcha-success .slider-captcha-text {
+    color: #43e97b;
+}
+
+.slider-captcha-fail .slider-captcha-track {
+    background: #4a2d2d;
+    animation: shake 0.5s ease-in-out;
+}
+
+.slider-captcha-fail .slider-captcha-btn {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+    box-shadow: 0 2px 10px rgba(255, 107, 107, 0.4);
+}
+
+.slider-captcha-fail .slider-captcha-text {
+    color: #ff6b6b;
+}
+
+.slider-captcha-loading .slider-captcha-btn {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* 抖动动画 */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+/* 成功图标 */
+.slider-captcha-success-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 150px;
+    background: linear-gradient(135deg, #2d4a3e 0%, #1a3a2e 100%);
+    border-radius: 8px;
+    color: #43e97b;
+    font-size: 48px;
+}
+
+/* 刷新按钮 */
+.slider-captcha-refresh {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+    z-index: 10;
+}
+
+.slider-captcha-refresh:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.slider-captcha-refresh svg {
+    width: 16px;
+    height: 16px;
+    fill: white;
+}
+
+/* 加载遮罩 */
+.slider-captcha-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    z-index: 20;
+}
+
+.slider-captcha-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+
+/* ========== 6 种背景样式 ========== */
+
+/* 样式1: 多层渐变叠加 */
+.slider-bg-gradient-overlay {
+    background-blend-mode: overlay, multiply, normal;
+}
+
+/* 样式2: 条纹渐变 */
+.slider-bg-stripe-gradient {
+    background-blend-mode: overlay;
+}
+
+/* 样式3: 圆形渐变 */
+.slider-bg-radial-gradient {
+    /* 动态生成 */
+}
+
+/* 样式4: 网格图案 */
+.slider-bg-grid-pattern {
+    /* 动态生成 */
+}
+
+/* 样式5: 波浪渐变 */
+.slider-bg-wave-gradient {
+    /* 动态生成 */
+}
+
+/* 样式6: 马赛克效果 */
+.slider-bg-mosaic-effect {
+    background-blend-mode: multiply;
+}
+
+/* ========== 响应式适配 ========== */
+
+@media (max-width: 480px) {
+    .slider-captcha-container {
+        max-width: 100%;
+    }
+    
+    .slider-captcha-bg {
+        height: 120px;
+    }
+    
+    .slider-captcha-puzzle {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .slider-captcha-piece {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .slider-captcha-track {
+        height: 40px;
+    }
+    
+    .slider-captcha-btn {
+        width: 45px;
+        height: 30px;
+    }
+    
+    .slider-captcha-text {
+        font-size: 12px;
+    }
+}
+
+/* 暗色主题适配（默认已是暗色） */
+.slider-captcha-container.light-theme .slider-captcha-track {
+    background: #e0e0e0;
+}
+
+.slider-captcha-container.light-theme .slider-captcha-text {
+    color: #999;
+}

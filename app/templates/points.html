@@ -1,0 +1,811 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_settings.site_name|default('六趣DNS') }} - 积分中心{% endblock %}
+
+{% block content %}
+<div class="pt-14 lg:pt-0 min-h-screen">
+    <div class="p-4 lg:p-6" x-data="pointsPage()">
+        <!-- 页面标题 -->
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white" x-text="$store.i18n.t('points.title')"></h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1" x-text="$store.i18n.t('points.description')"></p>
+        </div>
+
+        <!-- 积分概览卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <!-- 当前积分 -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('points.currentPoints')"></p>
+                        <p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1" x-text="pointsInfo.points || 0"></p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 累计积分 -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('points.totalPoints')"></p>
+                        <p class="text-3xl font-bold text-green-600 dark:text-green-400 mt-1" x-text="pointsInfo.total_points || 0"></p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 连续签到 -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('points.continuousDays')"></p>
+                        <p class="text-3xl font-bold text-orange-600 dark:text-orange-400 mt-1">
+                            <span x-text="signinStatus.continuous_days || 0"></span>
+                            <span class="text-base font-normal" x-text="$store.i18n.t('common.days')"></span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 签到区域 -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('points.dailySignin')"></h2>
+                </div>
+                <div class="p-6">
+                    <!-- 签到按钮 -->
+                    <div class="text-center mb-6">
+                        <button @click="handleSignin()" 
+                                :disabled="signinStatus.signed_today || signinLoading"
+                                :class="signinStatus.signed_today ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 hover:shadow-xl'"
+                                class="px-8 py-3 text-white rounded-lg font-medium transition">
+                            <span x-show="signinLoading" class="inline-flex items-center">
+                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span x-text="$store.i18n.t('common.loading')"></span>
+                            </span>
+                            <span x-show="!signinLoading" x-text="signinStatus.signed_today ? $store.i18n.t('points.signedIn') : $store.i18n.t('points.signin')"></span>
+                        </button>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-2" x-text="$store.i18n.t('points.signinReward', {points: pointsInfo.signin_base || 10})"></p>
+                    </div>
+
+                    <!-- 奖励进度 -->
+                    <div class="space-y-3">
+                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300" x-text="$store.i18n.t('points.bonusProgress')"></p>
+                        <div class="flex items-center space-x-2">
+                            <template x-for="day in [3, 7, 30]" :key="day">
+                                <div class="flex-1 text-center">
+                                    <div :class="signinStatus.continuous_days >= day ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'"
+                                         class="h-2 rounded-full mb-1"></div>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400" x-text="day + $store.i18n.t('common.days')"></span>
+                                    <span class="block text-xs font-medium" 
+                                          :class="signinStatus.continuous_days >= day ? 'text-green-600 dark:text-green-400' : 'text-gray-400'"
+                                          x-text="'+' + (day === 3 ? (pointsInfo.signin_bonus_3 || 5) : day === 7 ? (pointsInfo.signin_bonus_7 || 20) : (pointsInfo.signin_bonus_30 || 100))"></span>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400" x-show="signinStatus.days_to_next_bonus > 0">
+                            <span x-text="$store.i18n.t('points.nextBonus')"></span>:
+                            <span class="font-medium text-blue-600 dark:text-blue-400" x-text="signinStatus.days_to_next_bonus"></span>
+                            <span x-text="$store.i18n.t('common.days')"></span>
+                            (<span x-text="'+' + signinStatus.next_bonus_points"></span> <span x-text="$store.i18n.t('points.pointsUnit')"></span>)
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 积分兑换区域 -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200">
+                <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('points.exchangeToBalance')"></h2>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4">
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                            <span x-text="$store.i18n.t('points.exchangeRate')"></span>: 
+                            <span class="font-medium" x-text="pointsInfo.exchange_rate || 100"></span> 
+                            <span x-text="$store.i18n.t('points.pointsUnit')"></span> = ¥1
+                        </p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            <span x-text="$store.i18n.t('points.minExchange')"></span>: 
+                            <span class="font-medium" x-text="pointsInfo.min_exchange || 100"></span>
+                            <span x-text="$store.i18n.t('points.pointsUnit')"></span>
+                        </p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" x-text="$store.i18n.t('points.exchangeAmount')"></label>
+                            <input type="number" x-model.number="exchangePoints" 
+                                   :min="pointsInfo.min_exchange || 100"
+                                   :max="pointsInfo.points || 0"
+                                   step="100"
+                                   class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   :placeholder="$store.i18n.t('points.exchangePlaceholder')">
+                        </div>
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('points.willGet')"></span>
+                            <span class="text-lg font-bold text-green-600 dark:text-green-400">
+                                ¥<span x-text="exchangePoints ? (exchangePoints / (pointsInfo.exchange_rate || 100)).toFixed(2) : '0.00'"></span>
+                            </span>
+                        </div>
+                        <button @click="doExchange()" 
+                                :disabled="!exchangePoints || exchangePoints < (pointsInfo.min_exchange || 100) || exchangePoints > (pointsInfo.points || 0) || exchangeLoading"
+                                class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition">
+                            <span x-show="exchangeLoading" class="inline-flex items-center justify-center">
+                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span x-text="$store.i18n.t('common.loading')"></span>
+                            </span>
+                            <span x-show="!exchangeLoading" x-text="$store.i18n.t('points.exchange')"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 积分记录 -->
+        <div class="mt-6 bg-white dark:bg-gray-800 rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all duration-200">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('points.records')"></h2>
+                <select x-model="recordType" @change="loadRecords(1)" 
+                        class="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option value="" x-text="$store.i18n.t('common.all')"></option>
+                    <option value="signin" x-text="$store.i18n.t('points.typeSignin')"></option>
+                    <option value="signin_bonus" x-text="$store.i18n.t('points.typeBonus')"></option>
+                    <option value="invite" x-text="$store.i18n.t('points.typeInvite')"></option>
+                    <option value="exchange" x-text="$store.i18n.t('points.typeExchange')"></option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 dark:bg-gray-700/50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('points.recordType')"></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('points.recordPoints')"></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('points.recordBalance')"></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('points.recordDesc')"></th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" x-text="$store.i18n.t('points.recordTime')"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-if="recordsLoading">
+                            <tr>
+                                <td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    <svg class="animate-spin h-6 w-6 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span x-text="$store.i18n.t('common.loading')"></span>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="!recordsLoading && records.length === 0">
+                            <tr>
+                                <td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400" x-text="$store.i18n.t('common.noData')"></td>
+                            </tr>
+                        </template>
+                        <template x-for="record in records" :key="record.id">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white" x-text="record.type_text"></td>
+                                <td class="px-6 py-4 text-sm font-medium" :class="record.points > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                    <span x-text="record.points > 0 ? '+' + record.points : record.points"></span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400" x-text="record.balance"></td>
+                                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400" x-text="record.description || '-'"></td>
+                                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400" x-text="record.created_at"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <!-- 分页 -->
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between" x-show="recordsTotal > 0">
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                    <span x-text="$store.i18n.t('common.total')"></span> <span x-text="recordsTotal"></span> <span x-text="$store.i18n.t('common.items')"></span>
+                </span>
+                <div class="flex space-x-2">
+                    <button @click="loadRecords(recordsPage - 1)" :disabled="recordsPage <= 1"
+                            class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-text="$store.i18n.t('common.prev')"></span>
+                    </button>
+                    <span class="px-3 py-1 text-sm text-gray-600 dark:text-gray-400" x-text="recordsPage + ' / ' + recordsPages"></span>
+                    <button @click="loadRecords(recordsPage + 1)" :disabled="recordsPage >= recordsPages"
+                            class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-text="$store.i18n.t('common.next')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast 提示 -->
+        <div x-show="toast.show" x-cloak
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 transform translate-y-2"
+             x-transition:enter-end="opacity-100 transform translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 transform translate-y-0"
+             x-transition:leave-end="opacity-0 transform translate-y-2"
+             :class="toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'"
+             class="fixed bottom-4 right-4 px-6 py-3 rounded-lg text-white shadow-lg z-50">
+            <span x-text="toast.message"></span>
+        </div>
+
+        <!-- 签到验证码弹窗 -->
+        <div x-show="showCaptchaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="closeCaptchaModal()">
+            <div class="absolute inset-0 bg-black/50" @click="closeCaptchaModal()"></div>
+            <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md p-6" @click.stop>
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="$store.i18n.t('auth.humanVerify')"></h3>
+                    <button @click="closeCaptchaModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p class="text-gray-500 dark:text-gray-400 text-sm mb-4" x-text="$store.i18n.locale === 'zh' ? '请完成验证后签到' : 'Please complete verification to sign in'"></p>
+                
+                <!-- Turnstile 验证码 -->
+                <div x-show="captchaType === 'turnstile'" class="mb-4">
+                    <div id="turnstile-signin"></div>
+                </div>
+                
+                <!-- 滑块验证码 -->
+                <template x-if="captchaType === 'slider' && showCaptchaModal">
+                    <div class="mb-4">
+                        <div x-data="sliderCaptcha({
+                            onSuccess: (token) => {
+                                window.dispatchEvent(new CustomEvent('points-slider-success', { detail: { token: token } }));
+                            }
+                        })" 
+                        x-init="init()">
+                            <div class="slider-captcha-container" :class="containerClass">
+                                <template x-if="verified">
+                                    <div class="slider-captcha-success-icon">✓</div>
+                                </template>
+                                <template x-if="!verified">
+                                    <div>
+                                        <div class="slider-captcha-bg" :style="bgStyle">
+                                            <div class="slider-captcha-puzzle" :style="puzzleStyle"></div>
+                                            <div class="slider-captcha-piece" :style="pieceStyle"></div>
+                                            <div class="slider-captcha-refresh" @click="refresh()">
+                                                <svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                                            </div>
+                                            <div x-show="loading && status !== 'verifying'" class="slider-captcha-overlay">
+                                                <div class="slider-captcha-spinner"></div>
+                                            </div>
+                                        </div>
+                                        <div class="slider-captcha-track">
+                                            <span class="slider-captcha-text" x-text="statusText"></span>
+                                            <div class="slider-captcha-btn" :style="btnStyle" @mousedown="startDrag($event)" @touchstart="startDrag($event)">
+                                                <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                
+                <div class="flex gap-3">
+                    <button @click="closeCaptchaModal()" class="flex-1 px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700" x-text="$store.i18n.t('common.cancel')"></button>
+                    <button @click="submitSigninWithCaptcha()" :disabled="signinLoading || (captchaType === 'turnstile' && !turnstileToken) || (captchaType === 'slider' && !sliderVerified)" 
+                        class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-text="signinLoading ? ($store.i18n.locale === 'zh' ? '签到中...' : 'Signing in...') : $store.i18n.t('points.signin')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/slider-captcha.js"></script>
+<script>
+function pointsPage() {
+    return {
+        pointsInfo: {},
+        signinStatus: {},
+        signinLoading: false,
+        exchangePoints: null,
+        exchangeLoading: false,
+        records: [],
+        recordsLoading: false,
+        recordsPage: 1,
+        recordsPages: 1,
+        recordsTotal: 0,
+        recordType: '',
+        toast: { show: false, message: '', type: 'success' },
+        // 验证码相关
+        captchaEnabled: false,
+        captchaType: 'slider',
+        turnstileSiteKey: '',
+        showCaptchaModal: false,
+        turnstileToken: '',
+        turnstileWidgetId: null,
+        sliderVerified: false,
+        sliderToken: '',
+        sliderPosition: 0,
+        sliderTrajectory: [],
+        
+        // 滑块验证码状态（直接集成到父组件）
+        sliderStyleType: '', sliderStyleParams: {},
+        sliderPuzzleX: 0, sliderPuzzleY: 0,
+        sliderCurrentX: 0, sliderIsDragging: false,
+        sliderLoading: false, sliderStatus: 'idle',
+        sliderStartX: 0, sliderStartTime: 0,
+        sliderBgWidth: 300, sliderBgHeight: 150, sliderPuzzleSize: 50,
+        sliderTrackWidth: 0, sliderMaxSlide: 240,
+
+        async init() {
+            await this.loadCaptchaConfig();
+            await this.loadPointsInfo();
+            await this.loadRecords(1);
+            
+            // 监听滑块验证成功事件
+            window.addEventListener('points-slider-success', (e) => {
+                this.handleSliderSuccess(e.detail.token);
+            });
+        },
+
+        async loadCaptchaConfig() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            try {
+                const res = await fetch('/api/points/captcha-config', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.captchaEnabled = data.data.enabled;
+                    this.captchaType = data.data.type || 'slider';
+                    this.turnstileSiteKey = data.data.turnstile_site_key || '';
+                }
+            } catch (e) {
+                console.error('Load captcha config failed:', e);
+            }
+        },
+
+        async loadPointsInfo() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/points', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.code === 200) {
+                    this.pointsInfo = data.data;
+                    this.signinStatus = data.data.signin_status || {};
+                }
+            } catch (e) {
+                console.error('Load points info failed:', e);
+            }
+        },
+
+        // 点击签到按钮
+        handleSignin() {
+            if (this.signinStatus.signed_today || this.signinLoading) return;
+            
+            if (this.captchaEnabled) {
+                this.openCaptchaModal();
+            } else {
+                this.doSignin();
+            }
+        },
+
+        // 打开验证码弹窗
+        openCaptchaModal() {
+            // 1. 先清除父组件状态
+            this.showCaptchaModal = true;
+            this.sliderVerified = false;
+            this.sliderToken = '';
+            this.turnstileToken = '';
+            
+            // 2. 等待 DOM 更新
+            this.$nextTick(() => {
+                if (this.captchaType === 'turnstile') {
+                    this.renderTurnstile();
+                } else if (this.captchaType === 'slider') {
+                    setTimeout(() => {
+                        // 直接调用父组件的 refreshSlider 方法
+                        this.refreshSlider();
+                    }, 100);
+                }
+            });
+        },
+
+        // 关闭验证码弹窗
+        closeCaptchaModal() {
+            // 1. 清除父组件状态
+            this.sliderVerified = false;
+            this.sliderToken = '';
+            this.turnstileToken = '';
+            
+            // 2. 关闭弹窗
+            this.showCaptchaModal = false;
+            
+            // 3. 清理 Turnstile
+            if (this.turnstileWidgetId !== null && window.turnstile) {
+                turnstile.remove(this.turnstileWidgetId);
+                this.turnstileWidgetId = null;
+            }
+        },
+
+        // 渲染 Turnstile
+        renderTurnstile() {
+            const loadAndRender = () => {
+                const container = document.getElementById('turnstile-signin');
+                if (!container || !window.turnstile) return;
+                container.innerHTML = '';
+                this.turnstileWidgetId = turnstile.render(container, {
+                    sitekey: this.turnstileSiteKey,
+                    callback: (token) => { this.turnstileToken = token; },
+                    'expired-callback': () => { this.turnstileToken = ''; }
+                });
+            };
+            if (window.turnstile) { loadAndRender(); }
+            else {
+                const script = document.createElement('script');
+                script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+                script.async = true;
+                script.onload = () => { setTimeout(loadAndRender, 100); };
+                document.head.appendChild(script);
+            }
+        },
+
+        // 提交带验证码的签到
+        async submitSigninWithCaptcha() {
+            if (this.captchaType === 'turnstile' && !this.turnstileToken) {
+                this.showToast(this.$store.i18n.locale === 'zh' ? '请完成人机验证' : 'Please complete verification', 'error');
+                return;
+            }
+            if (this.captchaType === 'slider' && !this.sliderVerified) {
+                this.showToast(this.$store.i18n.locale === 'zh' ? '请完成滑块验证' : 'Please complete slider verification', 'error');
+                return;
+            }
+            
+            const captchaData = {
+                turnstile_token: this.turnstileToken,
+                slider_verified: this.sliderVerified,  // 添加滑块验证状态标记
+                slider_token: this.sliderToken,
+                slider_position: this.sliderPosition,
+                slider_trajectory: this.sliderTrajectory
+            };
+            
+            this.closeCaptchaModal();
+            await this.doSignin(captchaData);
+        },
+
+        async doSignin(captchaData = {}) {
+            if (this.signinStatus.signed_today || this.signinLoading) return;
+
+            this.signinLoading = true;
+            const token = localStorage.getItem('token');
+
+            try {
+                const res = await fetch('/api/points/signin', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(captchaData)
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    this.showToast(data.message + ' +' + data.data.total_points, 'success');
+                    await this.loadPointsInfo();
+                    await this.loadRecords(1);
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast(this.$store.i18n.locale === 'zh' ? '签到失败' : 'Sign in failed', 'error');
+            } finally {
+                this.signinLoading = false;
+            }
+        },
+
+        async doExchange() {
+            if (!this.exchangePoints || this.exchangeLoading) return;
+
+            this.exchangeLoading = true;
+            const token = localStorage.getItem('token');
+
+            try {
+                const res = await fetch('/api/points/exchange', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ points: this.exchangePoints })
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    this.showToast(data.message + ' ¥' + data.data.amount.toFixed(2), 'success');
+                    this.exchangePoints = null;
+                    await this.loadPointsInfo();
+                    await this.loadRecords(1);
+                } else {
+                    this.showToast(data.message, 'error');
+                }
+            } catch (e) {
+                this.showToast(this.$store.i18n.locale === 'zh' ? '兑换失败' : 'Exchange failed', 'error');
+            } finally {
+                this.exchangeLoading = false;
+            }
+        },
+
+        async loadRecords(page) {
+            this.recordsLoading = true;
+            const token = localStorage.getItem('token');
+
+            try {
+                let url = `/api/points/records?page=${page}&per_page=10`;
+                if (this.recordType) {
+                    url += `&type=${this.recordType}`;
+                }
+
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                
+                if (data.code === 200) {
+                    this.records = data.data.records;
+                    this.recordsPage = data.data.page;
+                    this.recordsPages = data.data.pages;
+                    this.recordsTotal = data.data.total;
+                }
+            } catch (e) {
+                console.error('Load records failed:', e);
+            } finally {
+                this.recordsLoading = false;
+            }
+        },
+
+        showToast(message, type = 'success') {
+            this.toast = { show: true, message, type };
+            setTimeout(() => { this.toast.show = false; }, 3000);
+        },
+        
+        // 滑块验证成功回调
+        handleSliderSuccess(token) {
+            console.log('[Points] Slider verification success, token:', token);
+            this.sliderVerified = true;
+            this.sliderToken = token;
+        },
+        
+        // ========== 滑块验证码方法（集成到父组件） ==========
+        
+        async refreshSlider() {
+            console.log('[Points] Refreshing slider captcha...');
+            this.sliderLoading = true;
+            this.sliderStatus = 'idle';
+            this.sliderVerified = false;
+            this.sliderCurrentX = 0;
+            this.sliderTrajectory = [];
+            
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch('/api/auth/slider-captcha', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const result = await response.json();
+                
+                if (result.code === 200) {
+                    this.sliderToken = result.data.token;
+                    this.sliderStyleType = result.data.style_type;
+                    this.sliderStyleParams = result.data.style_params;
+                    this.sliderPuzzleX = result.data.puzzle_x;
+                    this.sliderPuzzleY = result.data.puzzle_y;
+                    console.log('[Points] Slider captcha loaded, token:', this.sliderToken);
+                }
+            } catch (error) {
+                console.error('[Points] Failed to load slider captcha:', error);
+            } finally {
+                this.sliderLoading = false;
+            }
+        },
+        
+        startSliderDrag(e) {
+            if (this.sliderLoading || this.sliderVerified || this.sliderStatus === 'verifying') return;
+            
+            e.preventDefault();
+            this.sliderIsDragging = true;
+            this.sliderStatus = 'dragging';
+            this.sliderTrajectory = [];
+            this.sliderStartTime = Date.now();
+            
+            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            this.sliderStartX = clientX - this.sliderCurrentX;
+            
+            this.recordSliderTrajectory(e);
+            
+            document.addEventListener('mousemove', this.onSliderDrag.bind(this));
+            document.addEventListener('mouseup', this.endSliderDrag.bind(this));
+            document.addEventListener('touchmove', this.onSliderDrag.bind(this), { passive: false });
+            document.addEventListener('touchend', this.endSliderDrag.bind(this));
+        },
+        
+        onSliderDrag(e) {
+            if (!this.sliderIsDragging) return;
+            
+            e.preventDefault();
+            
+            const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            let newX = clientX - this.sliderStartX;
+            
+            newX = Math.max(0, Math.min(newX, this.sliderMaxSlide));
+            this.sliderCurrentX = newX;
+            
+            this.recordSliderTrajectory(e);
+        },
+        
+        async endSliderDrag(e) {
+            if (!this.sliderIsDragging) return;
+            
+            this.sliderIsDragging = false;
+            
+            document.removeEventListener('mousemove', this.onSliderDrag);
+            document.removeEventListener('mouseup', this.endSliderDrag);
+            document.removeEventListener('touchmove', this.onSliderDrag);
+            document.removeEventListener('touchend', this.endSliderDrag);
+            
+            this.recordSliderTrajectory(e);
+            
+            if (this.sliderCurrentX < 50) {
+                this.sliderStatus = 'idle';
+                this.sliderCurrentX = 0;
+                return;
+            }
+            
+            await this.verifySlider();
+        },
+        
+        recordSliderTrajectory(e) {
+            const clientX = e.type.includes('touch') 
+                ? (e.touches?.[0]?.clientX || e.changedTouches?.[0]?.clientX || 0)
+                : e.clientX;
+            const clientY = e.type.includes('touch')
+                ? (e.touches?.[0]?.clientY || e.changedTouches?.[0]?.clientY || 0)
+                : e.clientY;
+            
+            this.sliderTrajectory.push({
+                x: Math.round(clientX - this.sliderStartX),
+                y: Math.round(clientY),
+                t: Date.now() - this.sliderStartTime
+            });
+        },
+        
+        async verifySlider() {
+            this.sliderStatus = 'verifying';
+            this.sliderLoading = true;
+            
+            const position = Math.round((this.sliderCurrentX / this.sliderMaxSlide) * (this.sliderBgWidth - this.sliderPuzzleSize));
+            this.sliderPosition = position;
+            
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch('/api/auth/slider-captcha/verify', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({
+                        token: this.sliderToken,
+                        position: position,
+                        trajectory: this.sliderTrajectory
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.code === 200 && result.data?.success) {
+                    this.sliderStatus = 'success';
+                    this.sliderVerified = true;
+                    console.log('[Points] Slider verification success');
+                } else {
+                    this.sliderStatus = 'fail';
+                    this.sliderVerified = false;
+                    console.log('[Points] Slider verification failed');
+                    
+                    setTimeout(() => {
+                        this.refreshSlider();
+                    }, 1500);
+                }
+            } catch (error) {
+                console.error('[Points] Slider verification error:', error);
+                this.sliderStatus = 'fail';
+                
+                setTimeout(() => {
+                    this.refreshSlider();
+                }, 1500);
+            } finally {
+                this.sliderLoading = false;
+            }
+        },
+        
+        get sliderBgStyle() {
+            if (!this.sliderStyleType || !this.sliderStyleParams) return '';
+            
+            const colors = this.sliderStyleParams.colors || ['#667eea', '#764ba2', '#f093fb'];
+            const angles = this.sliderStyleParams.angles || [135, 45, 180];
+            
+            switch (this.sliderStyleType) {
+                case 'gradient_overlay':
+                    return `background: linear-gradient(${angles[0]}deg, ${colors[0]} 0%, ${colors[1]} 100%), linear-gradient(${angles[1]}deg, ${colors[1]} 0%, ${colors[2]} 100%), linear-gradient(${angles[2]}deg, ${colors[2]} 0%, ${colors[0]} 100%); background-blend-mode: overlay, multiply, normal;`;
+                case 'stripe_gradient':
+                    const stripeWidth = this.sliderStyleParams.stripe_width || 10;
+                    return `background: repeating-linear-gradient(45deg, ${colors[0]}, ${colors[0]} ${stripeWidth}px, ${colors[1]} ${stripeWidth}px, ${colors[1]} ${stripeWidth * 2}px), linear-gradient(to right, ${colors[1]}, ${colors[2]}); background-blend-mode: overlay;`;
+                case 'radial_gradient':
+                    const circles = this.sliderStyleParams.circles || [{x: 20, y: 80}, {x: 80, y: 20}, {x: 40, y: 40}];
+                    return `background: radial-gradient(circle at ${circles[0].x}% ${circles[0].y}%, ${colors[0]}cc 0%, transparent 50%), radial-gradient(circle at ${circles[1].x}% ${circles[1].y}%, ${colors[1]}cc 0%, transparent 50%), radial-gradient(circle at ${circles[2].x}% ${circles[2].y}%, ${colors[2]}cc 0%, transparent 50%), linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);`;
+                case 'grid_pattern':
+                    const gridSize = this.sliderStyleParams.grid_size || 20;
+                    return `background: linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(${angles[0]}deg, ${colors[0]} 0%, ${colors[1]} 100%); background-size: ${gridSize}px ${gridSize}px, ${gridSize}px ${gridSize}px, 100% 100%;`;
+                case 'wave_gradient':
+                    return `background: linear-gradient(${angles[0]}deg, ${colors[0]} 0%, ${colors[1]} 37%, ${colors[2]} 65%, ${colors[0]} 100%);`;
+                case 'mosaic_effect':
+                    const c4 = this.sliderStyleParams.colors?.[3] || colors[0];
+                    return `background: conic-gradient(from 45deg at 25% 25%, ${colors[0]}, ${colors[1]}, ${colors[2]}, ${colors[0]}), conic-gradient(from 225deg at 75% 75%, ${c4}, ${colors[1]}, ${colors[2]}, ${c4}); background-size: 50% 50%; background-blend-mode: multiply;`;
+                default:
+                    return `background: linear-gradient(135deg, ${colors[0]} 0%, ${colors[1]} 100%);`;
+            }
+        },
+        
+        get sliderPuzzleStyle() {
+            return `top: ${this.sliderPuzzleY}px; left: ${this.sliderPuzzleX}px;`;
+        },
+        
+        get sliderBtnStyle() {
+            return `left: ${this.sliderCurrentX + 5}px;`;
+        },
+        
+        get sliderPieceStyle() {
+            const pieceX = (this.sliderCurrentX / this.sliderMaxSlide) * (this.sliderBgWidth - this.sliderPuzzleSize);
+            return `top: ${this.sliderPuzzleY}px; left: ${pieceX}px; ${this.sliderBgStyle}`;
+        },
+        
+        get sliderStatusText() {
+            const texts = {
+                'idle': '向右拖动滑块完成验证',
+                'dragging': '继续拖动...',
+                'verifying': '验证中...',
+                'success': '验证成功',
+                'fail': '验证失败，请重试'
+            };
+            return texts[this.sliderStatus] || texts['idle'];
+        }
+    };
+}
+</script>
+{% endblock %}
