@@ -41,7 +41,7 @@ class Config:
     
     # App
     APP_NAME = os.getenv('APP_NAME', '六趣DNS')
-    APP_VERSION = os.getenv('APP_VERSION', '9999)  # 当前版本号
+    APP_VERSION = os.getenv('APP_VERSION', '9999')  # 当前版本号
     VERSION_CHECK_URL = os.getenv('VERSION_CHECK_URL', 'https://gx.6qu.cc/api/check-update')  # 版本检查地址
     DEFAULT_MAX_DOMAINS = int(os.getenv('DEFAULT_MAX_DOMAINS', 5))
     
